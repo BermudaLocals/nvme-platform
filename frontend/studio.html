@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Studio - NVME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .studio-page {
+      min-height: 100vh;
+      background: var(--dark);
+      padding: 80px 1rem 2rem;
+    }
+    .studio-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .studio-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .studio-header h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    .studio-header p {
+      color: var(--light-muted);
+    }
+    /* Studio Tabs */
+    .studio-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    .studio-tab {
+      padding: 0.75rem 1.5rem;
+      background: var(--dark-card);
+      border: none;
+      border-radius: 2rem;
+      color: var(--light-muted);
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .studio-tab.active {
+      background: var(--primary);
+      color: white;
+    }
+    .studio-tab:hover:not(.active) {
+      background: var(--dark-lighter);
+    }
+    /* Tool Cards */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+    .tool-card {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+    .tool-card:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+    .tool-card-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+    .tool-card-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .tool-card-desc {
+      font-size: 0.875rem;
+      color: var(--light-muted);
+      margin-bottom: 1rem;
+    }
+    .tool-card-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--primary);
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 1rem;
+    }
+    .tool-card-badge.pro {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--secondary);
+    }
+    /* My Videos Section */
+    .my-videos-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+    .videos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .video-item {
+      background: var(--dark-card);
+      border-radius: 0.75rem;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .video-item:hover {
+      transform: scale(1.02);
+    }
+    .video-item-thumbnail {
+      aspect-ratio: 9/16;
+      background: var(--dark-lighter);
+      position: relative;
+    }
+    .video-item-thumbnail img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .video-item-duration {
+      position: absolute;
+      bottom: 0.5rem;
+      right: 0.5rem;
+      background: rgba(0,0,0,0.7);
+      padding: 0.125rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+    }
+    .video-item-status {
+      position: absolute;
+      top: 0.5rem;
+      left: 0.5rem;
+      padding: 0.125rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.625rem;
+      font-weight: 600;
+    }
+    .video-item-status.published {
+      background: var(--success);
+    }
+    .video-item-status.draft {
+      background: var(--secondary);
+      color: var(--dark);
+    }
+    .video-item-status.processing {
+      background: var(--primary);
+    }
+    .video-item-info {
+      padding: 0.75rem;
+    }
+    .video-item-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .video-item-stats {
+      font-size: 0.75rem;
+      color: var(--light-muted);
+      display: flex;
+      gap: 0.75rem;
+    }
+    /* Analytics Section */
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .analytics-card {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+    .analytics-card-label {
+      font-size: 0.875rem;
+      color: var(--light-muted);
+      margin-bottom: 0.5rem;
+    }
+    .analytics-card-value {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    .analytics-card-change {
+      font-size: 0.75rem;
+      margin-top: 0.5rem;
+    }
+    .analytics-card-change.positive {
+      color: var(--success);
+    }
+    .analytics-card-change.negative {
+      color: var(--error);
+    }
+    /* Editor Modal */
+    .editor-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--dark);
+      z-index: 1000;
+      display: none;
+    }
+    .editor-modal.active {
+      display: flex;
+      flex-direction: column;
+    }
+    .editor-header {
+      padding: 1rem 1.5rem;
+      background: var(--dark-card);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--dark-lighter);
+    }
+    .editor-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+    .editor-preview {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      padding: 1rem;
+    }
+    .editor-preview video {
+      max-height: 100%;
+      max-width: 100%;
+      border-radius: 0.5rem;
+    }
+    .editor-sidebar {
+      width: 350px;
+      background: var(--dark-card);
+      border-left: 1px solid var(--dark-lighter);
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    .editor-section {
+      margin-bottom: 1.5rem;
+    }
+    .editor-section h4 {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      color: var(--light-muted);
+    }
+    .editor-tools {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+    .editor-tool {
+      background: var(--dark-lighter);
+      border: none;
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      color: var(--light);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .editor-tool:hover {
+      background: var(--primary);
+    }
+    .editor-tool-icon {
+      font-size: 1.25rem;
+      margin-bottom: 0.25rem;
+    }
+    .editor-tool-label {
+      font-size: 0.6875rem;
+    }
+    .editor-timeline {
+      height: 100px;
+      background: var(--dark-card);
+      border-top: 1px solid var(--dark-lighter);
+      padding: 0.5rem 1rem;
+    }
+    .timeline-track {
+      height: 60px;
+      background: var(--dark-lighter);
+      border-radius: 0.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .timeline-clip {
+      position: absolute;
+      top: 5px;
+      bottom: 5px;
+      background: var(--primary);
+      border-radius: 0.25rem;
+      cursor: move;
+    }
+    .timeline-playhead {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--error);
+      cursor: ew-resize;
+    }
+    /* AI Tools */
+    .ai-tool-card {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1));
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+    .ai-prompt-input {
+      width: 100%;
+      background: var(--dark-lighter);
+      border: none;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      color: var(--light);
+      font-size: 0.875rem;
+      resize: none;
+      min-height: 100px;
+    }
+    .ai-prompt-input:focus {
+      outline: 2px solid var(--primary);
+    }
+    /* Templates */
+    .templates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 1rem;
+    }
+    .template-item {
+      aspect-ratio: 9/16;
+      background: var(--dark-lighter);
+      border-radius: 0.75rem;
+      overflow: hidden;
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.2s;
+    }
+    .template-item:hover {
+      transform: scale(1.05);
+    }
+    .template-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .template-item-name {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 0.5rem;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">NVME</a>
+    <div class="navbar-nav">
+      <a href="/feed.html" class="nav-link">Feed</a>
+      <a href="/live.html" class="nav-link">Live</a>
+      <div class="user-menu hidden flex items-center gap-2">
+        <a href="/wallet.html" class="nav-link">💰 <span class="user-coins">0</span></a>
+        <div class="dropdown">
+          <button class="dropdown-toggle btn btn-secondary btn-sm flex items-center gap-2">
+            <img src="/img/default-avatar.png" alt="" class="avatar avatar-sm user-avatar">
+            <span class="user-name">User</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/profile.html" class="dropdown-item">👤 Profile</a>
+            <a href="/studio.html" class="dropdown-item">🎬 Studio</a>
+            <a href="/wallet.html" class="dropdown-item">💰 Wallet</a>
+            <a href="/messages.html" class="dropdown-item">💬 Messages</a>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item logout-btn">🚪 Log Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="studio-page">
+    <div class="studio-container">
+      <div class="studio-header">
+        <h1>🎬 Creator Studio</h1>
+        <p>Create, edit, and manage your content</p>
+      </div>
+
+      <!-- Studio Tabs -->
+      <div class="studio-tabs">
+        <button class="studio-tab active" onclick="switchStudioTab('tools')">🛠️ Tools</button>
+        <button class="studio-tab" onclick="switchStudioTab('videos')">📹 My Videos</button>
+        <button class="studio-tab" onclick="switchStudioTab('analytics')">📊 Analytics</button>
+        <button class="studio-tab" onclick="switchStudioTab('templates')">🎨 Templates</button>
+        <button class="studio-tab" onclick="switchStudioTab('ai')">🤖 AI Tools</button>
+      </div>
+
+      <!-- Tools Tab -->
+      <div id="toolsTab" class="tab-content">
+        <div class="tools-grid">
+          <div class="tool-card" onclick="openTool('upload')">
+            <div class="tool-card-icon">📤</div>
+            <div class="tool-card-title">Upload Video</div>
+            <div class="tool-card-desc">Upload and publish your videos to the platform</div>
+            <span class="tool-card-badge">Free</span>
+          </div>
+
+          <div class="tool-card" onclick="openTool('editor')">
+            <div class="tool-card-icon">✂️</div>
+            <div class="tool-card-title">Video Editor</div>
+            <div class="tool-card-desc">Trim, cut, and enhance your videos</div>
+            <span class="tool-card-badge">Free</span>
+          </div>
+
+          <div class="tool-card" onclick="openTool('effects')">
+            <div class="tool-card-icon">✨</div>
+            <div class="tool-card-title">Effects & Filters</div>
+            <div class="tool-card-desc">Add stunning effects and filters to your videos</div>
+            <span class="tool-card-badge">Free</span>
+          </div>
+
+          <div class="tool-card" onclick="openTool('text')">
+            <div class="tool-card-icon">📝</div>
+            <div class="tool-card-title">Text & Captions</div>
+            <div class="tool-card-desc">Add text overlays and auto-captions</div>
+            <span class="tool-card-badge">Free</span>
+          </div>
+
+          <div class="tool-card" onclick="openTool('music')">
+            <div class="tool-card-icon">🎵</div>
+            <div class="tool-card-title">Music Library</div>
+            <div class="tool-card-desc">Browse royalty-free music for your videos</div>
+            <span class="tool-card-badge">Free</span>
+          </div>
+
+          <div class="tool-card" onclick="openTool('thumbnail')">
+            <div class="tool-card-icon">🖼️</div>
+            <div class="tool-card-title">Thumbnail Maker</div>
+            <div class="tool-card-desc">Create eye-catching thumbnails</div>
+            <span class="tool-card-badge">Free</span>
+          </div>
+
+          <div class="tool-card ai-tool-card" onclick="openTool('ai-edit')">
+            <div class="tool-card-icon">🤖</div>
+            <div class="tool-card-title">AI Auto-Edit</div>
+            <div class="tool-card-desc">Let AI automatically edit your video</div>
+            <span class="tool-card-badge pro">Pro</span>
+          </div>
+
+          <div class="tool-card ai-tool-card" onclick="openTool('ai-voice')">
+            <div class="tool-card-icon">🎙️</div>
+            <div class="tool-card-title">AI Voice Over</div>
+            <div class="tool-card-desc">Generate natural voice overs with AI</div>
+            <span class="tool-card-badge pro">Pro</span>
+          </div>
+
+          <div class="tool-card" onclick="openTool('schedule')">
+            <div class="tool-card-icon">📅</div>
+            <div class="tool-card-title">Schedule Posts</div>
+            <div class="tool-card-desc">Schedule your videos for optimal times</div>
+            <span class="tool-card-badge">Free</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- My Videos Tab -->
+      <div id="videosTab" class="tab-content hidden">
+        <div class="my-videos-header">
+          <h2>My Videos</h2>
+          <a href="/upload.html" class="btn btn-primary">📤 Upload New</a>
+        </div>
+        <div class="videos-grid" id="myVideosGrid">
+          <!-- Videos will be loaded here -->
+        </div>
+      </div>
+
+      <!-- Analytics Tab -->
+      <div id="analyticsTab" class="tab-content hidden">
+        <div class="analytics-grid">
+          <div class="analytics-card">
+            <div class="analytics-card-label">Total Views</div>
+            <div class="analytics-card-value" id="totalViews">0</div>
+            <div class="analytics-card-change positive">+12% this week</div>
+          </div>
+          <div class="analytics-card">
+            <div class="analytics-card-label">Total Likes</div>
+            <div class="analytics-card-value" id="totalLikes">0</div>
+            <div class="analytics-card-change positive">+8% this week</div>
+          </div>
+          <div class="analytics-card">
+            <div class="analytics-card-label">Followers</div>
+            <div class="analytics-card-value" id="totalFollowers">0</div>
+            <div class="analytics-card-change positive">+15% this week</div>
+          </div>
+          <div class="analytics-card">
+            <div class="analytics-card-label">Earnings</div>
+            <div class="analytics-card-value">$<span id="totalEarnings">0</span></div>
+            <div class="analytics-card-change positive">+20% this week</div>
+          </div>
+        </div>
+
+        <div style="background: var(--dark-card); border-radius: 1rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+          <h3 style="margin-bottom: 1rem;">Views Over Time</h3>
+          <div style="height: 200px; display: flex; align-items: flex-end; gap: 0.5rem;" id="viewsChart">
+            <!-- Chart bars will be rendered here -->
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.75rem; color: var(--light-muted);">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+        </div>
+
+        <div style="background: var(--dark-card); border-radius: 1rem; padding: 1.5rem;">
+          <h3 style="margin-bottom: 1rem;">Top Performing Videos</h3>
+          <div id="topVideos">
+            <!-- Top videos will be loaded here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Templates Tab -->
+      <div id="templatesTab" class="tab-content hidden">
+        <h2 style="margin-bottom: 1.5rem;">Video Templates</h2>
+        <div class="templates-grid" id="templatesGrid">
+          <!-- Templates will be loaded here -->
+        </div>
+      </div>
+
+      <!-- AI Tools Tab -->
+      <div id="aiTab" class="tab-content hidden">
+        <div class="tools-grid">
+          <div class="tool-card ai-tool-card" onclick="openAITool('script')">
+            <div class="tool-card-icon">📜</div>
+            <div class="tool-card-title">AI Script Writer</div>
+            <div class="tool-card-desc">Generate video scripts with AI</div>
+            <span class="tool-card-badge pro">Pro</span>
+          </div>
+
+          <div class="tool-card ai-tool-card" onclick="openAITool('caption')">
+            <div class="tool-card-icon">💬</div>
+            <div class="tool-card-title">Auto Captions</div>
+            <div class="tool-card-desc">Automatically generate captions for your videos</div>
+            <span class="tool-card-badge">Free</span>
+          </div>
+
+          <div class="tool-card ai-tool-card" onclick="openAITool('thumbnail')">
+            <div class="tool-card-icon">🎨</div>
+            <div class="tool-card-title">AI Thumbnail</div>
+            <div class="tool-card-desc">Generate thumbnails with AI</div>
+            <span class="tool-card-badge pro">Pro</span>
+          </div>
+
+          <div class="tool-card ai-tool-card" onclick="openAITool('hashtag')">
+            <div class="tool-card-icon">#️⃣</div>
+            <div class="tool-card-title">Hashtag Generator</div>
+            <div class="tool-card-desc">Get trending hashtags for your content</div>
+            <span class="tool-card-badge">Free</span>
+          </div>
+
+          <div class="tool-card ai-tool-card" onclick="openAITool('translate')">
+            <div class="tool-card-icon">🌍</div>
+            <div class="tool-card-title">AI Translate</div>
+            <div class="tool-card-desc">Translate your videos to other languages</div>
+            <span class="tool-card-badge pro">Pro</span>
+          </div>
+
+          <div class="tool-card ai-tool-card" onclick="openAITool('enhance')">
+            <div class="tool-card-icon">✨</div>
+            <div class="tool-card-title">AI Enhance</div>
+            <div class="tool-card-desc">Upscale and enhance video quality</div>
+            <span class="tool-card-badge pro">Pro</span>
+          </div>
+        </div>
+
+        <div style="background: var(--dark-card); border-radius: 1rem; padding: 1.5rem; margin-top: 2rem;">
+          <h3 style="margin-bottom: 1rem;">🤖 AI Assistant</h3>
+          <textarea class="ai-prompt-input" id="aiPrompt" placeholder="Describe what you want to create... e.g., 'Write a script for a 30-second video about cooking tips'"></textarea>
+          <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="generateAI()">
+            ✨ Generate with AI
+          </button>
+          <div id="aiResult" style="margin-top: 1rem; display: none;">
+            <h4 style="margin-bottom: 0.5rem;">Result:</h4>
+            <div style="background: var(--dark-lighter); border-radius: 0.5rem; padding: 1rem; white-space: pre-wrap;" id="aiResultText"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video Editor Modal -->
+  <div class="editor-modal" id="editorModal">
+    <div class="editor-header">
+      <h2>✂️ Video Editor</h2>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-secondary" onclick="closeEditor()">Cancel</button>
+        <button class="btn btn-primary" onclick="exportVideo()">Export</button>
+      </div>
+    </div>
+    <div class="editor-content">
+      <div class="editor-preview">
+        <video id="editorVideo" controls></video>
+      </div>
+      <div class="editor-sidebar">
+        <div class="editor-section">
+          <h4>Basic Tools</h4>
+          <div class="editor-tools">
+            <button class="editor-tool" onclick="editorTrim()">
+              <div class="editor-tool-icon">✂️</div>
+              <div class="editor-tool-label">Trim</div>
+            </button>
+            <button class="editor-tool" onclick="editorSplit()">
+              <div class="editor-tool-icon">📐</div>
+              <div class="editor-tool-label">Split</div>
+            </button>
+            <button class="editor-tool" onclick="editorCrop()">
+              <div class="editor-tool-icon">🔲</div>
+              <div class="editor-tool-label">Crop</div>
+            </button>
+            <button class="editor-tool" onclick="editorRotate()">
+              <div class="editor-tool-icon">🔄</div>
+              <div class="editor-tool-label">Rotate</div>
+            </button>
+            <button class="editor-tool" onclick="editorSpeed()">
+              <div class="editor-tool-icon">⏱️</div>
+              <div class="editor-tool-label">Speed</div>
+            </button>
+            <button class="editor-tool" onclick="editorReverse()">
+              <div class="editor-tool-icon">⏪</div>
+              <div class="editor-tool-label">Reverse</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <h4>Effects</h4>
+          <div class="editor-tools">
+            <button class="editor-tool" onclick="addFilter('none')">
+              <div class="editor-tool-icon">🚫</div>
+              <div class="editor-tool-label">None</div>
+            </button>
+            <button class="editor-tool" onclick="addFilter('vintage')">
+              <div class="editor-tool-icon">📷</div>
+              <div class="editor-tool-label">Vintage</div>
+            </button>
+            <button class="editor-tool" onclick="addFilter('bw')">
+              <div class="editor-tool-icon">⬛</div>
+              <div class="editor-tool-label">B&W</div>
+            </button>
+            <button class="editor-tool" onclick="addFilter('warm')">
+              <div class="editor-tool-icon">🌅</div>
+              <div class="editor-tool-label">Warm</div>
+            </button>
+            <button class="editor-tool" onclick="addFilter('cool')">
+              <div class="editor-tool-icon">❄️</div>
+              <div class="editor-tool-label">Cool</div>
+            </button>
+            <button class="editor-tool" onclick="addFilter('vivid')">
+              <div class="editor-tool-icon">🌈</div>
+              <div class="editor-tool-label">Vivid</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <h4>Add Elements</h4>
+          <div class="editor-tools">
+            <button class="editor-tool" onclick="addText()">
+              <div class="editor-tool-icon">📝</div>
+              <div class="editor-tool-label">Text</div>
+            </button>
+            <button class="editor-tool" onclick="addSticker()">
+              <div class="editor-tool-icon">😀</div>
+              <div class="editor-tool-label">Sticker</div>
+            </button>
+            <button class="editor-tool" onclick="addMusic()">
+              <div class="editor-tool-icon">🎵</div>
+              <div class="editor-tool-label">Music</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <h4>Adjustments</h4>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <div>
+              <label style="font-size: 0.75rem; color: var(--light-muted);">Brightness</label>
+              <input type="range" min="0" max="200" value="100" style="width: 100%;" onchange="adjustBrightness(this.value)">
+            </div>
+            <div>
+              <label style="font-size: 0.75rem; color: var(--light-muted);">Contrast</label>
+              <input type="range" min="0" max="200" value="100" style="width: 100%;" onchange="adjustContrast(this.value)">
+            </div>
+            <div>
+              <label style="font-size: 0.75rem; color: var(--light-muted);">Saturation</label>
+              <input type="range" min="0" max="200" value="100" style="width: 100%;" onchange="adjustSaturation(this.value)">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-timeline">
+      <div class="timeline-track">
+        <div class="timeline-clip" style="left: 0; right: 20%;"></div>
+        <div class="timeline-playhead" style="left: 30%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let myVideos = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      const isAuth = await NVME.auth.checkAuth();
+      if (!isAuth) {
+        window.location.href = '/login.html?redirect=/studio.html';
+        return;
+      }
+      
+      loadMyVideos();
+      loadAnalytics();
+      loadTemplates();
+      renderViewsChart();
+    });
+
+    // Switch tabs
+    function switchStudioTab(tab) {
+      document.querySelectorAll('.studio-tab').forEach(t => {
+        t.classList.toggle('active', t.textContent.toLowerCase().includes(tab));
+      });
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+      document.getElementById(tab + 'Tab').classList.remove('hidden');
+    }
+
+    // Load my videos
+    async function loadMyVideos() {
+      const grid = document.getElementById('myVideosGrid');
+      
+      try {
+        const data = await NVME.api.get('/videos/my');
+        myVideos = data.videos || [];
+      } catch (error) {
+        // Demo videos
+        myVideos = [
+          { id: '1', title: 'My first video', thumbnail: 'https://picsum.photos/seed/v1/200/356', duration: '0:30', views: 1234, likes: 89, status: 'published' },
+          { id: '2', title: 'Cooking tutorial', thumbnail: 'https://picsum.photos/seed/v2/200/356', duration: '2:15', views: 5678, likes: 234, status: 'published' },
+          { id: '3', title: 'Draft video', thumbnail: 'https://picsum.photos/seed/v3/200/356', duration: '1:00', views: 0, likes: 0, status: 'draft' },
+        ];
+      }
+
+      if (myVideos.length === 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--light-muted);">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">📹</div>
+            <h3 style="color: var(--light); margin-bottom: 0.5rem;">No Videos Yet</h3>
+            <p>Upload your first video to get started!</p>
+            <a href="/upload.html" class="btn btn-primary" style="margin-top: 1rem;">📤 Upload Video</a>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = myVideos.map(video => `
+        <div class="video-item" onclick="editVideo('${video.id}')">
+          <div class="video-item-thumbnail">
+            <img src="${video.thumbnail}" alt="">
+            <span class="video-item-duration">${video.duration}</span>
+            <span class="video-item-status ${video.status}">${video.status}</span>
+          </div>
+          <div class="video-item-info">
+            <div class="video-item-title">${video.title}</div>
+            <div class="video-item-stats">
+              <span>👁 ${NVME.utils.formatNumber(video.views)}</span>
+              <span>❤️ ${NVME.utils.formatNumber(video.likes)}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Load analytics
+    async function loadAnalytics() {
+      try {
+        const data = await NVME.api.get('/analytics/overview');
+        document.getElementById('totalViews').textContent = NVME.utils.formatNumber(data.views || 0);
+        document.getElementById('totalLikes').textContent = NVME.utils.formatNumber(data.likes || 0);
+        document.getElementById('totalFollowers').textContent = NVME.utils.formatNumber(data.followers || 0);
+        document.getElementById('totalEarnings').textContent = (data.earnings || 0).toFixed(2);
+      } catch (error) {
+        // Demo data
+        document.getElementById('totalViews').textContent = '12.5K';
+        document.getElementById('totalLikes').textContent = '1.2K';
+        document.getElementById('totalFollowers').textContent = '456';
+        document.getElementById('totalEarnings').textContent = '125.50';
+      }
+    }
+
+    // Render views chart
+    function renderViewsChart() {
+      const chart = document.getElementById('viewsChart');
+      const data = [65, 45, 80, 55, 90, 70, 85]; // Demo data
+      const max = Math.max(...data);
+
+      chart.innerHTML = data.map(value => `
+        <div style="flex: 1; background: linear-gradient(to top, var(--primary), var(--accent)); border-radius: 0.25rem 0.25rem 0 0; height: ${(value / max) * 100}%;"></div>
+      `).join('');
+    }
+
+    // Load templates
+    function loadTemplates() {
+      const templates = [
+        { name: 'Trending Dance', image: 'https://picsum.photos/seed/t1/150/267' },
+        { name: 'Product Review', image: 'https://picsum.photos/seed/t2/150/267' },
+        { name: 'Tutorial', image: 'https://picsum.photos/seed/t3/150/267' },
+        { name: 'Vlog Intro', image: 'https://picsum.photos/seed/t4/150/267' },
+        { name: 'Before/After', image: 'https://picsum.photos/seed/t5/150/267' },
+        { name: 'Q&A', image: 'https://picsum.photos/seed/t6/150/267' },
+        { name: 'Countdown', image: 'https://picsum.photos/seed/t7/150/267' },
+        { name: 'Story Time', image: 'https://picsum.photos/seed/t8/150/267' },
+      ];
+
+      document.getElementById('templatesGrid').innerHTML = templates.map(t => `
+        <div class="template-item" onclick="useTemplate('${t.name}')">
+          <img src="${t.image}" alt="${t.name}">
+          <div class="template-item-name">${t.name}</div>
+        </div>
+      `).join('');
+    }
+
+    // Tool functions
+    function openTool(tool) {
+      if (tool === 'upload') {
+        window.location.href = '/upload.html';
+      } else if (tool === 'editor') {
+        document.getElementById('editorModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+      } else if (tool === 'schedule') {
+        window.location.href = '/calendar.html';
+      } else {
+        NVME.toast.info(`${tool} tool coming soon!`);
+      }
+    }
+
+    function closeEditor() {
+      document.getElementById('editorModal').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function exportVideo() {
+      NVME.toast.success('Video exported successfully!');
+      closeEditor();
+    }
+
+    // Editor functions
+    function editorTrim() { NVME.toast.info('Trim tool selected'); }
+    function editorSplit() { NVME.toast.info('Split tool selected'); }
+    function editorCrop() { NVME.toast.info('Crop tool selected'); }
+    function editorRotate() { NVME.toast.info('Rotate tool selected'); }
+    function editorSpeed() { NVME.toast.info('Speed tool selected'); }
+    function editorReverse() { NVME.toast.info('Reverse tool selected'); }
+
+    function addFilter(filter) {
+      const video = document.getElementById('editorVideo');
+      const filters = {
+        none: 'none',
+        vintage: 'sepia(0.5) contrast(1.1)',
+        bw: 'grayscale(1)',
+        warm: 'sepia(0.3) saturate(1.3)',
+        cool: 'hue-rotate(180deg) saturate(0.8)',
+        vivid: 'saturate(1.5) contrast(1.1)'
+      };
+      video.style.filter = filters[filter] || 'none';
+      NVME.toast.success(`${filter} filter applied`);
+    }
+
+    function addText() { NVME.toast.info('Text tool coming soon!'); }
+    function addSticker() { NVME.toast.info('Sticker tool coming soon!'); }
+    function addMusic() { NVME.toast.info('Music library coming soon!'); }
+
+    function adjustBrightness(value) {
+      document.getElementById('editorVideo').style.filter = `brightness(${value}%)`;
+    }
+    function adjustContrast(value) {
+      document.getElementById('editorVideo').style.filter = `contrast(${value}%)`;
+    }
+    function adjustSaturation(value) {
+      document.getElementById('editorVideo').style.filter = `saturate(${value}%)`;
+    }
+
+    // AI functions
+    function openAITool(tool) {
+      switchStudioTab('ai');
+      const prompts = {
+        script: 'Write a script for a 30-second video about...',
+        caption: 'Generate captions for my video about...',
+        thumbnail: 'Create a thumbnail concept for a video about...',
+        hashtag: 'Generate trending hashtags for a video about...',
+        translate: 'Translate my video captions to Spanish...',
+        enhance: 'Enhance my video quality...'
+      };
+      document.getElementById('aiPrompt').value = prompts[tool] || '';
+      document.getElementById('aiPrompt').focus();
+    }
+
+    async function generateAI() {
+      const prompt = document.getElementById('aiPrompt').value.trim();
+      if (!prompt) {
+        NVME.toast.error('Please enter a prompt');
+        return;
+      }
+
+      NVME.toast.info('Generating with AI...');
+
+      // Simulate AI response
+      await new Promise(r => setTimeout(r, 2000));
+
+      const responses = [
+        `Here's a script for your video:\n\n[INTRO - 5 seconds]\n"Hey everyone! Welcome back to my channel!"\n\n[MAIN CONTENT - 20 seconds]\n"Today I'm going to show you something amazing..."\n\n[OUTRO - 5 seconds]\n"Don't forget to like and subscribe!"`,
+        `Suggested hashtags:\n\n#viral #fyp #foryou #trending #content #creator #video #entertainment #fun #amazing`,
+        `Thumbnail concept:\n\n- Bright, eye-catching colors\n- Your face with surprised expression\n- Bold text overlay: "YOU WON'T BELIEVE THIS!"\n- Arrow pointing to main subject`
+      ];
+
+      document.getElementById('aiResult').style.display = 'block';
+      document.getElementById('aiResultText').textContent = responses[Math.floor(Math.random() * responses.length)];
+      NVME.toast.success('AI generation complete!');
+    }
+
+    function editVideo(videoId) {
+      NVME.toast.info('Opening video editor...');
+      document.getElementById('editorModal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function useTemplate(name) {
+      NVME.toast.success(`Using "${name}" template`);
+      window.location.href = '/upload.html?template=' + encodeURIComponent(name);
+    }
+  </script>
+</body>
+</html>

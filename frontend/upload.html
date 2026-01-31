@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload - NVME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .upload-page {
+      min-height: 100vh;
+      background: var(--dark);
+      padding: 80px 1rem 2rem;
+    }
+    .upload-container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .upload-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .upload-header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .upload-header p {
+      color: var(--light-muted);
+    }
+    .upload-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+    @media (max-width: 768px) {
+      .upload-content {
+        grid-template-columns: 1fr;
+      }
+    }
+    .upload-dropzone {
+      background: var(--dark-card);
+      border: 2px dashed var(--dark-lighter);
+      border-radius: 1rem;
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .upload-dropzone:hover,
+    .upload-dropzone.dragover {
+      border-color: var(--primary);
+      background: rgba(139, 92, 246, 0.1);
+    }
+    .upload-dropzone-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+    .upload-dropzone h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    .upload-dropzone p {
+      color: var(--light-muted);
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+    .upload-dropzone input {
+      display: none;
+    }
+    .upload-preview {
+      display: none;
+      background: var(--dark-card);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .upload-preview.active {
+      display: block;
+    }
+    .upload-preview-video {
+      width: 100%;
+      max-height: 400px;
+      background: #000;
+    }
+    .upload-preview-info {
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--dark-lighter);
+    }
+    .upload-preview-name {
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+    .upload-preview-size {
+      color: var(--light-muted);
+      font-size: 0.75rem;
+    }
+    .upload-preview-remove {
+      background: var(--error);
+      border: none;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .upload-form {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+    .upload-form h2 {
+      font-size: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+    .form-label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+    .form-input, .form-textarea {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      background: var(--dark-lighter);
+      border: 1px solid var(--dark-lighter);
+      border-radius: 0.5rem;
+      color: var(--light);
+      font-size: 0.875rem;
+    }
+    .form-input:focus, .form-textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .form-textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+    .char-count {
+      text-align: right;
+      font-size: 0.75rem;
+      color: var(--light-muted);
+      margin-top: 0.25rem;
+    }
+    .tags-input {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      background: var(--dark-lighter);
+      border: 1px solid var(--dark-lighter);
+      border-radius: 0.5rem;
+      min-height: 48px;
+    }
+    .tags-input:focus-within {
+      border-color: var(--primary);
+    }
+    .tag {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.5rem;
+      background: var(--primary);
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+    }
+    .tag-remove {
+      background: none;
+      border: none;
+      color: white;
+      cursor: pointer;
+      padding: 0;
+      font-size: 0.875rem;
+    }
+    .tags-input input {
+      flex: 1;
+      min-width: 100px;
+      background: none;
+      border: none;
+      color: var(--light);
+      font-size: 0.875rem;
+      padding: 0.25rem;
+    }
+    .tags-input input:focus {
+      outline: none;
+    }
+    .visibility-options {
+      display: flex;
+      gap: 1rem;
+    }
+    .visibility-option {
+      flex: 1;
+      padding: 1rem;
+      background: var(--dark-lighter);
+      border: 2px solid var(--dark-lighter);
+      border-radius: 0.5rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .visibility-option:hover {
+      border-color: var(--primary);
+    }
+    .visibility-option.selected {
+      border-color: var(--primary);
+      background: rgba(139, 92, 246, 0.1);
+    }
+    .visibility-option input {
+      display: none;
+    }
+    .visibility-option-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .visibility-option-label {
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+    .upload-progress {
+      display: none;
+      margin-top: 1rem;
+    }
+    .upload-progress.active {
+      display: block;
+    }
+    .progress-bar {
+      height: 8px;
+      background: var(--dark-lighter);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .progress-text {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--light-muted);
+    }
+    .upload-actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    .upload-actions .btn {
+      flex: 1;
+    }
+    .upload-tips {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-top: 2rem;
+    }
+    .upload-tips h3 {
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    }
+    .upload-tips ul {
+      list-style: none;
+      padding: 0;
+    }
+    .upload-tips li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.875rem;
+      color: var(--light-muted);
+    }
+    .upload-tips li span:first-child {
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">NVME</a>
+    <div class="navbar-nav">
+      <a href="/feed.html" class="nav-link">Feed</a>
+      <a href="/live.html" class="nav-link">Live</a>
+      <div class="user-menu hidden flex items-center gap-2">
+        <a href="/wallet.html" class="nav-link">💰 <span class="user-coins">0</span></a>
+        <div class="dropdown">
+          <button class="dropdown-toggle btn btn-secondary btn-sm flex items-center gap-2">
+            <img src="/img/default-avatar.png" alt="" class="avatar avatar-sm user-avatar">
+            <span class="user-name">User</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/profile.html" class="dropdown-item">👤 Profile</a>
+            <a href="/studio.html" class="dropdown-item">🎬 Studio</a>
+            <a href="/wallet.html" class="dropdown-item">💰 Wallet</a>
+            <a href="/messages.html" class="dropdown-item">💬 Messages</a>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item logout-btn">🚪 Log Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="upload-page">
+    <div class="upload-container">
+      <div class="upload-header">
+        <h1>Upload Video</h1>
+        <p>Share your creativity with the world</p>
+      </div>
+
+      <div class="upload-content">
+        <!-- Left: Video Upload -->
+        <div>
+          <div class="upload-dropzone" id="dropzone">
+            <div class="upload-dropzone-icon">📹</div>
+            <h3>Select video to upload</h3>
+            <p>Or drag and drop a file</p>
+            <p>MP4 or WebM • 720p or higher • Up to 10 minutes</p>
+            <button class="btn btn-primary">Select File</button>
+            <input type="file" id="videoInput" accept="video/mp4,video/webm,video/quicktime">
+          </div>
+
+          <div class="upload-preview" id="uploadPreview">
+            <video class="upload-preview-video" id="previewVideo" controls></video>
+            <div class="upload-preview-info">
+              <div>
+                <div class="upload-preview-name" id="fileName">video.mp4</div>
+                <div class="upload-preview-size" id="fileSize">0 MB</div>
+              </div>
+              <button class="upload-preview-remove" onclick="removeVideo()">Remove</button>
+            </div>
+          </div>
+
+          <div class="upload-tips">
+            <h3>📌 Tips for better reach</h3>
+            <ul>
+              <li><span>✨</span> <span>Use trending sounds and hashtags</span></li>
+              <li><span>📱</span> <span>Vertical videos (9:16) perform best</span></li>
+              <li><span>⏱️</span> <span>Keep it short and engaging (15-60 seconds)</span></li>
+              <li><span>🎯</span> <span>Hook viewers in the first 3 seconds</span></li>
+              <li><span>💬</span> <span>Add captions for accessibility</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Right: Video Details -->
+        <div class="upload-form">
+          <h2>Details</h2>
+          
+          <div class="form-group">
+            <label class="form-label">Caption</label>
+            <textarea class="form-textarea" id="description" placeholder="Write a caption..." maxlength="2200"></textarea>
+            <div class="char-count"><span id="descCount">0</span>/2200</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Hashtags</label>
+            <div class="tags-input" id="tagsInput">
+              <input type="text" placeholder="Add hashtags..." id="tagInput">
+            </div>
+            <p style="font-size: 0.75rem; color: var(--light-muted); margin-top: 0.25rem;">Press Enter or comma to add</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Cover</label>
+            <div style="display: flex; gap: 0.5rem;">
+              <div style="flex: 1; aspect-ratio: 9/16; background: var(--dark-lighter); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="selectCover()">
+                <img id="coverPreview" src="" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0.5rem; display: none;">
+                <span id="coverPlaceholder">📷 Select cover</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Who can view this video</label>
+            <div class="visibility-options">
+              <label class="visibility-option selected">
+                <input type="radio" name="visibility" value="public" checked>
+                <div class="visibility-option-icon">🌍</div>
+                <div class="visibility-option-label">Public</div>
+              </label>
+              <label class="visibility-option">
+                <input type="radio" name="visibility" value="followers">
+                <div class="visibility-option-icon">👥</div>
+                <div class="visibility-option-label">Followers</div>
+              </label>
+              <label class="visibility-option">
+                <input type="radio" name="visibility" value="private">
+                <div class="visibility-option-icon">🔒</div>
+                <div class="visibility-option-label">Private</div>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Allow</label>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
+                <input type="checkbox" id="allowComments" checked style="width: 18px; height: 18px;">
+                <span>Comments</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
+                <input type="checkbox" id="allowDuet" checked style="width: 18px; height: 18px;">
+                <span>Duet</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
+                <input type="checkbox" id="allowStitch" checked style="width: 18px; height: 18px;">
+                <span>Stitch</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="upload-progress" id="uploadProgress">
+            <div class="progress-bar">
+              <div class="progress-bar-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text">
+              <span id="progressStatus">Uploading...</span>
+              <span id="progressPercent">0%</span>
+            </div>
+          </div>
+
+          <div class="upload-actions">
+            <button class="btn btn-secondary" onclick="saveDraft()">Save Draft</button>
+            <button class="btn btn-primary" id="postBtn" onclick="postVideo()" disabled>Post</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let selectedFile = null;
+    let tags = [];
+    let coverBlob = null;
+
+    const dropzone = document.getElementById('dropzone');
+    const videoInput = document.getElementById('videoInput');
+    const uploadPreview = document.getElementById('uploadPreview');
+    const previewVideo = document.getElementById('previewVideo');
+    const description = document.getElementById('description');
+    const descCount = document.getElementById('descCount');
+    const tagsInput = document.getElementById('tagsInput');
+    const tagInput = document.getElementById('tagInput');
+    const postBtn = document.getElementById('postBtn');
+
+    // Check auth
+    document.addEventListener('DOMContentLoaded', async () => {
+      const isAuth = await NVME.auth.checkAuth();
+      if (!isAuth) {
+        window.location.href = '/login.html?redirect=/upload.html';
+      }
+    });
+
+    // Dropzone click
+    dropzone.addEventListener('click', () => videoInput.click());
+
+    // Drag and drop
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('dragover');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFile(files[0]);
+      }
+    });
+
+    // File input change
+    videoInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    function handleFile(file) {
+      // Validate file type
+      const validTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+      if (!validTypes.includes(file.type)) {
+        NVME.toast.error('Please select a valid video file (MP4, WebM)');
+        return;
+      }
+
+      // Validate file size (500MB max)
+      if (file.size > 500 * 1024 * 1024) {
+        NVME.toast.error('File size must be less than 500MB');
+        return;
+      }
+
+      selectedFile = file;
+      
+      // Show preview
+      const url = URL.createObjectURL(file);
+      previewVideo.src = url;
+      document.getElementById('fileName').textContent = file.name;
+      document.getElementById('fileSize').textContent = formatFileSize(file.size);
+      
+      dropzone.style.display = 'none';
+      uploadPreview.classList.add('active');
+      postBtn.disabled = false;
+
+      // Generate cover from video
+      previewVideo.addEventListener('loadeddata', () => {
+        generateCover();
+      }, { once: true });
+    }
+
+    function removeVideo() {
+      selectedFile = null;
+      previewVideo.src = '';
+      videoInput.value = '';
+      dropzone.style.display = 'block';
+      uploadPreview.classList.remove('active');
+      postBtn.disabled = true;
+      coverBlob = null;
+      document.getElementById('coverPreview').style.display = 'none';
+      document.getElementById('coverPlaceholder').style.display = 'block';
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes >= 1024 * 1024 * 1024) {
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+      } else if (bytes >= 1024 * 1024) {
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+      } else {
+        return (bytes / 1024).toFixed(2) + ' KB';
+      }
+    }
+
+    // Description character count
+    description.addEventListener('input', () => {
+      descCount.textContent = description.value.length;
+    });
+
+    // Tags input
+    tagInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        addTag();
+      }
+    });
+
+    function addTag() {
+      let tag = tagInput.value.trim().replace(/^#/, '').replace(/,/g, '');
+      if (tag && !tags.includes(tag) && tags.length < 10) {
+        tags.push(tag);
+        renderTags();
+      }
+      tagInput.value = '';
+    }
+
+    function removeTag(tag) {
+      tags = tags.filter(t => t !== tag);
+      renderTags();
+    }
+
+    function renderTags() {
+      const existingTags = tagsInput.querySelectorAll('.tag');
+      existingTags.forEach(t => t.remove());
+      
+      tags.forEach(tag => {
+        const tagEl = document.createElement('span');
+        tagEl.className = 'tag';
+        tagEl.innerHTML = `#${tag} <button class="tag-remove" onclick="removeTag('${tag}')">×</button>`;
+        tagsInput.insertBefore(tagEl, tagInput);
+      });
+    }
+
+    // Visibility options
+    document.querySelectorAll('.visibility-option').forEach(option => {
+      option.addEventListener('click', () => {
+        document.querySelectorAll('.visibility-option').forEach(o => o.classList.remove('selected'));
+        option.classList.add('selected');
+      });
+    });
+
+    // Generate cover from video
+    function generateCover() {
+      const canvas = document.createElement('canvas');
+      canvas.width = previewVideo.videoWidth;
+      canvas.height = previewVideo.videoHeight;
+      const ctx = canvas.getContext('2d');
+      
+      // Seek to 1 second
+      previewVideo.currentTime = 1;
+      previewVideo.addEventListener('seeked', () => {
+        ctx.drawImage(previewVideo, 0, 0);
+        canvas.toBlob((blob) => {
+          coverBlob = blob;
+          const url = URL.createObjectURL(blob);
+          document.getElementById('coverPreview').src = url;
+          document.getElementById('coverPreview').style.display = 'block';
+          document.getElementById('coverPlaceholder').style.display = 'none';
+        }, 'image/jpeg', 0.8);
+      }, { once: true });
+    }
+
+    function selectCover() {
+      if (previewVideo.src) {
+        // Allow user to select frame
+        const currentTime = prompt('Enter time in seconds for cover:', '1');
+        if (currentTime !== null) {
+          previewVideo.currentTime = parseFloat(currentTime) || 1;
+          previewVideo.addEventListener('seeked', () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = previewVideo.videoWidth;
+            canvas.height = previewVideo.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(previewVideo, 0, 0);
+            canvas.toBlob((blob) => {
+              coverBlob = blob;
+              const url = URL.createObjectURL(blob);
+              document.getElementById('coverPreview').src = url;
+              document.getElementById('coverPreview').style.display = 'block';
+              document.getElementById('coverPlaceholder').style.display = 'none';
+            }, 'image/jpeg', 0.8);
+          }, { once: true });
+        }
+      }
+    }
+
+    // Post video
+    async function postVideo() {
+      if (!selectedFile) {
+        NVME.toast.error('Please select a video');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('video', selectedFile);
+      formData.append('description', description.value);
+      formData.append('tags', JSON.stringify(tags));
+      formData.append('visibility', document.querySelector('input[name="visibility"]:checked').value);
+      formData.append('allow_comments', document.getElementById('allowComments').checked);
+      formData.append('allow_duet', document.getElementById('allowDuet').checked);
+      formData.append('allow_stitch', document.getElementById('allowStitch').checked);
+      
+      if (coverBlob) {
+        formData.append('thumbnail', coverBlob, 'cover.jpg');
+      }
+
+      // Show progress
+      const progressEl = document.getElementById('uploadProgress');
+      const progressFill = document.getElementById('progressFill');
+      const progressStatus = document.getElementById('progressStatus');
+      const progressPercent = document.getElementById('progressPercent');
+      
+      progressEl.classList.add('active');
+      postBtn.disabled = true;
+
+      try {
+        // Use XMLHttpRequest for progress tracking
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            progressFill.style.width = percent + '%';
+            progressPercent.textContent = percent + '%';
+            
+            if (percent === 100) {
+              progressStatus.textContent = 'Processing...';
+            }
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const response = JSON.parse(xhr.responseText);
+            NVME.toast.success('Video posted successfully!');
+            window.location.href = '/profile.html';
+          } else {
+            const error = JSON.parse(xhr.responseText);
+            throw new Error(error.error || 'Upload failed');
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          throw new Error('Upload failed');
+        });
+
+        xhr.open('POST', '/api/videos/upload');
+        xhr.withCredentials = true;
+        xhr.send(formData);
+
+      } catch (error) {
+        NVME.toast.error(error.message || 'Failed to upload video');
+        progressEl.classList.remove('active');
+        postBtn.disabled = false;
+      }
+    }
+
+    // Save draft
+    function saveDraft() {
+      const draft = {
+        description: description.value,
+        tags: tags,
+        visibility: document.querySelector('input[name="visibility"]:checked').value,
+        allowComments: document.getElementById('allowComments').checked,
+        allowDuet: document.getElementById('allowDuet').checked,
+        allowStitch: document.getElementById('allowStitch').checked
+      };
+      localStorage.setItem('videoDraft', JSON.stringify(draft));
+      NVME.toast.success('Draft saved!');
+    }
+
+    // Load draft on page load
+    const savedDraft = localStorage.getItem('videoDraft');
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft);
+        description.value = draft.description || '';
+        descCount.textContent = description.value.length;
+        tags = draft.tags || [];
+        renderTags();
+        
+        if (draft.visibility) {
+          document.querySelector(`input[name="visibility"][value="${draft.visibility}"]`).checked = true;
+          document.querySelectorAll('.visibility-option').forEach(o => o.classList.remove('selected'));
+          document.querySelector(`input[name="visibility"][value="${draft.visibility}"]`).closest('.visibility-option').classList.add('selected');
+        }
+        
+        document.getElementById('allowComments').checked = draft.allowComments !== false;
+        document.getElementById('allowDuet').checked = draft.allowDuet !== false;
+        document.getElementById('allowStitch').checked = draft.allowStitch !== false;
+      } catch (e) {}
+    }
+  </script>
+</body>
+</html>

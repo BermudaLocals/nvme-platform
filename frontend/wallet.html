@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wallet - NVME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .wallet-page {
+      min-height: 100vh;
+      background: var(--dark);
+      padding: 80px 1rem 2rem;
+    }
+    .wallet-container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    /* Balance Card */
+    .balance-card {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      border-radius: 1.5rem;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .balance-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    }
+    .balance-label {
+      font-size: 0.875rem;
+      opacity: 0.9;
+      margin-bottom: 0.5rem;
+    }
+    .balance-amount {
+      font-size: 3rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .balance-amount .coin-icon {
+      font-size: 2.5rem;
+    }
+    .balance-usd {
+      font-size: 1rem;
+      opacity: 0.8;
+      margin-top: 0.5rem;
+    }
+    .balance-actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    .balance-actions .btn {
+      flex: 1;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    .balance-actions .btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    /* Tabs */
+    .wallet-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    .wallet-tab {
+      padding: 0.75rem 1.5rem;
+      background: var(--dark-card);
+      border: none;
+      border-radius: 2rem;
+      color: var(--light-muted);
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .wallet-tab.active {
+      background: var(--primary);
+      color: white;
+    }
+    .wallet-tab:hover:not(.active) {
+      background: var(--dark-lighter);
+    }
+    /* Coin Packages */
+    .coin-packages {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .coin-package {
+      background: var(--dark-card);
+      border: 2px solid var(--dark-lighter);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .coin-package:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+    .coin-package.popular {
+      border-color: var(--secondary);
+    }
+    .coin-package.popular::before {
+      content: 'BEST VALUE';
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--secondary);
+      color: var(--dark);
+      font-size: 0.625rem;
+      font-weight: 700;
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+    }
+    .coin-package-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .coin-package-amount {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    .coin-package-bonus {
+      font-size: 0.75rem;
+      color: var(--success);
+      margin-bottom: 0.75rem;
+    }
+    .coin-package-price {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    /* Gift Catalog */
+    .gift-catalog {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 1rem;
+    }
+    .gift-item {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      padding: 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+    .gift-item:hover {
+      border-color: var(--primary);
+      transform: scale(1.05);
+    }
+    .gift-item.selected {
+      border-color: var(--primary);
+      background: rgba(139, 92, 246, 0.1);
+    }
+    .gift-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .gift-name {
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .gift-price {
+      font-size: 0.75rem;
+      color: var(--secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+    }
+    /* Gift Categories */
+    .gift-categories {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    .gift-category {
+      padding: 0.5rem 1rem;
+      background: var(--dark-lighter);
+      border: none;
+      border-radius: 1rem;
+      color: var(--light-muted);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .gift-category.active {
+      background: var(--primary);
+      color: white;
+    }
+    /* Transaction History */
+    .transactions-list {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .transaction-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--dark-lighter);
+    }
+    .transaction-item:last-child {
+      border-bottom: none;
+    }
+    .transaction-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+    .transaction-icon.credit {
+      background: rgba(16, 185, 129, 0.1);
+    }
+    .transaction-icon.debit {
+      background: rgba(239, 68, 68, 0.1);
+    }
+    .transaction-info {
+      flex: 1;
+    }
+    .transaction-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .transaction-date {
+      font-size: 0.75rem;
+      color: var(--light-muted);
+    }
+    .transaction-amount {
+      font-weight: 700;
+      text-align: right;
+    }
+    .transaction-amount.credit {
+      color: var(--success);
+    }
+    .transaction-amount.debit {
+      color: var(--error);
+    }
+    /* Earnings Section */
+    .earnings-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .earnings-stat {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+    .earnings-stat-label {
+      font-size: 0.875rem;
+      color: var(--light-muted);
+      margin-bottom: 0.5rem;
+    }
+    .earnings-stat-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+    .earnings-stat-change {
+      font-size: 0.75rem;
+      margin-top: 0.5rem;
+    }
+    .earnings-stat-change.positive {
+      color: var(--success);
+    }
+    .earnings-stat-change.negative {
+      color: var(--error);
+    }
+    /* Send Gift Modal */
+    .send-gift-recipient {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: var(--dark-lighter);
+      border-radius: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .send-gift-recipient img {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .send-gift-preview {
+      text-align: center;
+      padding: 2rem;
+      background: var(--dark-lighter);
+      border-radius: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .send-gift-preview .gift-icon {
+      font-size: 4rem;
+      animation: giftBounce 1s ease infinite;
+    }
+    @keyframes giftBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .gift-quantity {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .gift-quantity button {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--dark-lighter);
+      border: none;
+      color: var(--light);
+      font-size: 1.25rem;
+      cursor: pointer;
+    }
+    .gift-quantity button:hover {
+      background: var(--primary);
+    }
+    .gift-quantity span {
+      font-size: 1.5rem;
+      font-weight: 700;
+      min-width: 50px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">NVME</a>
+    <div class="navbar-nav">
+      <a href="/feed.html" class="nav-link">Feed</a>
+      <a href="/live.html" class="nav-link">Live</a>
+      <div class="user-menu hidden flex items-center gap-2">
+        <a href="/wallet.html" class="nav-link active">💰 <span class="user-coins">0</span></a>
+        <div class="dropdown">
+          <button class="dropdown-toggle btn btn-secondary btn-sm flex items-center gap-2">
+            <img src="/img/default-avatar.png" alt="" class="avatar avatar-sm user-avatar">
+            <span class="user-name">User</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/profile.html" class="dropdown-item">👤 Profile</a>
+            <a href="/studio.html" class="dropdown-item">🎬 Studio</a>
+            <a href="/wallet.html" class="dropdown-item">💰 Wallet</a>
+            <a href="/messages.html" class="dropdown-item">💬 Messages</a>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item logout-btn">🚪 Log Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="wallet-page">
+    <div class="wallet-container">
+      <!-- Balance Card -->
+      <div class="balance-card">
+        <div class="balance-label">Your Balance</div>
+        <div class="balance-amount">
+          <span class="coin-icon">🪙</span>
+          <span id="coinBalance">0</span>
+        </div>
+        <div class="balance-usd">≈ $<span id="usdBalance">0.00</span> USD</div>
+        <div class="balance-actions">
+          <button class="btn" onclick="switchTab('buy')">💳 Buy Coins</button>
+          <button class="btn" onclick="switchTab('gifts')">🎁 Send Gift</button>
+          <button class="btn" onclick="switchTab('earnings')">💰 Earnings</button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="wallet-tabs">
+        <button class="wallet-tab active" data-tab="buy" onclick="switchTab('buy')">Buy Coins</button>
+        <button class="wallet-tab" data-tab="gifts" onclick="switchTab('gifts')">Gift Catalog</button>
+        <button class="wallet-tab" data-tab="received" onclick="switchTab('received')">Received Gifts</button>
+        <button class="wallet-tab" data-tab="earnings" onclick="switchTab('earnings')">Earnings</button>
+        <button class="wallet-tab" data-tab="history" onclick="switchTab('history')">History</button>
+      </div>
+
+      <!-- Buy Coins Tab -->
+      <div id="buyTab" class="tab-content">
+        <h2 style="margin-bottom: 1rem;">Choose a Package</h2>
+        <div class="coin-packages" id="coinPackages">
+          <!-- Packages will be loaded here -->
+        </div>
+        <div style="background: var(--dark-card); border-radius: 1rem; padding: 1.5rem;">
+          <h3 style="margin-bottom: 1rem;">Payment Methods</h3>
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <button class="btn btn-secondary" style="flex: 1; min-width: 150px;">
+              💳 Credit Card
+            </button>
+            <button class="btn btn-secondary" style="flex: 1; min-width: 150px;">
+              📱 Apple Pay
+            </button>
+            <button class="btn btn-secondary" style="flex: 1; min-width: 150px;">
+              🅿️ PayPal
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gift Catalog Tab -->
+      <div id="giftsTab" class="tab-content hidden">
+        <div class="gift-categories">
+          <button class="gift-category active" onclick="filterGifts('all')">All</button>
+          <button class="gift-category" onclick="filterGifts('popular')">🔥 Popular</button>
+          <button class="gift-category" onclick="filterGifts('love')">❤️ Love</button>
+          <button class="gift-category" onclick="filterGifts('celebration')">🎉 Celebration</button>
+          <button class="gift-category" onclick="filterGifts('luxury')">💎 Luxury</button>
+          <button class="gift-category" onclick="filterGifts('funny')">😂 Funny</button>
+          <button class="gift-category" onclick="filterGifts('nature')">🌸 Nature</button>
+        </div>
+        <div class="gift-catalog" id="giftCatalog">
+          <!-- Gifts will be loaded here -->
+        </div>
+      </div>
+
+      <!-- Received Gifts Tab -->
+      <div id="receivedTab" class="tab-content hidden">
+        <div class="transactions-list" id="receivedGifts">
+          <!-- Received gifts will be loaded here -->
+        </div>
+      </div>
+
+      <!-- Earnings Tab -->
+      <div id="earningsTab" class="tab-content hidden">
+        <div class="earnings-stats">
+          <div class="earnings-stat">
+            <div class="earnings-stat-label">Total Earnings</div>
+            <div class="earnings-stat-value">$<span id="totalEarnings">0.00</span></div>
+            <div class="earnings-stat-change positive">+12% from last month</div>
+          </div>
+          <div class="earnings-stat">
+            <div class="earnings-stat-label">This Month</div>
+            <div class="earnings-stat-value">$<span id="monthEarnings">0.00</span></div>
+            <div class="earnings-stat-change positive">+5% from last week</div>
+          </div>
+          <div class="earnings-stat">
+            <div class="earnings-stat-label">Available to Withdraw</div>
+            <div class="earnings-stat-value">$<span id="availableWithdraw">0.00</span></div>
+          </div>
+          <div class="earnings-stat">
+            <div class="earnings-stat-label">Pending</div>
+            <div class="earnings-stat-value">$<span id="pendingEarnings">0.00</span></div>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width: 100%; margin-bottom: 1.5rem;" onclick="requestWithdraw()">
+          💸 Request Withdrawal
+        </button>
+        <h3 style="margin-bottom: 1rem;">Earnings Breakdown</h3>
+        <div class="transactions-list" id="earningsBreakdown">
+          <!-- Earnings breakdown will be loaded here -->
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div id="historyTab" class="tab-content hidden">
+        <div class="transactions-list" id="transactionHistory">
+          <!-- Transaction history will be loaded here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Send Gift Modal -->
+  <div class="modal-overlay" id="sendGiftModal">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Send Gift</h2>
+        <button class="modal-close" onclick="NVME.modal.hide('sendGiftModal')">✕</button>
+      </div>
+      <div style="padding: 1.5rem;">
+        <div class="send-gift-recipient" id="giftRecipient">
+          <img src="/img/default-avatar.png" alt="" id="recipientAvatar">
+          <div>
+            <div style="font-weight: 600;" id="recipientName">User</div>
+            <div style="font-size: 0.875rem; color: var(--light-muted);" id="recipientUsername">@username</div>
+          </div>
+        </div>
+        <div class="send-gift-preview">
+          <div class="gift-icon" id="selectedGiftIcon">🎁</div>
+          <div style="font-weight: 600; margin-top: 0.5rem;" id="selectedGiftName">Select a gift</div>
+          <div style="color: var(--secondary); margin-top: 0.25rem;">
+            🪙 <span id="selectedGiftPrice">0</span> coins
+          </div>
+        </div>
+        <div class="gift-quantity">
+          <button onclick="changeQuantity(-1)">−</button>
+          <span id="giftQuantity">1</span>
+          <button onclick="changeQuantity(1)">+</button>
+        </div>
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+          <div style="font-size: 0.875rem; color: var(--light-muted);">Total Cost</div>
+          <div style="font-size: 1.5rem; font-weight: 700;">🪙 <span id="totalGiftCost">0</span></div>
+        </div>
+        <button class="btn btn-primary" style="width: 100%;" onclick="confirmSendGift()">
+          Send Gift
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Buy Coins Modal -->
+  <div class="modal-overlay" id="buyCoinsModal">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Buy Coins</h2>
+        <button class="modal-close" onclick="NVME.modal.hide('buyCoinsModal')">✕</button>
+      </div>
+      <div style="padding: 1.5rem;">
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+          <div style="font-size: 3rem;">🪙</div>
+          <div style="font-size: 2rem; font-weight: 700;" id="buyAmount">0</div>
+          <div style="color: var(--light-muted);">coins</div>
+        </div>
+        <div style="background: var(--dark-lighter); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span>Package</span>
+            <span id="buyPackageName">-</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span>Bonus</span>
+            <span style="color: var(--success);" id="buyBonus">+0</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 1.25rem; padding-top: 0.5rem; border-top: 1px solid var(--dark-card);">
+            <span>Total</span>
+            <span id="buyPrice">$0.00</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width: 100%;" onclick="processPurchase()">
+          💳 Pay Now
+        </button>
+        <p style="text-align: center; font-size: 0.75rem; color: var(--light-muted); margin-top: 1rem;">
+          By purchasing, you agree to our Terms of Service
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let walletData = null;
+    let selectedGift = null;
+    let selectedPackage = null;
+    let giftQuantity = 1;
+    let recipientId = null;
+
+    // Gift catalog
+    const gifts = [
+      // Popular
+      { id: 1, name: 'Rose', icon: '🌹', price: 1, category: 'popular' },
+      { id: 2, name: 'Heart', icon: '❤️', price: 5, category: 'popular' },
+      { id: 3, name: 'Fire', icon: '🔥', price: 10, category: 'popular' },
+      { id: 4, name: 'Star', icon: '⭐', price: 15, category: 'popular' },
+      { id: 5, name: 'Crown', icon: '👑', price: 100, category: 'popular' },
+      // Love
+      { id: 6, name: 'Kiss', icon: '💋', price: 20, category: 'love' },
+      { id: 7, name: 'Love Letter', icon: '💌', price: 25, category: 'love' },
+      { id: 8, name: 'Cupid', icon: '💘', price: 50, category: 'love' },
+      { id: 9, name: 'Two Hearts', icon: '💕', price: 30, category: 'love' },
+      { id: 10, name: 'Heart Eyes', icon: '😍', price: 15, category: 'love' },
+      // Celebration
+      { id: 11, name: 'Party', icon: '🎉', price: 25, category: 'celebration' },
+      { id: 12, name: 'Confetti', icon: '🎊', price: 30, category: 'celebration' },
+      { id: 13, name: 'Balloon', icon: '🎈', price: 10, category: 'celebration' },
+      { id: 14, name: 'Cake', icon: '🎂', price: 50, category: 'celebration' },
+      { id: 15, name: 'Trophy', icon: '🏆', price: 200, category: 'celebration' },
+      // Luxury
+      { id: 16, name: 'Diamond', icon: '💎', price: 500, category: 'luxury' },
+      { id: 17, name: 'Money Bag', icon: '💰', price: 300, category: 'luxury' },
+      { id: 18, name: 'Gem', icon: '💠', price: 250, category: 'luxury' },
+      { id: 19, name: 'Ring', icon: '💍', price: 1000, category: 'luxury' },
+      { id: 20, name: 'Rocket', icon: '🚀', price: 500, category: 'luxury' },
+      // Funny
+      { id: 21, name: 'LOL', icon: '😂', price: 5, category: 'funny' },
+      { id: 22, name: 'Clown', icon: '🤡', price: 10, category: 'funny' },
+      { id: 23, name: 'Poop', icon: '💩', price: 5, category: 'funny' },
+      { id: 24, name: 'Ghost', icon: '👻', price: 15, category: 'funny' },
+      { id: 25, name: 'Alien', icon: '👽', price: 20, category: 'funny' },
+      // Nature
+      { id: 26, name: 'Sunflower', icon: '🌻', price: 10, category: 'nature' },
+      { id: 27, name: 'Cherry Blossom', icon: '🌸', price: 15, category: 'nature' },
+      { id: 28, name: 'Rainbow', icon: '🌈', price: 25, category: 'nature' },
+      { id: 29, name: 'Butterfly', icon: '🦋', price: 20, category: 'nature' },
+      { id: 30, name: 'Unicorn', icon: '🦄', price: 100, category: 'nature' },
+      // More gifts
+      { id: 31, name: 'Pizza', icon: '🍕', price: 10, category: 'funny' },
+      { id: 32, name: 'Ice Cream', icon: '🍦', price: 8, category: 'funny' },
+      { id: 33, name: 'Champagne', icon: '🍾', price: 75, category: 'celebration' },
+      { id: 34, name: 'Teddy Bear', icon: '🧸', price: 50, category: 'love' },
+      { id: 35, name: 'Chocolate', icon: '🍫', price: 15, category: 'love' },
+      { id: 36, name: 'Sparkles', icon: '✨', price: 20, category: 'popular' },
+      { id: 37, name: 'Lightning', icon: '⚡', price: 25, category: 'popular' },
+      { id: 38, name: 'Flame', icon: '🔥', price: 30, category: 'popular' },
+      { id: 39, name: 'Snowflake', icon: '❄️', price: 15, category: 'nature' },
+      { id: 40, name: 'Sun', icon: '☀️', price: 20, category: 'nature' },
+      { id: 41, name: 'Moon', icon: '🌙', price: 25, category: 'nature' },
+      { id: 42, name: 'Shooting Star', icon: '🌠', price: 100, category: 'luxury' },
+      { id: 43, name: 'Galaxy', icon: '🌌', price: 200, category: 'luxury' },
+      { id: 44, name: 'Planet', icon: '🪐', price: 150, category: 'luxury' },
+      { id: 45, name: 'Microphone', icon: '🎤', price: 50, category: 'celebration' },
+      { id: 46, name: 'Guitar', icon: '🎸', price: 75, category: 'celebration' },
+      { id: 47, name: 'Drum', icon: '🥁', price: 60, category: 'celebration' },
+      { id: 48, name: 'Clap', icon: '👏', price: 5, category: 'popular' },
+      { id: 49, name: 'Thumbs Up', icon: '👍', price: 1, category: 'popular' },
+      { id: 50, name: 'Muscle', icon: '💪', price: 10, category: 'popular' },
+    ];
+
+    // Coin packages
+    const packages = [
+      { id: 1, coins: 100, bonus: 0, price: 0.99, name: 'Starter' },
+      { id: 2, coins: 500, bonus: 50, price: 4.99, name: 'Basic' },
+      { id: 3, coins: 1000, bonus: 150, price: 9.99, name: 'Popular', popular: true },
+      { id: 4, coins: 2500, bonus: 500, price: 24.99, name: 'Pro' },
+      { id: 5, coins: 5000, bonus: 1500, price: 49.99, name: 'Premium' },
+      { id: 6, coins: 10000, bonus: 4000, price: 99.99, name: 'Ultimate' },
+    ];
+
+    // Check auth and load wallet
+    document.addEventListener('DOMContentLoaded', async () => {
+      const isAuth = await NVME.auth.checkAuth();
+      if (!isAuth) {
+        window.location.href = '/login.html?redirect=/wallet.html';
+        return;
+      }
+      
+      loadWallet();
+      renderPackages();
+      renderGifts();
+      
+      // Check for gift param
+      const urlParams = new URLSearchParams(window.location.search);
+      const giftTo = urlParams.get('to');
+      if (giftTo) {
+        recipientId = giftTo;
+        switchTab('gifts');
+        loadRecipient(giftTo);
+      }
+    });
+
+    // Load wallet data
+    async function loadWallet() {
+      try {
+        const data = await NVME.api.get('/wallet/balance');
+        walletData = data;
+        document.getElementById('coinBalance').textContent = NVME.utils.formatNumber(data.coins || 0);
+        document.getElementById('usdBalance').textContent = ((data.coins || 0) * 0.01).toFixed(2);
+        
+        // Update earnings
+        document.getElementById('totalEarnings').textContent = (data.total_earnings || 0).toFixed(2);
+        document.getElementById('monthEarnings').textContent = (data.month_earnings || 0).toFixed(2);
+        document.getElementById('availableWithdraw').textContent = (data.available_withdraw || 0).toFixed(2);
+        document.getElementById('pendingEarnings').textContent = (data.pending_earnings || 0).toFixed(2);
+      } catch (error) {
+        console.error('Failed to load wallet:', error);
+      }
+    }
+
+    // Render coin packages
+    function renderPackages() {
+      const container = document.getElementById('coinPackages');
+      container.innerHTML = packages.map(pkg => `
+        <div class="coin-package ${pkg.popular ? 'popular' : ''}" onclick="selectPackage(${pkg.id})">
+          <div class="coin-package-icon">🪙</div>
+          <div class="coin-package-amount">${NVME.utils.formatNumber(pkg.coins)}</div>
+          ${pkg.bonus > 0 ? `<div class="coin-package-bonus">+${NVME.utils.formatNumber(pkg.bonus)} bonus</div>` : '<div class="coin-package-bonus">&nbsp;</div>'}
+          <div class="coin-package-price">$${pkg.price.toFixed(2)}</div>
+        </div>
+      `).join('');
+    }
+
+    // Render gifts
+    function renderGifts(category = 'all') {
+      const container = document.getElementById('giftCatalog');
+      const filtered = category === 'all' ? gifts : gifts.filter(g => g.category === category);
+      
+      container.innerHTML = filtered.map(gift => `
+        <div class="gift-item" onclick="selectGift(${gift.id})">
+          <div class="gift-icon">${gift.icon}</div>
+          <div class="gift-name">${gift.name}</div>
+          <div class="gift-price">🪙 ${gift.price}</div>
+        </div>
+      `).join('');
+    }
+
+    // Filter gifts
+    function filterGifts(category) {
+      document.querySelectorAll('.gift-category').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.toLowerCase().includes(category) || (category === 'all' && btn.textContent === 'All'));
+      });
+      renderGifts(category);
+    }
+
+    // Switch tabs
+    function switchTab(tab) {
+      document.querySelectorAll('.wallet-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+      });
+      document.querySelectorAll('.tab-content').forEach(c => {
+        c.classList.add('hidden');
+      });
+      document.getElementById(tab + 'Tab').classList.remove('hidden');
+      
+      // Load tab-specific data
+      if (tab === 'received') loadReceivedGifts();
+      if (tab === 'history') loadTransactionHistory();
+      if (tab === 'earnings') loadEarningsBreakdown();
+    }
+
+    // Select package
+    function selectPackage(packageId) {
+      selectedPackage = packages.find(p => p.id === packageId);
+      if (!selectedPackage) return;
+      
+      document.getElementById('buyAmount').textContent = NVME.utils.formatNumber(selectedPackage.coins + selectedPackage.bonus);
+      document.getElementById('buyPackageName').textContent = selectedPackage.name;
+      document.getElementById('buyBonus').textContent = '+' + NVME.utils.formatNumber(selectedPackage.bonus);
+      document.getElementById('buyPrice').textContent = '$' + selectedPackage.price.toFixed(2);
+      
+      NVME.modal.show('buyCoinsModal');
+    }
+
+    // Process purchase
+    async function processPurchase() {
+      if (!selectedPackage) return;
+      
+      try {
+        await NVME.api.post('/wallet/buy-coins', {
+          package_id: selectedPackage.id,
+          amount: selectedPackage.coins,
+          price: selectedPackage.price
+        });
+        
+        NVME.toast.success(`Successfully purchased ${NVME.utils.formatNumber(selectedPackage.coins + selectedPackage.bonus)} coins!`);
+        NVME.modal.hide('buyCoinsModal');
+        loadWallet();
+      } catch (error) {
+        NVME.toast.error(error.message || 'Purchase failed');
+      }
+    }
+
+    // Select gift
+    function selectGift(giftId) {
+      selectedGift = gifts.find(g => g.id === giftId);
+      if (!selectedGift) return;
+      
+      document.querySelectorAll('.gift-item').forEach(item => {
+        item.classList.remove('selected');
+      });
+      event.currentTarget.classList.add('selected');
+      
+      document.getElementById('selectedGiftIcon').textContent = selectedGift.icon;
+      document.getElementById('selectedGiftName').textContent = selectedGift.name;
+      document.getElementById('selectedGiftPrice').textContent = selectedGift.price;
+      giftQuantity = 1;
+      document.getElementById('giftQuantity').textContent = giftQuantity;
+      updateTotalGiftCost();
+      
+      if (recipientId) {
+        NVME.modal.show('sendGiftModal');
+      }
+    }
+
+    // Load recipient
+    async function loadRecipient(userId) {
+      try {
+        const data = await NVME.api.get(`/users/${userId}`);
+        document.getElementById('recipientAvatar').src = data.avatar || '/img/default-avatar.png';
+        document.getElementById('recipientName').textContent = data.display_name || data.username;
+        document.getElementById('recipientUsername').textContent = '@' + data.username;
+      } catch (error) {
+        console.error('Failed to load recipient:', error);
+      }
+    }
+
+    // Change quantity
+    function changeQuantity(delta) {
+      giftQuantity = Math.max(1, Math.min(99, giftQuantity + delta));
+      document.getElementById('giftQuantity').textContent = giftQuantity;
+      updateTotalGiftCost();
+    }
+
+    function updateTotalGiftCost() {
+      if (selectedGift) {
+        document.getElementById('totalGiftCost').textContent = NVME.utils.formatNumber(selectedGift.price * giftQuantity);
+      }
+    }
+
+    // Confirm send gift
+    async function confirmSendGift() {
+      if (!selectedGift || !recipientId) {
+        NVME.toast.error('Please select a gift and recipient');
+        return;
+      }
+      
+      const totalCost = selectedGift.price * giftQuantity;
+      if (walletData && walletData.coins < totalCost) {
+        NVME.toast.error('Not enough coins');
+        switchTab('buy');
+        NVME.modal.hide('sendGiftModal');
+        return;
+      }
+      
+      try {
+        await NVME.api.post('/gifts/send', {
+          recipient_id: recipientId,
+          gift_id: selectedGift.id,
+          quantity: giftQuantity
+        });
+        
+        NVME.toast.success(`Sent ${giftQuantity}x ${selectedGift.icon} ${selectedGift.name}!`);
+        NVME.modal.hide('sendGiftModal');
+        loadWallet();
+        
+        // Go back if came from video/message
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('gift')) {
+          history.back();
+        }
+      } catch (error) {
+        NVME.toast.error(error.message || 'Failed to send gift');
+      }
+    }
+
+    // Load received gifts
+    async function loadReceivedGifts() {
+      const container = document.getElementById('receivedGifts');
+      container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--light-muted);">Loading...</div>';
+      
+      try {
+        const data = await NVME.api.get('/gifts/received');
+        
+        if (!data.gifts || data.gifts.length === 0) {
+          container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--light-muted);">No gifts received yet</div>';
+          return;
+        }
+        
+        container.innerHTML = data.gifts.map(gift => `
+          <div class="transaction-item">
+            <div class="transaction-icon credit">${gift.icon}</div>
+            <div class="transaction-info">
+              <div class="transaction-title">${gift.name} from @${gift.sender_username}</div>
+              <div class="transaction-date">${NVME.utils.formatDate(gift.created_at)}</div>
+            </div>
+            <div class="transaction-amount credit">+${gift.coins_value} 🪙</div>
+          </div>
+        `).join('');
+      } catch (error) {
+        container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--light-muted);">Failed to load gifts</div>';
+      }
+    }
+
+    // Load transaction history
+    async function loadTransactionHistory() {
+      const container = document.getElementById('transactionHistory');
+      container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--light-muted);">Loading...</div>';
+      
+      try {
+        const data = await NVME.api.get('/wallet/transactions');
+        
+        if (!data.transactions || data.transactions.length === 0) {
+          container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--light-muted);">No transactions yet</div>';
+          return;
+        }
+        
+        container.innerHTML = data.transactions.map(tx => `
+          <div class="transaction-item">
+            <div class="transaction-icon ${tx.type === 'credit' ? 'credit' : 'debit'}">
+              ${tx.type === 'credit' ? '📥' : '📤'}
+            </div>
+            <div class="transaction-info">
+              <div class="transaction-title">${tx.description}</div>
+              <div class="transaction-date">${NVME.utils.formatDate(tx.created_at)}</div>
+            </div>
+            <div class="transaction-amount ${tx.type}">
+              ${tx.type === 'credit' ? '+' : '-'}${NVME.utils.formatNumber(tx.amount)} 🪙
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--light-muted);">Failed to load history</div>';
+      }
+    }
+
+    // Load earnings breakdown
+    async function loadEarningsBreakdown() {
+      const container = document.getElementById('earningsBreakdown');
+      container.innerHTML = `
+        <div class="transaction-item">
+          <div class="transaction-icon credit">🎁</div>
+          <div class="transaction-info">
+            <div class="transaction-title">Gifts Received</div>
+            <div class="transaction-date">This month</div>
+          </div>
+          <div class="transaction-amount credit">$${(walletData?.gift_earnings || 0).toFixed(2)}</div>
+        </div>
+        <div class="transaction-item">
+          <div class="transaction-icon credit">📹</div>
+          <div class="transaction-info">
+            <div class="transaction-title">Video Views</div>
+            <div class="transaction-date">This month</div>
+          </div>
+          <div class="transaction-amount credit">$${(walletData?.view_earnings || 0).toFixed(2)}</div>
+        </div>
+        <div class="transaction-item">
+          <div class="transaction-icon credit">📺</div>
+          <div class="transaction-info">
+            <div class="transaction-title">Live Streaming</div>
+            <div class="transaction-date">This month</div>
+          </div>
+          <div class="transaction-amount credit">$${(walletData?.live_earnings || 0).toFixed(2)}</div>
+        </div>
+      `;
+    }
+
+    // Request withdrawal
+    function requestWithdraw() {
+      if (!walletData || walletData.available_withdraw < 10) {
+        NVME.toast.error('Minimum withdrawal amount is $10');
+        return;
+      }
+      NVME.toast.info('Withdrawal feature coming soon!');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NVME - The Future of Short Video Entertainment</title>
+  <meta name="description" content="Create, share, and earn with NVME - the next generation video platform with live streaming, virtual gifts, and creator monetization.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* Landing Page Specific Styles */
+    .landing-hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      padding: 80px 1.5rem 2rem;
+    }
+
+    .hero-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(ellipse at 20% 20%, rgba(139, 92, 246, 0.3) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(236, 72, 153, 0.2) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(245, 158, 11, 0.1) 0%, transparent 50%);
+      animation: bgPulse 10s ease-in-out infinite;
+    }
+
+    @keyframes bgPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      max-width: 800px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: rgba(139, 92, 246, 0.2);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 2rem;
+      font-size: 0.875rem;
+      color: var(--primary);
+      margin-bottom: 1.5rem;
+      animation: slideDown 0.6s ease;
+    }
+
+    .hero-title {
+      font-size: clamp(2.5rem, 8vw, 5rem);
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      animation: slideUp 0.6s ease 0.1s both;
+    }
+
+    .hero-title .gradient {
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.25rem);
+      color: var(--light-muted);
+      max-width: 600px;
+      margin: 0 auto 2rem;
+      line-height: 1.6;
+      animation: slideUp 0.6s ease 0.2s both;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      animation: slideUp 0.6s ease 0.3s both;
+    }
+
+    .hero-buttons .btn {
+      padding: 1rem 2rem;
+      font-size: 1rem;
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 3rem;
+      justify-content: center;
+      margin-top: 4rem;
+      animation: fadeIn 0.6s ease 0.5s both;
+    }
+
+    .hero-stat {
+      text-align: center;
+    }
+
+    .hero-stat-value {
+      font-size: 2rem;
+      font-weight: 800;
+      background: var(--gradient-gold);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-stat-label {
+      font-size: 0.875rem;
+      color: var(--light-muted);
+    }
+
+    /* Features Section */
+    .features-section {
+      padding: 6rem 1.5rem;
+      background: var(--dark-card);
+    }
+
+    .section-header {
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto 4rem;
+    }
+
+    .section-title {
+      font-size: 2.5rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+    }
+
+    .section-subtitle {
+      color: var(--light-muted);
+      font-size: 1.125rem;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .feature-card {
+      background: var(--dark);
+      border-radius: var(--radius-xl);
+      padding: 2rem;
+      text-align: center;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 40px rgba(139, 92, 246, 0.2);
+    }
+
+    .feature-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .feature-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    .feature-desc {
+      color: var(--light-muted);
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* How It Works */
+    .how-section {
+      padding: 6rem 1.5rem;
+    }
+
+    .steps-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+      justify-content: center;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .step-card {
+      flex: 1;
+      min-width: 250px;
+      max-width: 300px;
+      text-align: center;
+      position: relative;
+    }
+
+    .step-number {
+      width: 60px;
+      height: 60px;
+      background: var(--gradient-primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin: 0 auto 1.5rem;
+    }
+
+    .step-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    .step-desc {
+      color: var(--light-muted);
+      font-size: 0.9375rem;
+    }
+
+    /* Monetization Section */
+    .monetize-section {
+      padding: 6rem 1.5rem;
+      background: linear-gradient(180deg, var(--dark-card) 0%, var(--dark) 100%);
+    }
+
+    .monetize-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .monetize-card {
+      background: var(--dark-lighter);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      text-align: center;
+      border: 1px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .monetize-card:hover {
+      border-color: var(--primary);
+      background: rgba(139, 92, 246, 0.1);
+    }
+
+    .monetize-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .monetize-title {
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .monetize-desc {
+      font-size: 0.8125rem;
+      color: var(--light-muted);
+    }
+
+    /* CTA Section */
+    .cta-section {
+      padding: 6rem 1.5rem;
+      text-align: center;
+    }
+
+    .cta-box {
+      max-width: 600px;
+      margin: 0 auto;
+      background: var(--gradient-primary);
+      border-radius: var(--radius-xl);
+      padding: 4rem 2rem;
+    }
+
+    .cta-title {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+    }
+
+    .cta-text {
+      font-size: 1.125rem;
+      opacity: 0.9;
+      margin-bottom: 2rem;
+    }
+
+    .cta-box .btn {
+      background: white;
+      color: var(--primary);
+      padding: 1rem 2.5rem;
+      font-size: 1.0625rem;
+    }
+
+    .cta-box .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Footer */
+    .footer {
+      background: var(--dark-card);
+      border-top: 1px solid var(--dark-lighter);
+      padding: 3rem 1.5rem 1.5rem;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+    }
+
+    .footer-brand {
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.75rem;
+    }
+
+    .footer-desc {
+      color: var(--light-muted);
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+
+    .footer-title {
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .footer-links {
+      list-style: none;
+    }
+
+    .footer-links li {
+      margin-bottom: 0.5rem;
+    }
+
+    .footer-links a {
+      color: var(--light-muted);
+      font-size: 0.875rem;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: var(--primary);
+    }
+
+    .footer-bottom {
+      max-width: 1200px;
+      margin: 2rem auto 0;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--dark-lighter);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-size: 0.875rem;
+      color: var(--light-muted);
+    }
+
+    .social-links {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .social-links a {
+      font-size: 1.25rem;
+      transition: transform 0.2s;
+    }
+
+    .social-links a:hover {
+      transform: scale(1.2);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero-stats {
+        gap: 1.5rem;
+      }
+
+      .hero-stat-value {
+        font-size: 1.5rem;
+      }
+
+      .features-section,
+      .how-section,
+      .monetize-section,
+      .cta-section {
+        padding: 4rem 1rem;
+      }
+
+      .section-title {
+        font-size: 2rem;
+      }
+
+      .cta-box {
+        padding: 3rem 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">NVME</a>
+    <div class="navbar-nav">
+      <a href="/feed.html" class="nav-link">Explore</a>
+      <a href="/live.html" class="nav-link">Live</a>
+      <div class="auth-buttons flex items-center gap-2">
+        <a href="/login.html" class="btn btn-secondary btn-sm">Log In</a>
+        <a href="/signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+      </div>
+      <div class="user-menu hidden flex items-center gap-2">
+        <a href="/wallet.html" class="nav-link">💰 <span class="user-coins">0</span></a>
+        <div class="dropdown">
+          <button class="dropdown-toggle btn btn-secondary btn-sm flex items-center gap-2">
+            <img src="/img/default-avatar.svg" alt="" class="avatar avatar-sm user-avatar">
+            <span class="user-name">User</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/profile.html" class="dropdown-item">👤 Profile</a>
+            <a href="/upload.html" class="dropdown-item">📤 Upload</a>
+            <a href="/studio.html" class="dropdown-item">🎬 Studio</a>
+            <a href="/wallet.html" class="dropdown-item">💰 Wallet</a>
+            <a href="/messages.html" class="dropdown-item">💬 Messages</a>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item logout-btn">🚪 Log Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="landing-hero">
+    <div class="hero-bg"></div>
+    <div class="hero-content">
+      <div class="hero-badge">
+        🚀 The Future of Content Creation
+      </div>
+      <h1 class="hero-title">
+        Create. Share. <span class="gradient">Earn.</span>
+      </h1>
+      <p class="hero-subtitle">
+        Join millions of creators on NVME - the next generation video platform 
+        with live streaming, virtual gifts, and real monetization opportunities.
+      </p>
+      <div class="hero-buttons">
+        <a href="/signup.html" class="btn btn-primary">Get Started Free</a>
+        <a href="/feed.html" class="btn btn-secondary">Explore Videos</a>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-value">10M+</div>
+          <div class="hero-stat-label">Active Users</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-value">50M+</div>
+          <div class="hero-stat-label">Videos Created</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-value">$5M+</div>
+          <div class="hero-stat-label">Creator Earnings</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features-section">
+    <div class="section-header">
+      <h2 class="section-title">Everything You Need</h2>
+      <p class="section-subtitle">Powerful tools for creators, engaging experiences for viewers</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📱</div>
+        <h3 class="feature-title">Short Videos</h3>
+        <p class="feature-desc">Create and share engaging short-form videos with powerful editing tools and effects.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎥</div>
+        <h3 class="feature-title">Live Streaming</h3>
+        <p class="feature-desc">Go live instantly and connect with your audience in real-time with multi-guest support.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎁</div>
+        <h3 class="feature-title">Virtual Gifts</h3>
+        <p class="feature-desc">Send and receive animated gifts that convert to real earnings for creators.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💬</div>
+        <h3 class="feature-title">Direct Messages</h3>
+        <p class="feature-desc">Connect with friends and fans through our WhatsApp-style messaging system.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎰</div>
+        <h3 class="feature-title">Fun Games</h3>
+        <p class="feature-desc">Play exciting games like Crown & Anchor, Blackjack, and more to win coins.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🤖</div>
+        <h3 class="feature-title">AI Studio</h3>
+        <p class="feature-desc">Create professional content with AI-powered editing, captions, and effects.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="how-section">
+    <div class="section-header">
+      <h2 class="section-title">How It Works</h2>
+      <p class="section-subtitle">Start creating and earning in minutes</p>
+    </div>
+    <div class="steps-container">
+      <div class="step-card">
+        <div class="step-number">1</div>
+        <h3 class="step-title">Sign Up Free</h3>
+        <p class="step-desc">Create your account in seconds with email or phone number.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">2</div>
+        <h3 class="step-title">Create Content</h3>
+        <p class="step-desc">Upload videos, go live, or use our AI studio to create amazing content.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">3</div>
+        <h3 class="step-title">Grow & Earn</h3>
+        <p class="step-desc">Build your audience and earn through gifts, tips, and creator rewards.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Monetization -->
+  <section class="monetize-section">
+    <div class="section-header">
+      <h2 class="section-title">Multiple Ways to Earn</h2>
+      <p class="section-subtitle">Turn your creativity into real income</p>
+    </div>
+    <div class="monetize-grid">
+      <div class="monetize-card">
+        <div class="monetize-icon">🎁</div>
+        <div class="monetize-title">Virtual Gifts</div>
+        <div class="monetize-desc">Receive gifts from fans</div>
+      </div>
+      <div class="monetize-card">
+        <div class="monetize-icon">💎</div>
+        <div class="monetize-title">Tips</div>
+        <div class="monetize-desc">Direct support from viewers</div>
+      </div>
+      <div class="monetize-card">
+        <div class="monetize-icon">⭐</div>
+        <div class="monetize-title">Subscriptions</div>
+        <div class="monetize-desc">Exclusive content access</div>
+      </div>
+      <div class="monetize-card">
+        <div class="monetize-icon">🏆</div>
+        <div class="monetize-title">Challenges</div>
+        <div class="monetize-desc">Win prize pools</div>
+      </div>
+      <div class="monetize-card">
+        <div class="monetize-icon">📈</div>
+        <div class="monetize-title">Creator Fund</div>
+        <div class="monetize-desc">Earn from views</div>
+      </div>
+      <div class="monetize-card">
+        <div class="monetize-icon">🤝</div>
+        <div class="monetize-title">Brand Deals</div>
+        <div class="monetize-desc">Sponsored content</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta-section">
+    <div class="cta-box">
+      <h2 class="cta-title">Ready to Start Creating?</h2>
+      <p class="cta-text">Join millions of creators and start your journey today. It's free!</p>
+      <a href="/signup.html" class="btn">Create Free Account</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-content">
+      <div>
+        <div class="footer-brand">NVME</div>
+        <p class="footer-desc">The next generation video platform for creators and viewers.</p>
+      </div>
+      <div>
+        <h4 class="footer-title">Platform</h4>
+        <ul class="footer-links">
+          <li><a href="/feed.html">Explore</a></li>
+          <li><a href="/live.html">Live</a></li>
+          <li><a href="/games.html">Games</a></li>
+          <li><a href="/studio.html">Creator Studio</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="footer-title">Company</h4>
+        <ul class="footer-links">
+          <li><a href="#">About Us</a></li>
+          <li><a href="#">Careers</a></li>
+          <li><a href="#">Press</a></li>
+          <li><a href="#">Contact</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="footer-title">Legal</h4>
+        <ul class="footer-links">
+          <li><a href="#">Terms of Service</a></li>
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Community Guidelines</a></li>
+          <li><a href="#">Cookie Policy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>© 2026 NVME. All rights reserved.</div>
+      <div class="social-links">
+        <a href="#" title="Twitter">🐦</a>
+        <a href="#" title="Instagram">📸</a>
+        <a href="#" title="YouTube">▶️</a>
+        <a href="#" title="Discord">💬</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // Check if user is logged in and update UI
+    document.addEventListener('DOMContentLoaded', async () => {
+      const isAuth = await NVME.auth.checkAuth();
+      if (isAuth) {
+        document.querySelectorAll('.auth-buttons').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.user-menu').forEach(el => el.classList.remove('hidden'));
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up - NVME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .auth-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1F2937 0%, #111827 100%);
+      padding: 1rem;
+    }
+    .auth-container {
+      width: 100%;
+      max-width: 420px;
+    }
+    .auth-card {
+      background: var(--dark-card);
+      border: 1px solid var(--dark-lighter);
+      border-radius: 1.5rem;
+      padding: 2.5rem;
+    }
+    .auth-logo {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .auth-logo a {
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .auth-title {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .auth-subtitle {
+      text-align: center;
+      color: var(--light-muted);
+      margin-bottom: 2rem;
+    }
+    .auth-form .form-group {
+      margin-bottom: 1.25rem;
+    }
+    .auth-form .form-input {
+      padding: 1rem 1.25rem;
+      font-size: 1rem;
+    }
+    .auth-form .btn {
+      width: 100%;
+      padding: 1rem;
+      font-size: 1rem;
+      margin-top: 0.5rem;
+    }
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      margin: 1.5rem 0;
+      color: var(--light-muted);
+      font-size: 0.875rem;
+    }
+    .auth-divider::before,
+    .auth-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--dark-lighter);
+    }
+    .auth-divider span {
+      padding: 0 1rem;
+    }
+    .social-buttons {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .social-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.875rem;
+      background: var(--dark-lighter);
+      border: 1px solid var(--dark-lighter);
+      border-radius: 0.5rem;
+      color: var(--light);
+      font-weight: 500;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .social-btn:hover {
+      background: var(--dark);
+      border-color: var(--primary);
+    }
+    .auth-footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      color: var(--light-muted);
+    }
+    .auth-footer a {
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .password-toggle {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--light-muted);
+      cursor: pointer;
+    }
+    .input-wrapper {
+      position: relative;
+    }
+    .error-message {
+      color: var(--error);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      display: none;
+    }
+    .form-group.error .error-message {
+      display: block;
+    }
+    .form-group.error .form-input {
+      border-color: var(--error);
+    }
+    .password-strength {
+      height: 4px;
+      background: var(--dark-lighter);
+      border-radius: 2px;
+      margin-top: 0.5rem;
+      overflow: hidden;
+    }
+    .password-strength-bar {
+      height: 100%;
+      width: 0;
+      transition: all 0.3s;
+    }
+    .password-strength-bar.weak { width: 33%; background: var(--error); }
+    .password-strength-bar.medium { width: 66%; background: var(--warning); }
+    .password-strength-bar.strong { width: 100%; background: var(--success); }
+    .terms-text {
+      font-size: 0.75rem;
+      color: var(--light-muted);
+      text-align: center;
+      margin-top: 1rem;
+    }
+    .terms-text a {
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="auth-logo">
+          <a href="/">NVME</a>
+        </div>
+        <h1 class="auth-title">Create Account</h1>
+        <p class="auth-subtitle">Join millions of creators on NVME</p>
+        
+        <form class="auth-form" id="signupForm">
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" class="form-input" id="username" placeholder="Choose a username" required>
+            <p class="error-message">Username must be 3-20 characters (letters, numbers, underscore)</p>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-input" id="email" placeholder="Enter your email" required>
+            <p class="error-message">Please enter a valid email address</p>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Phone (optional)</label>
+            <input type="tel" class="form-input" id="phone" placeholder="+1 234 567 8900">
+            <p class="error-message">Please enter a valid phone number</p>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <div class="input-wrapper">
+              <input type="password" class="form-input" id="password" placeholder="Create a password" required>
+              <button type="button" class="password-toggle" onclick="togglePassword()">
+                👁️
+              </button>
+            </div>
+            <div class="password-strength">
+              <div class="password-strength-bar" id="strengthBar"></div>
+            </div>
+            <p class="error-message">Password must be at least 6 characters</p>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Confirm Password</label>
+            <input type="password" class="form-input" id="confirmPassword" placeholder="Confirm your password" required>
+            <p class="error-message">Passwords do not match</p>
+          </div>
+          
+          <button type="submit" class="btn btn-primary" id="submitBtn">
+            <span class="btn-text">Create Account</span>
+            <span class="btn-loading hidden">
+              <span class="spinner spinner-sm"></span>
+            </span>
+          </button>
+        </form>
+        
+        <p class="terms-text">
+          By signing up, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>
+        </p>
+        
+        <div class="auth-divider">
+          <span>or continue with</span>
+        </div>
+        
+        <div class="social-buttons">
+          <button class="social-btn" onclick="socialLogin('google')">
+            <span>🔵</span> Google
+          </button>
+          <button class="social-btn" onclick="socialLogin('apple')">
+            <span>🍎</span> Apple
+          </button>
+        </div>
+        
+        <p class="auth-footer">
+          Already have an account? <a href="/login.html">Log in</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    const form = document.getElementById('signupForm');
+    const usernameInput = document.getElementById('username');
+    const emailInput = document.getElementById('email');
+    const phoneInput = document.getElementById('phone');
+    const passwordInput = document.getElementById('password');
+    const confirmPasswordInput = document.getElementById('confirmPassword');
+    const submitBtn = document.getElementById('submitBtn');
+    const strengthBar = document.getElementById('strengthBar');
+
+    // Check if already logged in
+    document.addEventListener('DOMContentLoaded', async () => {
+      const isAuth = await NVME.auth.checkAuth();
+      if (isAuth) {
+        window.location.href = '/feed.html';
+      }
+    });
+
+    function togglePassword() {
+      const type = passwordInput.type === 'password' ? 'text' : 'password';
+      passwordInput.type = type;
+    }
+
+    function checkPasswordStrength(password) {
+      let strength = 0;
+      if (password.length >= 6) strength++;
+      if (password.length >= 10) strength++;
+      if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++;
+      if (/[0-9]/.test(password)) strength++;
+      if (/[^A-Za-z0-9]/.test(password)) strength++;
+      
+      strengthBar.className = 'password-strength-bar';
+      if (strength <= 2) strengthBar.classList.add('weak');
+      else if (strength <= 3) strengthBar.classList.add('medium');
+      else strengthBar.classList.add('strong');
+    }
+
+    passwordInput.addEventListener('input', () => {
+      checkPasswordStrength(passwordInput.value);
+      passwordInput.closest('.form-group').classList.remove('error');
+    });
+
+    function setLoading(loading) {
+      submitBtn.disabled = loading;
+      submitBtn.querySelector('.btn-text').classList.toggle('hidden', loading);
+      submitBtn.querySelector('.btn-loading').classList.toggle('hidden', !loading);
+    }
+
+    function validateForm() {
+      let valid = true;
+      
+      // Validate username
+      if (!NVME.validate.username(usernameInput.value)) {
+        usernameInput.closest('.form-group').classList.add('error');
+        valid = false;
+      } else {
+        usernameInput.closest('.form-group').classList.remove('error');
+      }
+      
+      // Validate email
+      if (!NVME.validate.email(emailInput.value)) {
+        emailInput.closest('.form-group').classList.add('error');
+        valid = false;
+      } else {
+        emailInput.closest('.form-group').classList.remove('error');
+      }
+      
+      // Validate phone (optional)
+      if (phoneInput.value && !NVME.validate.phone(phoneInput.value)) {
+        phoneInput.closest('.form-group').classList.add('error');
+        valid = false;
+      } else {
+        phoneInput.closest('.form-group').classList.remove('error');
+      }
+      
+      // Validate password
+      if (!NVME.validate.password(passwordInput.value)) {
+        passwordInput.closest('.form-group').classList.add('error');
+        valid = false;
+      } else {
+        passwordInput.closest('.form-group').classList.remove('error');
+      }
+      
+      // Validate confirm password
+      if (passwordInput.value !== confirmPasswordInput.value) {
+        confirmPasswordInput.closest('.form-group').classList.add('error');
+        valid = false;
+      } else {
+        confirmPasswordInput.closest('.form-group').classList.remove('error');
+      }
+      
+      return valid;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (!validateForm()) return;
+      
+      setLoading(true);
+      
+      try {
+        await NVME.auth.signup(
+          emailInput.value,
+          phoneInput.value || null,
+          passwordInput.value,
+          usernameInput.value
+        );
+        NVME.toast.success('Account created successfully!');
+        window.location.href = '/feed.html';
+      } catch (error) {
+        NVME.toast.error(error.message || 'Failed to create account');
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    function socialLogin(provider) {
+      NVME.toast.info(`${provider} signup coming soon!`);
+    }
+
+    // Clear errors on input
+    [usernameInput, emailInput, phoneInput, confirmPasswordInput].forEach(input => {
+      input.addEventListener('input', () => {
+        input.closest('.form-group').classList.remove('error');
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Content Calendar - NVME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .calendar-page {
+      min-height: 100vh;
+      background: var(--dark);
+      padding: 80px 1rem 2rem;
+    }
+    .calendar-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .calendar-header h1 {
+      font-size: 1.5rem;
+    }
+    .calendar-nav {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .calendar-nav button {
+      background: var(--dark-card);
+      border: none;
+      color: var(--light);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.25rem;
+    }
+    .calendar-nav button:hover {
+      background: var(--primary);
+    }
+    .calendar-month {
+      font-size: 1.25rem;
+      font-weight: 700;
+      min-width: 180px;
+      text-align: center;
+    }
+    .calendar-views {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .calendar-view-btn {
+      padding: 0.5rem 1rem;
+      background: var(--dark-card);
+      border: none;
+      border-radius: 0.5rem;
+      color: var(--light-muted);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .calendar-view-btn.active {
+      background: var(--primary);
+      color: white;
+    }
+    /* Calendar Grid */
+    .calendar-grid {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .calendar-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      background: var(--dark-lighter);
+    }
+    .calendar-weekday {
+      padding: 1rem;
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--light-muted);
+    }
+    .calendar-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+    }
+    .calendar-day {
+      min-height: 120px;
+      border: 1px solid var(--dark-lighter);
+      padding: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .calendar-day:hover {
+      background: var(--dark-lighter);
+    }
+    .calendar-day.other-month {
+      opacity: 0.4;
+    }
+    .calendar-day.today {
+      background: rgba(139, 92, 246, 0.1);
+    }
+    .calendar-day.today .day-number {
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .day-number {
+      font-weight: 600;
+      font-size: 0.875rem;
+      margin-bottom: 0.5rem;
+    }
+    .day-events {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .day-event {
+      font-size: 0.6875rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .day-event.scheduled {
+      background: var(--primary);
+      color: white;
+    }
+    .day-event.draft {
+      background: var(--secondary);
+      color: var(--dark);
+    }
+    .day-event.published {
+      background: var(--success);
+      color: white;
+    }
+    .day-event.live {
+      background: var(--error);
+      color: white;
+    }
+    /* List View */
+    .calendar-list {
+      display: none;
+    }
+    .calendar-list.active {
+      display: block;
+    }
+    .calendar-grid-view {
+      display: block;
+    }
+    .calendar-grid-view.hidden {
+      display: none;
+    }
+    .list-day {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+    .list-day-header {
+      padding: 1rem 1.5rem;
+      background: var(--dark-lighter);
+      font-weight: 600;
+    }
+    .list-day-header.today {
+      background: var(--primary);
+    }
+    .list-events {
+      padding: 0.5rem;
+    }
+    .list-event {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .list-event:hover {
+      background: var(--dark-lighter);
+    }
+    .list-event-time {
+      font-size: 0.875rem;
+      color: var(--light-muted);
+      min-width: 60px;
+    }
+    .list-event-thumbnail {
+      width: 60px;
+      height: 80px;
+      border-radius: 0.5rem;
+      object-fit: cover;
+      background: var(--dark-lighter);
+    }
+    .list-event-info {
+      flex: 1;
+    }
+    .list-event-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .list-event-status {
+      font-size: 0.75rem;
+      padding: 0.125rem 0.5rem;
+      border-radius: 1rem;
+      display: inline-block;
+    }
+    .list-event-status.scheduled {
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--primary);
+    }
+    .list-event-status.draft {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--secondary);
+    }
+    .list-event-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .list-event-actions button {
+      background: var(--dark-lighter);
+      border: none;
+      color: var(--light);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .list-event-actions button:hover {
+      background: var(--primary);
+    }
+    /* Schedule Modal */
+    .schedule-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .schedule-preview {
+      display: flex;
+      gap: 1rem;
+      background: var(--dark-lighter);
+      padding: 1rem;
+      border-radius: 0.75rem;
+    }
+    .schedule-preview-thumbnail {
+      width: 80px;
+      height: 120px;
+      border-radius: 0.5rem;
+      object-fit: cover;
+      background: var(--dark-card);
+    }
+    .schedule-preview-info {
+      flex: 1;
+    }
+    .datetime-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .best-times {
+      background: var(--dark-lighter);
+      border-radius: 0.75rem;
+      padding: 1rem;
+    }
+    .best-times h4 {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .best-time-slots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .best-time-slot {
+      padding: 0.5rem 1rem;
+      background: var(--dark-card);
+      border: none;
+      border-radius: 2rem;
+      color: var(--light);
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .best-time-slot:hover {
+      background: var(--primary);
+    }
+    /* Stats Sidebar */
+    .calendar-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .stat-card-value {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    .stat-card-label {
+      font-size: 0.75rem;
+      color: var(--light-muted);
+    }
+    /* Mobile */
+    @media (max-width: 768px) {
+      .calendar-day {
+        min-height: 80px;
+        padding: 0.25rem;
+      }
+      .day-event {
+        font-size: 0.5rem;
+        padding: 0.125rem 0.25rem;
+      }
+      .calendar-weekday {
+        padding: 0.5rem;
+        font-size: 0.75rem;
+      }
+      .datetime-inputs {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">NVME</a>
+    <div class="navbar-nav">
+      <a href="/feed.html" class="nav-link">Feed</a>
+      <a href="/studio.html" class="nav-link">Studio</a>
+      <div class="user-menu hidden flex items-center gap-2">
+        <a href="/wallet.html" class="nav-link">💰 <span class="user-coins">0</span></a>
+        <div class="dropdown">
+          <button class="dropdown-toggle btn btn-secondary btn-sm flex items-center gap-2">
+            <img src="/img/default-avatar.png" alt="" class="avatar avatar-sm user-avatar">
+            <span class="user-name">User</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/profile.html" class="dropdown-item">👤 Profile</a>
+            <a href="/studio.html" class="dropdown-item">🎬 Studio</a>
+            <a href="/wallet.html" class="dropdown-item">💰 Wallet</a>
+            <a href="/messages.html" class="dropdown-item">💬 Messages</a>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item logout-btn">🚪 Log Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="calendar-page">
+    <div class="calendar-container">
+      <!-- Stats -->
+      <div class="calendar-stats">
+        <div class="stat-card">
+          <div class="stat-card-value" id="scheduledCount">0</div>
+          <div class="stat-card-label">Scheduled</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value" id="draftsCount">0</div>
+          <div class="stat-card-label">Drafts</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value" id="publishedCount">0</div>
+          <div class="stat-card-label">Published This Month</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value" id="liveCount">0</div>
+          <div class="stat-card-label">Live Scheduled</div>
+        </div>
+      </div>
+
+      <!-- Header -->
+      <div class="calendar-header">
+        <h1>📅 Content Calendar</h1>
+        <div class="calendar-nav">
+          <button onclick="prevMonth()">←</button>
+          <span class="calendar-month" id="currentMonth">January 2026</span>
+          <button onclick="nextMonth()">→</button>
+        </div>
+        <div class="calendar-views">
+          <button class="calendar-view-btn active" onclick="switchView('grid')">📅 Grid</button>
+          <button class="calendar-view-btn" onclick="switchView('list')">📋 List</button>
+        </div>
+        <button class="btn btn-primary" onclick="openScheduleModal()">
+          ➕ Schedule Post
+        </button>
+      </div>
+
+      <!-- Grid View -->
+      <div class="calendar-grid-view" id="gridView">
+        <div class="calendar-grid">
+          <div class="calendar-weekdays">
+            <div class="calendar-weekday">Sun</div>
+            <div class="calendar-weekday">Mon</div>
+            <div class="calendar-weekday">Tue</div>
+            <div class="calendar-weekday">Wed</div>
+            <div class="calendar-weekday">Thu</div>
+            <div class="calendar-weekday">Fri</div>
+            <div class="calendar-weekday">Sat</div>
+          </div>
+          <div class="calendar-days" id="calendarDays">
+            <!-- Days will be rendered here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- List View -->
+      <div class="calendar-list" id="listView">
+        <!-- List items will be rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Schedule Modal -->
+  <div class="modal-overlay" id="scheduleModal">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3>📅 Schedule Post</h3>
+        <button class="modal-close" onclick="NVME.modal.hide('scheduleModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="schedule-form">
+          <div class="form-group">
+            <label class="form-label">Select Video</label>
+            <select class="form-input" id="scheduleVideo">
+              <option value="">Choose a video...</option>
+            </select>
+          </div>
+
+          <div class="schedule-preview hidden" id="schedulePreview">
+            <img src="" alt="" class="schedule-preview-thumbnail" id="previewThumbnail">
+            <div class="schedule-preview-info">
+              <div style="font-weight: 600;" id="previewTitle">Video Title</div>
+              <div style="font-size: 0.875rem; color: var(--light-muted);" id="previewDuration">0:00</div>
+            </div>
+          </div>
+
+          <div class="datetime-inputs">
+            <div class="form-group">
+              <label class="form-label">Date</label>
+              <input type="date" class="form-input" id="scheduleDate">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Time</label>
+              <input type="time" class="form-input" id="scheduleTime">
+            </div>
+          </div>
+
+          <div class="best-times">
+            <h4>✨ Best Times to Post</h4>
+            <div class="best-time-slots">
+              <button class="best-time-slot" onclick="setBestTime('09:00')">9:00 AM</button>
+              <button class="best-time-slot" onclick="setBestTime('12:00')">12:00 PM</button>
+              <button class="best-time-slot" onclick="setBestTime('17:00')">5:00 PM</button>
+              <button class="best-time-slot" onclick="setBestTime('19:00')">7:00 PM</button>
+              <button class="best-time-slot" onclick="setBestTime('21:00')">9:00 PM</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Caption</label>
+            <textarea class="form-input" id="scheduleCaption" rows="3" placeholder="Write a caption..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Hashtags</label>
+            <input type="text" class="form-input" id="scheduleHashtags" placeholder="#viral #fyp #trending">
+          </div>
+
+          <button class="btn btn-primary" style="width: 100%;" onclick="schedulePost()">
+            📅 Schedule Post
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Detail Modal -->
+  <div class="modal-overlay" id="eventModal">
+    <div class="modal" style="max-width: 450px;">
+      <div class="modal-header">
+        <h3>📹 Scheduled Post</h3>
+        <button class="modal-close" onclick="NVME.modal.hide('eventModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="schedule-preview" id="eventPreview">
+          <img src="" alt="" class="schedule-preview-thumbnail" id="eventThumbnail">
+          <div class="schedule-preview-info">
+            <div style="font-weight: 600;" id="eventTitle">Video Title</div>
+            <div style="font-size: 0.875rem; color: var(--light-muted);" id="eventTime">Jan 1, 2026 at 9:00 AM</div>
+            <div style="margin-top: 0.5rem;">
+              <span class="list-event-status scheduled" id="eventStatus">Scheduled</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 1rem;">
+          <div style="font-size: 0.875rem; color: var(--light-muted); margin-bottom: 0.5rem;">Caption</div>
+          <div id="eventCaption" style="font-size: 0.9375rem;">No caption</div>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+          <button class="btn btn-secondary" style="flex: 1;" onclick="editEvent()">
+            ✏️ Edit
+          </button>
+          <button class="btn btn-secondary" style="flex: 1;" onclick="publishNow()">
+            🚀 Publish Now
+          </button>
+          <button class="btn btn-error" onclick="deleteEvent()">
+            🗑️
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let currentDate = new Date();
+    let currentView = 'grid';
+    let scheduledPosts = [];
+    let selectedEvent = null;
+    let myVideos = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      const isAuth = await NVME.auth.checkAuth();
+      if (!isAuth) {
+        window.location.href = '/login.html?redirect=/calendar.html';
+        return;
+      }
+
+      // Set default date to today
+      const today = new Date();
+      document.getElementById('scheduleDate').value = today.toISOString().split('T')[0];
+      document.getElementById('scheduleDate').min = today.toISOString().split('T')[0];
+
+      loadScheduledPosts();
+      loadMyVideos();
+      renderCalendar();
+    });
+
+    // Load scheduled posts
+    async function loadScheduledPosts() {
+      try {
+        const data = await NVME.api.get('/videos/scheduled');
+        scheduledPosts = data.posts || [];
+      } catch (error) {
+        // Demo data
+        scheduledPosts = [
+          {
+            id: '1',
+            title: 'Morning Routine',
+            thumbnail: 'https://picsum.photos/seed/s1/200/356',
+            date: '2026-02-01',
+            time: '09:00',
+            status: 'scheduled',
+            caption: 'My morning routine! #morning #routine'
+          },
+          {
+            id: '2',
+            title: 'Cooking Tutorial',
+            thumbnail: 'https://picsum.photos/seed/s2/200/356',
+            date: '2026-02-03',
+            time: '17:00',
+            status: 'scheduled',
+            caption: 'Easy pasta recipe! #cooking #food'
+          },
+          {
+            id: '3',
+            title: 'Live Q&A',
+            thumbnail: 'https://picsum.photos/seed/s3/200/356',
+            date: '2026-02-05',
+            time: '19:00',
+            status: 'live',
+            caption: 'Join my live Q&A session!'
+          },
+          {
+            id: '4',
+            title: 'Draft Video',
+            thumbnail: 'https://picsum.photos/seed/s4/200/356',
+            date: '2026-02-07',
+            time: '12:00',
+            status: 'draft',
+            caption: 'Work in progress...'
+          }
+        ];
+      }
+
+      updateStats();
+    }
+
+    // Load my videos for scheduling
+    async function loadMyVideos() {
+      try {
+        const data = await NVME.api.get('/videos/my');
+        myVideos = data.videos || [];
+      } catch (error) {
+        myVideos = [
+          { id: 'v1', title: 'My first video', thumbnail: 'https://picsum.photos/seed/v1/200/356', duration: '0:30' },
+          { id: 'v2', title: 'Cooking tutorial', thumbnail: 'https://picsum.photos/seed/v2/200/356', duration: '2:15' },
+          { id: 'v3', title: 'Travel vlog', thumbnail: 'https://picsum.photos/seed/v3/200/356', duration: '5:00' },
+        ];
+      }
+
+      const select = document.getElementById('scheduleVideo');
+      select.innerHTML = '<option value="">Choose a video...</option>' +
+        myVideos.map(v => `<option value="${v.id}" data-thumbnail="${v.thumbnail}" data-duration="${v.duration}">${v.title}</option>`).join('');
+
+      select.addEventListener('change', function() {
+        const option = this.options[this.selectedIndex];
+        const preview = document.getElementById('schedulePreview');
+        if (this.value) {
+          preview.classList.remove('hidden');
+          document.getElementById('previewThumbnail').src = option.dataset.thumbnail;
+          document.getElementById('previewTitle').textContent = option.textContent;
+          document.getElementById('previewDuration').textContent = option.dataset.duration;
+        } else {
+          preview.classList.add('hidden');
+        }
+      });
+    }
+
+    // Update stats
+    function updateStats() {
+      const now = new Date();
+      const thisMonth = scheduledPosts.filter(p => {
+        const d = new Date(p.date);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      });
+
+      document.getElementById('scheduledCount').textContent = scheduledPosts.filter(p => p.status === 'scheduled').length;
+      document.getElementById('draftsCount').textContent = scheduledPosts.filter(p => p.status === 'draft').length;
+      document.getElementById('publishedCount').textContent = scheduledPosts.filter(p => p.status === 'published').length;
+      document.getElementById('liveCount').textContent = scheduledPosts.filter(p => p.status === 'live').length;
+    }
+
+    // Render calendar
+    function renderCalendar() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+
+      // Update header
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+      document.getElementById('currentMonth').textContent = `${monthNames[month]} ${year}`;
+
+      // Get first day of month and total days
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+      const today = new Date();
+      const container = document.getElementById('calendarDays');
+      container.innerHTML = '';
+
+      // Previous month days
+      for (let i = firstDay - 1; i >= 0; i--) {
+        const day = daysInPrevMonth - i;
+        const dateStr = formatDateStr(year, month - 1, day);
+        container.appendChild(createDayElement(day, dateStr, true));
+      }
+
+      // Current month days
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = formatDateStr(year, month, day);
+        const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+        container.appendChild(createDayElement(day, dateStr, false, isToday));
+      }
+
+      // Next month days
+      const totalCells = firstDay + daysInMonth;
+      const remainingCells = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+      for (let day = 1; day <= remainingCells; day++) {
+        const dateStr = formatDateStr(year, month + 1, day);
+        container.appendChild(createDayElement(day, dateStr, true));
+      }
+
+      // Render list view
+      renderListView();
+    }
+
+    function formatDateStr(year, month, day) {
+      const d = new Date(year, month, day);
+      return d.toISOString().split('T')[0];
+    }
+
+    function createDayElement(day, dateStr, isOtherMonth, isToday = false) {
+      const div = document.createElement('div');
+      div.className = 'calendar-day' + (isOtherMonth ? ' other-month' : '') + (isToday ? ' today' : '');
+      div.onclick = () => openDayDetail(dateStr);
+
+      const events = scheduledPosts.filter(p => p.date === dateStr);
+
+      div.innerHTML = `
+        <div class="day-number">${day}</div>
+        <div class="day-events">
+          ${events.slice(0, 3).map(e => `
+            <div class="day-event ${e.status}" onclick="event.stopPropagation(); openEvent('${e.id}')">
+              ${e.time} ${e.title}
+            </div>
+          `).join('')}
+          ${events.length > 3 ? `<div style="font-size: 0.625rem; color: var(--light-muted);">+${events.length - 3} more</div>` : ''}
+        </div>
+      `;
+
+      return div;
+    }
+
+    // Render list view
+    function renderListView() {
+      const container = document.getElementById('listView');
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const today = new Date();
+
+      let html = '';
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = formatDateStr(year, month, day);
+        const events = scheduledPosts.filter(p => p.date === dateStr);
+        if (events.length === 0) continue;
+
+        const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+        const dateObj = new Date(year, month, day);
+        const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+        html += `
+          <div class="list-day">
+            <div class="list-day-header ${isToday ? 'today' : ''}">${dayName}</div>
+            <div class="list-events">
+              ${events.map(e => `
+                <div class="list-event" onclick="openEvent('${e.id}')">
+                  <div class="list-event-time">${formatTime(e.time)}</div>
+                  <img src="${e.thumbnail}" alt="" class="list-event-thumbnail">
+                  <div class="list-event-info">
+                    <div class="list-event-title">${e.title}</div>
+                    <span class="list-event-status ${e.status}">${e.status}</span>
+                  </div>
+                  <div class="list-event-actions">
+                    <button onclick="event.stopPropagation(); editEvent('${e.id}')">✏️</button>
+                    <button onclick="event.stopPropagation(); deleteEvent('${e.id}')">🗑️</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html || '<div style="text-align: center; padding: 3rem; color: var(--light-muted);">No scheduled posts this month</div>';
+    }
+
+    function formatTime(time) {
+      const [hours, minutes] = time.split(':');
+      const h = parseInt(hours);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = h % 12 || 12;
+      return `${h12}:${minutes} ${ampm}`;
+    }
+
+    // Navigation
+    function prevMonth() {
+      currentDate.setMonth(currentDate.getMonth() - 1);
+      renderCalendar();
+    }
+
+    function nextMonth() {
+      currentDate.setMonth(currentDate.getMonth() + 1);
+      renderCalendar();
+    }
+
+    // Switch view
+    function switchView(view) {
+      currentView = view;
+      document.querySelectorAll('.calendar-view-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.toLowerCase().includes(view));
+      });
+      document.getElementById('gridView').classList.toggle('hidden', view !== 'grid');
+      document.getElementById('listView').classList.toggle('active', view === 'list');
+    }
+
+    // Open schedule modal
+    function openScheduleModal() {
+      NVME.modal.show('scheduleModal');
+    }
+
+    // Set best time
+    function setBestTime(time) {
+      document.getElementById('scheduleTime').value = time;
+    }
+
+    // Schedule post
+    async function schedulePost() {
+      const videoId = document.getElementById('scheduleVideo').value;
+      const date = document.getElementById('scheduleDate').value;
+      const time = document.getElementById('scheduleTime').value;
+      const caption = document.getElementById('scheduleCaption').value;
+      const hashtags = document.getElementById('scheduleHashtags').value;
+
+      if (!videoId) {
+        NVME.toast.error('Please select a video');
+        return;
+      }
+      if (!date || !time) {
+        NVME.toast.error('Please select date and time');
+        return;
+      }
+
+      try {
+        await NVME.api.post('/videos/schedule', {
+          video_id: videoId,
+          scheduled_date: date,
+          scheduled_time: time,
+          caption: caption + ' ' + hashtags
+        });
+
+        NVME.toast.success('Post scheduled!');
+        NVME.modal.hide('scheduleModal');
+
+        // Add to local list
+        const video = myVideos.find(v => v.id === videoId);
+        scheduledPosts.push({
+          id: Date.now().toString(),
+          title: video.title,
+          thumbnail: video.thumbnail,
+          date,
+          time,
+          status: 'scheduled',
+          caption: caption + ' ' + hashtags
+        });
+
+        updateStats();
+        renderCalendar();
+      } catch (error) {
+        // Demo mode
+        const video = myVideos.find(v => v.id === videoId);
+        scheduledPosts.push({
+          id: Date.now().toString(),
+          title: video.title,
+          thumbnail: video.thumbnail,
+          date,
+          time,
+          status: 'scheduled',
+          caption: caption + ' ' + hashtags
+        });
+
+        NVME.toast.success('Post scheduled!');
+        NVME.modal.hide('scheduleModal');
+        updateStats();
+        renderCalendar();
+      }
+    }
+
+    // Open event detail
+    function openEvent(eventId) {
+      selectedEvent = scheduledPosts.find(p => p.id === eventId);
+      if (!selectedEvent) return;
+
+      document.getElementById('eventThumbnail').src = selectedEvent.thumbnail;
+      document.getElementById('eventTitle').textContent = selectedEvent.title;
+      document.getElementById('eventTime').textContent = `${new Date(selectedEvent.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${formatTime(selectedEvent.time)}`;
+      document.getElementById('eventStatus').textContent = selectedEvent.status;
+      document.getElementById('eventStatus').className = 'list-event-status ' + selectedEvent.status;
+      document.getElementById('eventCaption').textContent = selectedEvent.caption || 'No caption';
+
+      NVME.modal.show('eventModal');
+    }
+
+    // Open day detail
+    function openDayDetail(dateStr) {
+      const events = scheduledPosts.filter(p => p.date === dateStr);
+      if (events.length === 1) {
+        openEvent(events[0].id);
+      } else if (events.length > 1) {
+        // Could show a list modal, for now just open first
+        openEvent(events[0].id);
+      } else {
+        // Open schedule modal with date pre-filled
+        document.getElementById('scheduleDate').value = dateStr;
+        openScheduleModal();
+      }
+    }
+
+    // Edit event
+    function editEvent(eventId) {
+      const event = eventId ? scheduledPosts.find(p => p.id === eventId) : selectedEvent;
+      if (!event) return;
+
+      NVME.modal.hide('eventModal');
+      NVME.toast.info('Edit feature coming soon!');
+    }
+
+    // Publish now
+    async function publishNow() {
+      if (!selectedEvent) return;
+
+      try {
+        await NVME.api.post(`/videos/${selectedEvent.id}/publish`);
+        selectedEvent.status = 'published';
+        NVME.toast.success('Video published!');
+        NVME.modal.hide('eventModal');
+        updateStats();
+        renderCalendar();
+      } catch (error) {
+        selectedEvent.status = 'published';
+        NVME.toast.success('Video published!');
+        NVME.modal.hide('eventModal');
+        updateStats();
+        renderCalendar();
+      }
+    }
+
+    // Delete event
+    function deleteEvent(eventId) {
+      const id = eventId || (selectedEvent ? selectedEvent.id : null);
+      if (!id) return;
+
+      if (!confirm('Delete this scheduled post?')) return;
+
+      scheduledPosts = scheduledPosts.filter(p => p.id !== id);
+      NVME.toast.success('Post deleted');
+      NVME.modal.hide('eventModal');
+      updateStats();
+      renderCalendar();
+    }
+  </script>
+</body>
+</html>

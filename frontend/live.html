@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live - NVME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .live-page {
+      min-height: 100vh;
+      background: var(--dark);
+      padding-top: 60px;
+    }
+    /* Live Grid */
+    .live-header {
+      padding: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .live-header h1 {
+      font-size: 1.5rem;
+    }
+    .live-filters {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+    }
+    .live-filter {
+      padding: 0.5rem 1rem;
+      background: var(--dark-card);
+      border: none;
+      border-radius: 2rem;
+      color: var(--light-muted);
+      font-size: 0.875rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .live-filter.active {
+      background: var(--primary);
+      color: white;
+    }
+    .live-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      padding: 0 1.5rem 2rem;
+    }
+    .live-card {
+      background: var(--dark-card);
+      border-radius: 1rem;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .live-card:hover {
+      transform: translateY(-4px);
+    }
+    .live-thumbnail {
+      position: relative;
+      aspect-ratio: 16/9;
+      background: var(--dark-lighter);
+    }
+    .live-thumbnail img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .live-badge {
+      position: absolute;
+      top: 0.75rem;
+      left: 0.75rem;
+      background: var(--error);
+      color: white;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .live-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .live-viewers {
+      position: absolute;
+      bottom: 0.75rem;
+      left: 0.75rem;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .live-info {
+      padding: 1rem;
+    }
+    .live-host {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .live-host-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .live-host-name {
+      font-weight: 600;
+      font-size: 0.9375rem;
+    }
+    .live-title {
+      font-size: 0.875rem;
+      color: var(--light-muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    /* Live Stream View */
+    .live-stream-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--dark);
+      z-index: 1000;
+      display: none;
+    }
+    .live-stream-container.active {
+      display: flex;
+    }
+    .live-stream-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .live-stream-video {
+      flex: 1;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .live-stream-video video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .live-stream-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 1rem;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .live-stream-host-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .live-stream-host-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 2px solid var(--error);
+    }
+    .live-stream-host-name {
+      font-weight: 600;
+    }
+    .live-stream-host-viewers {
+      font-size: 0.75rem;
+      color: var(--light-muted);
+    }
+    .live-stream-close {
+      background: rgba(0,0,0,0.5);
+      border: none;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.25rem;
+    }
+    .live-stream-actions {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1rem;
+      background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+      display: flex;
+      gap: 0.5rem;
+    }
+    .live-stream-actions button {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 2rem;
+      cursor: pointer;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .live-stream-actions button:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    .live-stream-actions button.primary {
+      background: var(--primary);
+    }
+    /* Live Chat Sidebar */
+    .live-chat-sidebar {
+      width: 350px;
+      background: var(--dark-card);
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--dark-lighter);
+    }
+    .live-chat-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--dark-lighter);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .live-chat-header h3 {
+      font-size: 1rem;
+    }
+    .live-chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+    .chat-message {
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      margin-bottom: 0.25rem;
+    }
+    .chat-message:hover {
+      background: var(--dark-lighter);
+    }
+    .chat-message-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.25rem;
+    }
+    .chat-message-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+    }
+    .chat-message-name {
+      font-weight: 600;
+      font-size: 0.8125rem;
+    }
+    .chat-message-name.host {
+      color: var(--error);
+    }
+    .chat-message-name.moderator {
+      color: var(--primary);
+    }
+    .chat-message-text {
+      font-size: 0.875rem;
+      color: var(--light-muted);
+      padding-left: 32px;
+    }
+    .chat-gift-message {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2));
+      padding: 0.75rem;
+      border-radius: 0.75rem;
+      text-align: center;
+      margin: 0.5rem 0;
+    }
+    .chat-gift-icon {
+      font-size: 2rem;
+      animation: giftPop 0.5s ease;
+    }
+    @keyframes giftPop {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    .chat-gift-text {
+      font-size: 0.8125rem;
+      margin-top: 0.25rem;
+    }
+    .live-chat-input {
+      padding: 0.75rem;
+      border-top: 1px solid var(--dark-lighter);
+      display: flex;
+      gap: 0.5rem;
+    }
+    .live-chat-input input {
+      flex: 1;
+      background: var(--dark-lighter);
+      border: none;
+      padding: 0.75rem 1rem;
+      border-radius: 2rem;
+      color: var(--light);
+      font-size: 0.875rem;
+    }
+    .live-chat-input button {
+      background: var(--primary);
+      border: none;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    /* Gift Panel */
+    .gift-panel {
+      padding: 0.75rem;
+      border-top: 1px solid var(--dark-lighter);
+      display: none;
+    }
+    .gift-panel.active {
+      display: block;
+    }
+    .gift-panel-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.5rem;
+    }
+    .gift-panel-item {
+      background: var(--dark-lighter);
+      border: none;
+      border-radius: 0.5rem;
+      padding: 0.5rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .gift-panel-item:hover {
+      background: var(--primary);
+      transform: scale(1.1);
+    }
+    .gift-panel-item .icon {
+      font-size: 1.5rem;
+    }
+    .gift-panel-item .price {
+      font-size: 0.625rem;
+      color: var(--secondary);
+    }
+    /* Go Live Modal */
+    .go-live-preview {
+      aspect-ratio: 16/9;
+      background: #000;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+    .go-live-preview video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .go-live-preview-placeholder {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: var(--light-muted);
+    }
+    .go-live-settings {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    /* Mobile */
+    @media (max-width: 768px) {
+      .live-chat-sidebar {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+        max-width: 350px;
+        transform: translateX(100%);
+        transition: transform 0.3s;
+      }
+      .live-chat-sidebar.active {
+        transform: translateX(0);
+      }
+      .live-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">NVME</a>
+    <div class="navbar-nav">
+      <a href="/feed.html" class="nav-link">Feed</a>
+      <a href="/live.html" class="nav-link active">Live</a>
+      <div class="user-menu hidden flex items-center gap-2">
+        <a href="/wallet.html" class="nav-link">💰 <span class="user-coins">0</span></a>
+        <div class="dropdown">
+          <button class="dropdown-toggle btn btn-secondary btn-sm flex items-center gap-2">
+            <img src="/img/default-avatar.png" alt="" class="avatar avatar-sm user-avatar">
+            <span class="user-name">User</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/profile.html" class="dropdown-item">👤 Profile</a>
+            <a href="/studio.html" class="dropdown-item">🎬 Studio</a>
+            <a href="/wallet.html" class="dropdown-item">💰 Wallet</a>
+            <a href="/messages.html" class="dropdown-item">💬 Messages</a>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item logout-btn">🚪 Log Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="live-page">
+    <!-- Live Header -->
+    <div class="live-header">
+      <h1>🔴 Live Now</h1>
+      <div style="display: flex; gap: 1rem; align-items: center;">
+        <div class="live-filters">
+          <button class="live-filter active" onclick="filterLive('all')">All</button>
+          <button class="live-filter" onclick="filterLive('following')">Following</button>
+          <button class="live-filter" onclick="filterLive('popular')">Popular</button>
+          <button class="live-filter" onclick="filterLive('new')">New</button>
+          <button class="live-filter" onclick="filterLive('gaming')">Gaming</button>
+          <button class="live-filter" onclick="filterLive('music')">Music</button>
+        </div>
+        <button class="btn btn-primary" onclick="openGoLive()">🎥 Go Live</button>
+      </div>
+    </div>
+
+    <!-- Live Grid -->
+    <div class="live-grid" id="liveGrid">
+      <!-- Live streams will be loaded here -->
+    </div>
+  </div>
+
+  <!-- Live Stream View -->
+  <div class="live-stream-container" id="liveStreamContainer">
+    <div class="live-stream-main">
+      <div class="live-stream-video">
+        <video id="streamVideo" autoplay playsinline></video>
+      </div>
+      <div class="live-stream-overlay">
+        <div class="live-stream-host-info">
+          <img src="/img/default-avatar.png" alt="" class="live-stream-host-avatar" id="streamHostAvatar">
+          <div>
+            <div class="live-stream-host-name" id="streamHostName">Host</div>
+            <div class="live-stream-host-viewers">👁 <span id="streamViewers">0</span> watching</div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="followHostBtn">Follow</button>
+        </div>
+        <button class="live-stream-close" onclick="closeLiveStream()">✕</button>
+      </div>
+      <div class="live-stream-actions">
+        <button onclick="toggleChat()">💬 Chat</button>
+        <button onclick="toggleGiftPanel()">🎁 Gift</button>
+        <button onclick="shareStream()">📤 Share</button>
+        <button onclick="reportStream()">⚠️</button>
+      </div>
+    </div>
+    <div class="live-chat-sidebar" id="liveChatSidebar">
+      <div class="live-chat-header">
+        <h3>Live Chat</h3>
+        <button onclick="toggleChat()" style="background: none; border: none; color: var(--light); cursor: pointer;">✕</button>
+      </div>
+      <div class="live-chat-messages" id="chatMessages">
+        <!-- Chat messages will appear here -->
+      </div>
+      <div class="gift-panel" id="giftPanel">
+        <div class="gift-panel-grid" id="giftPanelGrid">
+          <!-- Quick gifts -->
+        </div>
+      </div>
+      <div class="live-chat-input">
+        <input type="text" placeholder="Say something..." id="chatInput" onkeypress="handleChatKeypress(event)">
+        <button onclick="sendChatMessage()">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Go Live Modal -->
+  <div class="modal-overlay" id="goLiveModal">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Go Live</h2>
+        <button class="modal-close" onclick="NVME.modal.hide('goLiveModal')">✕</button>
+      </div>
+      <div style="padding: 1.5rem;">
+        <div class="go-live-preview">
+          <video id="previewVideo" autoplay muted playsinline></video>
+          <div class="go-live-preview-placeholder" id="previewPlaceholder">
+            <div style="font-size: 3rem;">📹</div>
+            <p>Camera preview will appear here</p>
+          </div>
+        </div>
+        <div class="go-live-settings">
+          <div class="form-group">
+            <label class="form-label">Stream Title</label>
+            <input type="text" class="form-input" id="streamTitle" placeholder="What's your stream about?">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select class="form-input" id="streamCategory">
+              <option value="chat">Just Chatting</option>
+              <option value="gaming">Gaming</option>
+              <option value="music">Music</option>
+              <option value="art">Art</option>
+              <option value="cooking">Cooking</option>
+              <option value="fitness">Fitness</option>
+              <option value="education">Education</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 1rem;">
+            <button class="btn btn-secondary" style="flex: 1;" onclick="toggleCamera()" id="cameraBtn">📹 Camera</button>
+            <button class="btn btn-secondary" style="flex: 1;" onclick="toggleMic()" id="micBtn">🎤 Mic</button>
+            <button class="btn btn-secondary" style="flex: 1;" onclick="flipCamera()" id="flipBtn">🔄 Flip</button>
+          </div>
+          <button class="btn btn-primary" style="width: 100%;" onclick="startLiveStream()" id="startStreamBtn">
+            🔴 Start Live Stream
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let liveStreams = [];
+    let currentStream = null;
+    let localStream = null;
+    let peerConnection = null;
+    let chatPollingInterval = null;
+    let cameraEnabled = true;
+    let micEnabled = true;
+
+    // Quick gifts for live
+    const quickGifts = [
+      { icon: '🌹', name: 'Rose', price: 1 },
+      { icon: '❤️', name: 'Heart', price: 5 },
+      { icon: '🔥', name: 'Fire', price: 10 },
+      { icon: '⭐', name: 'Star', price: 15 },
+      { icon: '👑', name: 'Crown', price: 100 },
+      { icon: '💎', name: 'Diamond', price: 500 },
+      { icon: '🚀', name: 'Rocket', price: 500 },
+      { icon: '🎉', name: 'Party', price: 25 },
+      { icon: '💰', name: 'Money', price: 300 },
+      { icon: '🦄', name: 'Unicorn', price: 100 },
+    ];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      await NVME.auth.checkAuth();
+      loadLiveStreams();
+      renderGiftPanel();
+    });
+
+    // Load live streams
+    async function loadLiveStreams() {
+      const grid = document.getElementById('liveGrid');
+      grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--light-muted);">Loading live streams...</div>';
+
+      try {
+        const data = await NVME.api.get('/live/streams');
+        liveStreams = data.streams || [];
+        renderLiveStreams();
+      } catch (error) {
+        // Show demo streams
+        liveStreams = generateDemoStreams();
+        renderLiveStreams();
+      }
+    }
+
+    // Generate demo streams
+    function generateDemoStreams() {
+      const titles = [
+        'Just chatting! Come hang out 💬',
+        'Gaming session - join me! 🎮',
+        'Music vibes tonight 🎵',
+        'Cooking dinner live 🍳',
+        'Art stream - painting session 🎨',
+        'Q&A - Ask me anything!',
+        'Late night chill stream',
+        'Workout with me! 💪'
+      ];
+      const names = ['Alex', 'Jordan', 'Sam', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Quinn'];
+      
+      return Array.from({ length: 8 }, (_, i) => ({
+        id: `demo-${i}`,
+        title: titles[i],
+        host: {
+          id: `host-${i}`,
+          username: names[i].toLowerCase(),
+          display_name: names[i],
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${names[i]}`
+        },
+        viewers: Math.floor(Math.random() * 5000) + 100,
+        thumbnail: `https://picsum.photos/seed/${i}/400/225`,
+        category: ['chat', 'gaming', 'music', 'cooking', 'art'][i % 5],
+        started_at: new Date(Date.now() - Math.random() * 3600000).toISOString()
+      }));
+    }
+
+    // Render live streams
+    function renderLiveStreams() {
+      const grid = document.getElementById('liveGrid');
+      
+      if (liveStreams.length === 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--light-muted);">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">📺</div>
+            <h3 style="color: var(--light); margin-bottom: 0.5rem;">No Live Streams</h3>
+            <p>Be the first to go live!</p>
+            <button class="btn btn-primary" style="margin-top: 1rem;" onclick="openGoLive()">🎥 Go Live</button>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = liveStreams.map(stream => `
+        <div class="live-card" onclick="watchStream('${stream.id}')">
+          <div class="live-thumbnail">
+            <img src="${stream.thumbnail}" alt="">
+            <div class="live-badge">LIVE</div>
+            <div class="live-viewers">👁 ${NVME.utils.formatNumber(stream.viewers)}</div>
+          </div>
+          <div class="live-info">
+            <div class="live-host">
+              <img src="${stream.host.avatar || '/img/default-avatar.png'}" alt="" class="live-host-avatar">
+              <span class="live-host-name">${stream.host.display_name || stream.host.username}</span>
+            </div>
+            <div class="live-title">${stream.title}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Filter live streams
+    function filterLive(category) {
+      document.querySelectorAll('.live-filter').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.toLowerCase() === category || (category === 'all' && btn.textContent === 'All'));
+      });
+      
+      if (category === 'all') {
+        renderLiveStreams();
+      } else if (category === 'following') {
+        // Filter by following (demo: show fewer)
+        const filtered = liveStreams.slice(0, 3);
+        renderFilteredStreams(filtered);
+      } else {
+        const filtered = liveStreams.filter(s => s.category === category);
+        renderFilteredStreams(filtered);
+      }
+    }
+
+    function renderFilteredStreams(streams) {
+      const grid = document.getElementById('liveGrid');
+      if (streams.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--light-muted);">No streams in this category</div>';
+        return;
+      }
+      // Temporarily replace and render
+      const original = liveStreams;
+      liveStreams = streams;
+      renderLiveStreams();
+      liveStreams = original;
+    }
+
+    // Watch stream
+    function watchStream(streamId) {
+      currentStream = liveStreams.find(s => s.id === streamId);
+      if (!currentStream) return;
+
+      // Update UI
+      document.getElementById('streamHostAvatar').src = currentStream.host.avatar || '/img/default-avatar.png';
+      document.getElementById('streamHostName').textContent = currentStream.host.display_name || currentStream.host.username;
+      document.getElementById('streamViewers').textContent = NVME.utils.formatNumber(currentStream.viewers);
+
+      // Show stream container
+      document.getElementById('liveStreamContainer').classList.add('active');
+      document.body.style.overflow = 'hidden';
+
+      // Start chat polling
+      startChatPolling();
+
+      // Add demo chat messages
+      addDemoChatMessages();
+    }
+
+    // Close live stream
+    function closeLiveStream() {
+      document.getElementById('liveStreamContainer').classList.remove('active');
+      document.body.style.overflow = '';
+      currentStream = null;
+      
+      if (chatPollingInterval) {
+        clearInterval(chatPollingInterval);
+      }
+      
+      document.getElementById('chatMessages').innerHTML = '';
+    }
+
+    // Toggle chat sidebar
+    function toggleChat() {
+      document.getElementById('liveChatSidebar').classList.toggle('active');
+    }
+
+    // Toggle gift panel
+    function toggleGiftPanel() {
+      document.getElementById('giftPanel').classList.toggle('active');
+    }
+
+    // Render gift panel
+    function renderGiftPanel() {
+      const grid = document.getElementById('giftPanelGrid');
+      grid.innerHTML = quickGifts.map(gift => `
+        <button class="gift-panel-item" onclick="sendLiveGift('${gift.icon}', '${gift.name}', ${gift.price})">
+          <div class="icon">${gift.icon}</div>
+          <div class="price">🪙${gift.price}</div>
+        </button>
+      `).join('');
+    }
+
+    // Send live gift
+    async function sendLiveGift(icon, name, price) {
+      if (!NVME.state.isAuthenticated) {
+        NVME.toast.error('Please log in to send gifts');
+        return;
+      }
+
+      try {
+        await NVME.api.post('/gifts/send', {
+          recipient_id: currentStream.host.id,
+          gift_name: name,
+          gift_icon: icon,
+          gift_price: price,
+          stream_id: currentStream.id
+        });
+
+        // Add gift message to chat
+        addGiftMessage(NVME.state.user.display_name || NVME.state.user.username, icon, name);
+        NVME.toast.success(`Sent ${icon} ${name}!`);
+      } catch (error) {
+        NVME.toast.error(error.message || 'Failed to send gift');
+      }
+    }
+
+    // Chat functions
+    function startChatPolling() {
+      // In real app, would poll for new messages
+      chatPollingInterval = setInterval(() => {
+        // Add random demo message occasionally
+        if (Math.random() > 0.7) {
+          addRandomChatMessage();
+        }
+      }, 3000);
+    }
+
+    function addDemoChatMessages() {
+      const messages = [
+        { user: 'viewer1', text: 'Hey everyone! 👋' },
+        { user: 'viewer2', text: 'Love this stream!' },
+        { user: 'viewer3', text: '🔥🔥🔥' },
+        { user: currentStream.host.username, text: 'Welcome to the stream!', isHost: true },
+      ];
+
+      messages.forEach((msg, i) => {
+        setTimeout(() => addChatMessage(msg.user, msg.text, msg.isHost), i * 500);
+      });
+    }
+
+    function addRandomChatMessage() {
+      const messages = [
+        'This is awesome!', 'Hello from Brazil! 🇧🇷', 'First time here',
+        '❤️❤️❤️', 'You\'re amazing!', 'LOL 😂', 'Can you play some music?',
+        'Greetings from Japan! 🇯🇵', 'Love your content!', '👏👏👏'
+      ];
+      const users = ['fan123', 'viewer_x', 'newbie', 'superfan', 'lurker99'];
+      
+      addChatMessage(
+        users[Math.floor(Math.random() * users.length)],
+        messages[Math.floor(Math.random() * messages.length)]
+      );
+    }
+
+    function addChatMessage(username, text, isHost = false) {
+      const container = document.getElementById('chatMessages');
+      const msgEl = document.createElement('div');
+      msgEl.className = 'chat-message';
+      msgEl.innerHTML = `
+        <div class="chat-message-header">
+          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${username}" alt="" class="chat-message-avatar">
+          <span class="chat-message-name ${isHost ? 'host' : ''}">${username}</span>
+        </div>
+        <div class="chat-message-text">${NVME.utils.escapeHtml(text)}</div>
+      `;
+      container.appendChild(msgEl);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function addGiftMessage(username, icon, name) {
+      const container = document.getElementById('chatMessages');
+      const msgEl = document.createElement('div');
+      msgEl.className = 'chat-gift-message';
+      msgEl.innerHTML = `
+        <div class="chat-gift-icon">${icon}</div>
+        <div class="chat-gift-text"><strong>${username}</strong> sent ${name}!</div>
+      `;
+      container.appendChild(msgEl);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function handleChatKeypress(e) {
+      if (e.key === 'Enter') {
+        sendChatMessage();
+      }
+    }
+
+    function sendChatMessage() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      if (!NVME.state.isAuthenticated) {
+        NVME.toast.error('Please log in to chat');
+        return;
+      }
+
+      addChatMessage(NVME.state.user.username, text);
+      input.value = '';
+
+      // In real app, would send to server
+    }
+
+    // Share stream
+    function shareStream() {
+      if (navigator.share) {
+        navigator.share({
+          title: currentStream.title,
+          text: `Watch ${currentStream.host.display_name} live on NVME!`,
+          url: window.location.href
+        });
+      } else {
+        navigator.clipboard.writeText(window.location.href);
+        NVME.toast.success('Link copied!');
+      }
+    }
+
+    // Report stream
+    function reportStream() {
+      NVME.toast.info('Report feature coming soon');
+    }
+
+    // Go Live functions
+    async function openGoLive() {
+      if (!NVME.state.isAuthenticated) {
+        window.location.href = '/login.html?redirect=/live.html';
+        return;
+      }
+
+      NVME.modal.show('goLiveModal');
+      await startPreview();
+    }
+
+    async function startPreview() {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: 1280, height: 720 },
+          audio: true
+        });
+        
+        const video = document.getElementById('previewVideo');
+        video.srcObject = localStream;
+        document.getElementById('previewPlaceholder').style.display = 'none';
+      } catch (error) {
+        console.error('Failed to access camera:', error);
+        NVME.toast.error('Could not access camera/microphone');
+      }
+    }
+
+    function toggleCamera() {
+      if (!localStream) return;
+      
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) {
+        cameraEnabled = !cameraEnabled;
+        videoTrack.enabled = cameraEnabled;
+        document.getElementById('cameraBtn').textContent = cameraEnabled ? '📹 Camera' : '📹 Off';
+        document.getElementById('cameraBtn').classList.toggle('btn-secondary', cameraEnabled);
+        document.getElementById('cameraBtn').classList.toggle('btn-outline', !cameraEnabled);
+      }
+    }
+
+    function toggleMic() {
+      if (!localStream) return;
+      
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        micEnabled = !micEnabled;
+        audioTrack.enabled = micEnabled;
+        document.getElementById('micBtn').textContent = micEnabled ? '🎤 Mic' : '🎤 Off';
+      }
+    }
+
+    async function flipCamera() {
+      if (!localStream) return;
+      
+      // Stop current stream
+      localStream.getTracks().forEach(track => track.stop());
+      
+      // Get current facing mode and flip
+      const currentFacing = localStream.getVideoTracks()[0]?.getSettings().facingMode;
+      const newFacing = currentFacing === 'user' ? 'environment' : 'user';
+      
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: newFacing, width: 1280, height: 720 },
+          audio: true
+        });
+        
+        document.getElementById('previewVideo').srcObject = localStream;
+      } catch (error) {
+        NVME.toast.error('Could not flip camera');
+      }
+    }
+
+    async function startLiveStream() {
+      const title = document.getElementById('streamTitle').value.trim();
+      const category = document.getElementById('streamCategory').value;
+      
+      if (!title) {
+        NVME.toast.error('Please enter a stream title');
+        return;
+      }
+
+      try {
+        const data = await NVME.api.post('/live/start', {
+          title,
+          category
+        });
+
+        NVME.modal.hide('goLiveModal');
+        NVME.toast.success('You are now live!');
+        
+        // In real app, would set up WebRTC connection to streaming server
+        // For now, show success and reload
+        loadLiveStreams();
+      } catch (error) {
+        NVME.toast.error(error.message || 'Failed to start stream');
+      }
+    }
+
+    // Cleanup on page leave
+    window.addEventListener('beforeunload', () => {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+      if (chatPollingInterval) {
+        clearInterval(chatPollingInterval);
+      }
+    });
+  </script>
+</body>
+</html>

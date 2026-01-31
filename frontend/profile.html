@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile - NVME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .profile-page {
+      min-height: 100vh;
+      background: var(--dark);
+      padding-bottom: 80px;
+    }
+    .profile-header {
+      background: linear-gradient(135deg, var(--dark-card) 0%, var(--dark) 100%);
+      padding: 2rem 1rem;
+      text-align: center;
+    }
+    .profile-cover {
+      height: 150px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      position: absolute;
+      top: 60px;
+      left: 0;
+      right: 0;
+    }
+    .profile-avatar-container {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 1rem;
+    }
+    .profile-avatar {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 4px solid var(--dark-card);
+      object-fit: cover;
+    }
+    .profile-avatar-edit {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 32px;
+      height: 32px;
+      background: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: 2px solid var(--dark-card);
+    }
+    .profile-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .profile-username {
+      color: var(--light-muted);
+      margin-bottom: 1rem;
+    }
+    .profile-bio {
+      max-width: 400px;
+      margin: 0 auto 1.5rem;
+      color: var(--light-muted);
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+    .profile-stats {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .profile-stat {
+      text-align: center;
+      cursor: pointer;
+    }
+    .profile-stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+    .profile-stat-label {
+      font-size: 0.75rem;
+      color: var(--light-muted);
+    }
+    .profile-actions {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+    }
+    .profile-actions .btn {
+      min-width: 120px;
+    }
+    .profile-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--dark-lighter);
+      background: var(--dark-card);
+      position: sticky;
+      top: 60px;
+      z-index: 10;
+    }
+    .profile-tab {
+      flex: 1;
+      padding: 1rem;
+      text-align: center;
+      background: none;
+      border: none;
+      color: var(--light-muted);
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+    }
+    .profile-tab.active {
+      color: var(--light);
+    }
+    .profile-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 2px;
+      background: var(--primary);
+    }
+    .profile-content {
+      padding: 1rem;
+    }
+    .videos-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+    .video-thumbnail {
+      aspect-ratio: 9/16;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .video-thumbnail img,
+    .video-thumbnail video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .video-thumbnail-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 0.5rem;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.75rem;
+    }
+    .video-thumbnail:hover .video-thumbnail-overlay {
+      background: rgba(0,0,0,0.6);
+    }
+    .empty-content {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--light-muted);
+    }
+    .empty-content-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .followers-list {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .follower-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--dark-lighter);
+    }
+    .follower-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .follower-info {
+      flex: 1;
+    }
+    .follower-name {
+      font-weight: 600;
+    }
+    .follower-username {
+      font-size: 0.875rem;
+      color: var(--light-muted);
+    }
+    /* Edit Profile Modal */
+    .edit-profile-form {
+      padding: 1.5rem;
+    }
+    .avatar-upload {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .avatar-upload-preview {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-bottom: 0.75rem;
+    }
+    .avatar-upload-btn {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: var(--dark-lighter);
+      border-radius: 0.5rem;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .avatar-upload-btn:hover {
+      background: var(--primary);
+    }
+    .avatar-upload input {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">NVME</a>
+    <div class="navbar-nav">
+      <a href="/feed.html" class="nav-link">Feed</a>
+      <a href="/live.html" class="nav-link">Live</a>
+      <div class="auth-buttons flex gap-2">
+        <a href="/login.html" class="btn btn-secondary btn-sm">Log In</a>
+        <a href="/signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+      </div>
+      <div class="user-menu hidden flex items-center gap-2">
+        <a href="/wallet.html" class="nav-link">💰 <span class="user-coins">0</span></a>
+        <div class="dropdown">
+          <button class="dropdown-toggle btn btn-secondary btn-sm flex items-center gap-2">
+            <img src="/img/default-avatar.png" alt="" class="avatar avatar-sm user-avatar">
+            <span class="user-name">User</span>
+          </button>
+          <div class="dropdown-menu">
+            <a href="/profile.html" class="dropdown-item">👤 Profile</a>
+            <a href="/studio.html" class="dropdown-item">🎬 Studio</a>
+            <a href="/wallet.html" class="dropdown-item">💰 Wallet</a>
+            <a href="/messages.html" class="dropdown-item">💬 Messages</a>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item logout-btn">🚪 Log Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="profile-page">
+    <!-- Profile Header -->
+    <div class="profile-header">
+      <div class="profile-avatar-container">
+        <img src="/img/default-avatar.png" alt="" class="profile-avatar" id="profileAvatar">
+        <div class="profile-avatar-edit own-profile-only hidden" onclick="openEditProfile()">
+          📷
+        </div>
+      </div>
+      <h1 class="profile-name">
+        <span id="profileDisplayName">Loading...</span>
+        <span class="verified-badge hidden" id="verifiedBadge"></span>
+      </h1>
+      <p class="profile-username" id="profileUsername">@username</p>
+      <p class="profile-bio" id="profileBio"></p>
+      
+      <div class="profile-stats">
+        <div class="profile-stat" onclick="showFollowing()">
+          <div class="profile-stat-value" id="followingCount">0</div>
+          <div class="profile-stat-label">Following</div>
+        </div>
+        <div class="profile-stat" onclick="showFollowers()">
+          <div class="profile-stat-value" id="followersCount">0</div>
+          <div class="profile-stat-label">Followers</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-value" id="likesCount">0</div>
+          <div class="profile-stat-label">Likes</div>
+        </div>
+      </div>
+      
+      <div class="profile-actions">
+        <button class="btn btn-primary own-profile-only hidden" onclick="openEditProfile()">
+          Edit Profile
+        </button>
+        <button class="btn btn-primary other-profile-only hidden" id="followBtn" onclick="toggleFollow()">
+          Follow
+        </button>
+        <button class="btn btn-secondary other-profile-only hidden" onclick="sendMessage()">
+          Message
+        </button>
+        <button class="btn btn-secondary" onclick="shareProfile()">
+          Share
+        </button>
+      </div>
+    </div>
+
+    <!-- Profile Tabs -->
+    <div class="profile-tabs">
+      <button class="profile-tab active" data-tab="videos" onclick="switchTab('videos')">
+        📹 Videos
+      </button>
+      <button class="profile-tab" data-tab="liked" onclick="switchTab('liked')">
+        ❤️ Liked
+      </button>
+      <button class="profile-tab own-profile-only hidden" data-tab="private" onclick="switchTab('private')">
+        🔒 Private
+      </button>
+    </div>
+
+    <!-- Profile Content -->
+    <div class="profile-content">
+      <div id="videosTab" class="tab-content">
+        <div class="videos-grid" id="videosGrid">
+          <!-- Videos will be loaded here -->
+        </div>
+      </div>
+      <div id="likedTab" class="tab-content hidden">
+        <div class="videos-grid" id="likedGrid">
+          <!-- Liked videos will be loaded here -->
+        </div>
+      </div>
+      <div id="privateTab" class="tab-content hidden">
+        <div class="videos-grid" id="privateGrid">
+          <!-- Private videos will be loaded here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Profile Modal -->
+  <div class="modal-overlay" id="editProfileModal">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Edit Profile</h2>
+        <button class="modal-close" onclick="NVME.modal.hide('editProfileModal')">✕</button>
+      </div>
+      <form class="edit-profile-form" id="editProfileForm">
+        <div class="avatar-upload">
+          <img src="/img/default-avatar.png" alt="" class="avatar-upload-preview" id="avatarPreview">
+          <label class="avatar-upload-btn">
+            Change Photo
+            <input type="file" accept="image/*" id="avatarInput" onchange="previewAvatar(this)">
+          </label>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Display Name</label>
+          <input type="text" class="form-input" id="editDisplayName" maxlength="50">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input type="text" class="form-input" id="editUsername" maxlength="20">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Bio</label>
+          <textarea class="form-input" id="editBio" rows="3" maxlength="150"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Website</label>
+          <input type="url" class="form-input" id="editWebsite" placeholder="https://">
+        </div>
+        
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+          Save Changes
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Followers/Following Modal -->
+  <div class="modal-overlay" id="followersModal">
+    <div class="modal" style="max-width: 400px; max-height: 80vh;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="followersModalTitle">Followers</h2>
+        <button class="modal-close" onclick="NVME.modal.hide('followersModal')">✕</button>
+      </div>
+      <div class="followers-list" id="followersList" style="overflow-y: auto; max-height: 60vh; padding: 1rem;">
+        <!-- Followers will be loaded here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <a href="/" class="bottom-nav-item">
+      <span class="icon">🏠</span>
+      <span>Home</span>
+    </a>
+    <a href="/feed.html" class="bottom-nav-item">
+      <span class="icon">🔍</span>
+      <span>Discover</span>
+    </a>
+    <a href="/upload.html" class="bottom-nav-item create">
+      <span class="icon">➕</span>
+    </a>
+    <a href="/messages.html" class="bottom-nav-item">
+      <span class="icon">💬</span>
+      <span>Inbox</span>
+    </a>
+    <a href="/profile.html" class="bottom-nav-item active">
+      <span class="icon">👤</span>
+      <span>Profile</span>
+    </a>
+  </nav>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let profileUser = null;
+    let isOwnProfile = false;
+    let currentTab = 'videos';
+
+    // Get user ID from URL or use current user
+    const urlParams = new URLSearchParams(window.location.search);
+    const profileId = urlParams.get('id');
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await NVME.auth.checkAuth();
+      loadProfile();
+    });
+
+    async function loadProfile() {
+      try {
+        let endpoint = '/auth/me';
+        if (profileId && (!NVME.state.user || profileId !== NVME.state.user.id)) {
+          endpoint = `/users/${profileId}`;
+        }
+        
+        const data = await NVME.api.get(endpoint);
+        profileUser = data.user || data;
+        
+        isOwnProfile = NVME.state.user && NVME.state.user.id === profileUser.id;
+        
+        renderProfile();
+        loadVideos();
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+        if (!profileId) {
+          window.location.href = '/login.html';
+        } else {
+          NVME.toast.error('User not found');
+        }
+      }
+    }
+
+    function renderProfile() {
+      document.getElementById('profileAvatar').src = profileUser.avatar || '/img/default-avatar.png';
+      document.getElementById('profileDisplayName').textContent = profileUser.display_name || profileUser.username;
+      document.getElementById('profileUsername').textContent = '@' + profileUser.username;
+      document.getElementById('profileBio').textContent = profileUser.bio || '';
+      document.getElementById('followingCount').textContent = NVME.utils.formatNumber(profileUser.following_count || 0);
+      document.getElementById('followersCount').textContent = NVME.utils.formatNumber(profileUser.followers_count || 0);
+      document.getElementById('likesCount').textContent = NVME.utils.formatNumber(profileUser.total_likes || 0);
+      
+      if (profileUser.is_verified) {
+        document.getElementById('verifiedBadge').classList.remove('hidden');
+      }
+      
+      // Show/hide elements based on profile ownership
+      document.querySelectorAll('.own-profile-only').forEach(el => {
+        el.classList.toggle('hidden', !isOwnProfile);
+      });
+      document.querySelectorAll('.other-profile-only').forEach(el => {
+        el.classList.toggle('hidden', isOwnProfile);
+      });
+      
+      // Update follow button
+      if (!isOwnProfile) {
+        const followBtn = document.getElementById('followBtn');
+        if (profileUser.is_following) {
+          followBtn.textContent = 'Following';
+          followBtn.classList.remove('btn-primary');
+          followBtn.classList.add('btn-secondary');
+        }
+      }
+      
+      // Update page title
+      document.title = `${profileUser.display_name || profileUser.username} - NVME`;
+    }
+
+    async function loadVideos() {
+      const grid = document.getElementById('videosGrid');
+      grid.innerHTML = '<div class="text-center text-muted" style="grid-column: 1/-1; padding: 2rem;">Loading...</div>';
+      
+      try {
+        const data = await NVME.api.get(`/users/${profileUser.id}/videos`);
+        
+        if (!data.videos || data.videos.length === 0) {
+          grid.innerHTML = `
+            <div class="empty-content" style="grid-column: 1/-1;">
+              <div class="empty-content-icon">📹</div>
+              <h3>No videos yet</h3>
+              ${isOwnProfile ? '<a href="/upload.html" class="btn btn-primary" style="margin-top: 1rem;">Upload your first video</a>' : ''}
+            </div>
+          `;
+          return;
+        }
+        
+        grid.innerHTML = data.videos.map(video => `
+          <div class="video-thumbnail" onclick="window.location.href='/feed.html?video=${video.id}'">
+            <img src="${video.thumbnail_url || '/img/video-placeholder.png'}" alt="">
+            <div class="video-thumbnail-overlay">
+              <span>▶️</span>
+              <span>${NVME.utils.formatNumber(video.views_count || 0)}</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        grid.innerHTML = '<div class="text-center text-muted" style="grid-column: 1/-1; padding: 2rem;">Failed to load videos</div>';
+      }
+    }
+
+    async function loadLikedVideos() {
+      const grid = document.getElementById('likedGrid');
+      grid.innerHTML = '<div class="text-center text-muted" style="grid-column: 1/-1; padding: 2rem;">Loading...</div>';
+      
+      try {
+        const data = await NVME.api.get(`/users/${profileUser.id}/liked`);
+        
+        if (!data.videos || data.videos.length === 0) {
+          grid.innerHTML = `
+            <div class="empty-content" style="grid-column: 1/-1;">
+              <div class="empty-content-icon">❤️</div>
+              <h3>No liked videos</h3>
+            </div>
+          `;
+          return;
+        }
+        
+        grid.innerHTML = data.videos.map(video => `
+          <div class="video-thumbnail" onclick="window.location.href='/feed.html?video=${video.id}'">
+            <img src="${video.thumbnail_url || '/img/video-placeholder.png'}" alt="">
+            <div class="video-thumbnail-overlay">
+              <span>▶️</span>
+              <span>${NVME.utils.formatNumber(video.views_count || 0)}</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        grid.innerHTML = '<div class="text-center text-muted" style="grid-column: 1/-1; padding: 2rem;">Failed to load videos</div>';
+      }
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      // Update tab buttons
+      document.querySelectorAll('.profile-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+      });
+      
+      // Show/hide content
+      document.querySelectorAll('.tab-content').forEach(c => {
+        c.classList.add('hidden');
+      });
+      document.getElementById(tab + 'Tab').classList.remove('hidden');
+      
+      // Load content
+      if (tab === 'liked') {
+        loadLikedVideos();
+      } else if (tab === 'private') {
+        loadPrivateVideos();
+      }
+    }
+
+    async function loadPrivateVideos() {
+      const grid = document.getElementById('privateGrid');
+      grid.innerHTML = `
+        <div class="empty-content" style="grid-column: 1/-1;">
+          <div class="empty-content-icon">🔒</div>
+          <h3>Private videos</h3>
+          <p>Only you can see these</p>
+        </div>
+      `;
+    }
+
+    async function toggleFollow() {
+      if (!NVME.auth.requireAuth()) return;
+      
+      const btn = document.getElementById('followBtn');
+      const isFollowing = profileUser.is_following;
+      
+      // Optimistic update
+      profileUser.is_following = !isFollowing;
+      btn.textContent = isFollowing ? 'Follow' : 'Following';
+      btn.classList.toggle('btn-primary', isFollowing);
+      btn.classList.toggle('btn-secondary', !isFollowing);
+      
+      const countEl = document.getElementById('followersCount');
+      const count = parseInt(countEl.textContent) || 0;
+      countEl.textContent = NVME.utils.formatNumber(isFollowing ? count - 1 : count + 1);
+      
+      try {
+        if (isFollowing) {
+          await NVME.api.delete(`/follow/${profileUser.id}`);
+        } else {
+          await NVME.api.post(`/follow/${profileUser.id}`);
+        }
+      } catch (error) {
+        // Revert
+        profileUser.is_following = isFollowing;
+        btn.textContent = isFollowing ? 'Following' : 'Follow';
+        btn.classList.toggle('btn-primary', !isFollowing);
+        btn.classList.toggle('btn-secondary', isFollowing);
+        countEl.textContent = NVME.utils.formatNumber(count);
+        NVME.toast.error('Failed to update follow status');
+      }
+    }
+
+    function sendMessage() {
+      if (!NVME.auth.requireAuth()) return;
+      window.location.href = `/messages.html?user=${profileUser.id}`;
+    }
+
+    function shareProfile() {
+      const url = `${window.location.origin}/profile.html?id=${profileUser.id}`;
+      NVME.utils.copyToClipboard(url);
+    }
+
+    async function showFollowers() {
+      document.getElementById('followersModalTitle').textContent = 'Followers';
+      NVME.modal.show('followersModal');
+      
+      const list = document.getElementById('followersList');
+      list.innerHTML = '<div class="text-center text-muted">Loading...</div>';
+      
+      try {
+        const data = await NVME.api.get(`/users/${profileUser.id}/followers`);
+        
+        if (!data.followers || data.followers.length === 0) {
+          list.innerHTML = '<div class="text-center text-muted">No followers yet</div>';
+          return;
+        }
+        
+        list.innerHTML = data.followers.map(user => `
+          <div class="follower-item">
+            <a href="/profile.html?id=${user.id}">
+              <img src="${user.avatar || '/img/default-avatar.png'}" alt="" class="follower-avatar">
+            </a>
+            <div class="follower-info">
+              <a href="/profile.html?id=${user.id}" class="follower-name">${user.display_name || user.username}</a>
+              <div class="follower-username">@${user.username}</div>
+            </div>
+            ${user.id !== NVME.state.user?.id ? `
+              <button class="btn btn-sm ${user.is_following ? 'btn-secondary' : 'btn-primary'}" onclick="quickFollow('${user.id}', this)">
+                ${user.is_following ? 'Following' : 'Follow'}
+              </button>
+            ` : ''}
+          </div>
+        `).join('');
+      } catch (error) {
+        list.innerHTML = '<div class="text-center text-muted">Failed to load followers</div>';
+      }
+    }
+
+    async function showFollowing() {
+      document.getElementById('followersModalTitle').textContent = 'Following';
+      NVME.modal.show('followersModal');
+      
+      const list = document.getElementById('followersList');
+      list.innerHTML = '<div class="text-center text-muted">Loading...</div>';
+      
+      try {
+        const data = await NVME.api.get(`/users/${profileUser.id}/following`);
+        
+        if (!data.following || data.following.length === 0) {
+          list.innerHTML = '<div class="text-center text-muted">Not following anyone yet</div>';
+          return;
+        }
+        
+        list.innerHTML = data.following.map(user => `
+          <div class="follower-item">
+            <a href="/profile.html?id=${user.id}">
+              <img src="${user.avatar || '/img/default-avatar.png'}" alt="" class="follower-avatar">
+            </a>
+            <div class="follower-info">
+              <a href="/profile.html?id=${user.id}" class="follower-name">${user.display_name || user.username}</a>
+              <div class="follower-username">@${user.username}</div>
+            </div>
+            ${user.id !== NVME.state.user?.id ? `
+              <button class="btn btn-sm btn-secondary" onclick="quickFollow('${user.id}', this)">
+                Following
+              </button>
+            ` : ''}
+          </div>
+        `).join('');
+      } catch (error) {
+        list.innerHTML = '<div class="text-center text-muted">Failed to load following</div>';
+      }
+    }
+
+    async function quickFollow(userId, btn) {
+      if (!NVME.auth.requireAuth()) return;
+      
+      const isFollowing = btn.textContent.trim() === 'Following';
+      
+      btn.textContent = isFollowing ? 'Follow' : 'Following';
+      btn.classList.toggle('btn-primary', isFollowing);
+      btn.classList.toggle('btn-secondary', !isFollowing);
+      
+      try {
+        if (isFollowing) {
+          await NVME.api.delete(`/follow/${userId}`);
+        } else {
+          await NVME.api.post(`/follow/${userId}`);
+        }
+      } catch (error) {
+        btn.textContent = isFollowing ? 'Following' : 'Follow';
+        btn.classList.toggle('btn-primary', !isFollowing);
+        btn.classList.toggle('btn-secondary', isFollowing);
+        NVME.toast.error('Failed to update follow status');
+      }
+    }
+
+    function openEditProfile() {
+      document.getElementById('avatarPreview').src = profileUser.avatar || '/img/default-avatar.png';
+      document.getElementById('editDisplayName').value = profileUser.display_name || '';
+      document.getElementById('editUsername').value = profileUser.username || '';
+      document.getElementById('editBio').value = profileUser.bio || '';
+      document.getElementById('editWebsite').value = profileUser.website || '';
+      NVME.modal.show('editProfileModal');
+    }
+
+    function previewAvatar(input) {
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          document.getElementById('avatarPreview').src = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+
+    document.getElementById('editProfileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData();
+      formData.append('display_name', document.getElementById('editDisplayName').value);
+      formData.append('username', document.getElementById('editUsername').value);
+      formData.append('bio', document.getElementById('editBio').value);
+      formData.append('website', document.getElementById('editWebsite').value);
+      
+      const avatarInput = document.getElementById('avatarInput');
+      if (avatarInput.files && avatarInput.files[0]) {
+        formData.append('avatar', avatarInput.files[0]);
+      }
+      
+      try {
+        await NVME.api.upload('/users/profile', formData);
+        NVME.toast.success('Profile updated!');
+        NVME.modal.hide('editProfileModal');
+        loadProfile();
+      } catch (error) {
+        NVME.toast.error(error.message || 'Failed to update profile');
+      }
+    });
+  </script>
+</body>
+</html>

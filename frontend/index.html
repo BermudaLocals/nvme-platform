@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="css/style.css">
   <style>
     /* Landing Page Specific Styles */
     .landing-hero {
@@ -393,6 +393,10 @@
       transform: scale(1.2);
     }
 
+    .hidden {
+      display: none !important;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .hero-stats {
@@ -421,29 +425,30 @@
   </style>
 </head>
 <body>
-  <!-- Navigation -->
   <nav class="navbar">
-    <a href="/" class="navbar-brand">NVME</a>
+    <a href="index.html" class="navbar-brand">NVME</a>
     <div class="navbar-nav">
-      <a href="/feed.html" class="nav-link">Explore</a>
-      <a href="/live.html" class="nav-link">Live</a>
-      <div class="auth-buttons flex items-center gap-2">
-        <a href="/login.html" class="btn btn-secondary btn-sm">Log In</a>
-        <a href="/signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+      <a href="feed.html" class="nav-link">Explore</a>
+      <a href="live.html" class="nav-link">Live</a>
+      
+      <div id="logged-out-view" class="auth-buttons flex items-center gap-2">
+        <a href="login.html" class="btn btn-secondary btn-sm">Log In</a>
+        <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
       </div>
-      <div class="user-menu hidden flex items-center gap-2">
-        <a href="/wallet.html" class="nav-link">💰 <span class="user-coins">0</span></a>
+
+      <div id="logged-in-view" class="user-menu hidden flex items-center gap-2">
+        <a href="wallet.html" class="nav-link">💰 <span class="user-coins">0</span></a>
         <div class="dropdown">
           <button class="dropdown-toggle btn btn-secondary btn-sm flex items-center gap-2">
-            <img src="/img/default-avatar.svg" alt="" class="avatar avatar-sm user-avatar">
+            <img src="img/default-avatar.svg" alt="" class="avatar avatar-sm user-avatar">
             <span class="user-name">User</span>
           </button>
           <div class="dropdown-menu">
-            <a href="/profile.html" class="dropdown-item">👤 Profile</a>
-            <a href="/upload.html" class="dropdown-item">📤 Upload</a>
-            <a href="/studio.html" class="dropdown-item">🎬 Studio</a>
-            <a href="/wallet.html" class="dropdown-item">💰 Wallet</a>
-            <a href="/messages.html" class="dropdown-item">💬 Messages</a>
+            <a href="profile.html" class="dropdown-item">👤 Profile</a>
+            <a href="upload.html" class="dropdown-item">📤 Upload</a>
+            <a href="studio.html" class="dropdown-item">🎬 Studio</a>
+            <a href="wallet.html" class="dropdown-item">💰 Wallet</a>
+            <a href="messages.html" class="dropdown-item">💬 Messages</a>
             <div class="dropdown-divider"></div>
             <button class="dropdown-item logout-btn">🚪 Log Out</button>
           </div>
@@ -452,7 +457,6 @@
     </div>
   </nav>
 
-  <!-- Hero Section -->
   <section class="landing-hero">
     <div class="hero-bg"></div>
     <div class="hero-content">
@@ -467,8 +471,8 @@
         with live streaming, virtual gifts, and real monetization opportunities.
       </p>
       <div class="hero-buttons">
-        <a href="/signup.html" class="btn btn-primary">Get Started Free</a>
-        <a href="/feed.html" class="btn btn-secondary">Explore Videos</a>
+        <a href="signup.html" class="btn btn-primary">Get Started Free</a>
+        <a href="feed.html" class="btn btn-secondary">Explore Videos</a>
       </div>
       <div class="hero-stats">
         <div class="hero-stat">
@@ -487,7 +491,6 @@
     </div>
   </section>
 
-  <!-- Features Section -->
   <section class="features-section">
     <div class="section-header">
       <h2 class="section-title">Everything You Need</h2>
@@ -527,7 +530,6 @@
     </div>
   </section>
 
-  <!-- How It Works -->
   <section class="how-section">
     <div class="section-header">
       <h2 class="section-title">How It Works</h2>
@@ -552,7 +554,6 @@
     </div>
   </section>
 
-  <!-- Monetization -->
   <section class="monetize-section">
     <div class="section-header">
       <h2 class="section-title">Multiple Ways to Earn</h2>
@@ -592,16 +593,14 @@
     </div>
   </section>
 
-  <!-- CTA Section -->
   <section class="cta-section">
     <div class="cta-box">
       <h2 class="cta-title">Ready to Start Creating?</h2>
       <p class="cta-text">Join millions of creators and start your journey today. It's free!</p>
-      <a href="/signup.html" class="btn">Create Free Account</a>
+      <a href="signup.html" class="btn">Create Free Account</a>
     </div>
   </section>
 
-  <!-- Footer -->
   <footer class="footer">
     <div class="footer-content">
       <div>
@@ -611,10 +610,10 @@
       <div>
         <h4 class="footer-title">Platform</h4>
         <ul class="footer-links">
-          <li><a href="/feed.html">Explore</a></li>
-          <li><a href="/live.html">Live</a></li>
-          <li><a href="/games.html">Games</a></li>
-          <li><a href="/studio.html">Creator Studio</a></li>
+          <li><a href="feed.html">Explore</a></li>
+          <li><a href="live.html">Live</a></li>
+          <li><a href="games.html">Games</a></li>
+          <li><a href="studio.html">Creator Studio</a></li>
         </ul>
       </div>
       <div>
@@ -647,14 +646,35 @@
     </div>
   </footer>
 
-  <script src="/js/app.js"></script>
+  <script src="js/app.js"></script>
   <script>
-    // Check if user is logged in and update UI
+    // Robust Auth Toggle
     document.addEventListener('DOMContentLoaded', async () => {
-      const isAuth = await NVME.auth.checkAuth();
-      if (isAuth) {
-        document.querySelectorAll('.auth-buttons').forEach(el => el.classList.add('hidden'));
-        document.querySelectorAll('.user-menu').forEach(el => el.classList.remove('hidden'));
+      const loggedOutView = document.getElementById('logged-out-view');
+      const loggedInView = document.getElementById('logged-in-view');
+
+      const updateUI = (isAuth) => {
+        if (isAuth) {
+          loggedOutView.classList.add('hidden');
+          loggedInView.classList.remove('hidden');
+        } else {
+          loggedOutView.classList.remove('hidden');
+          loggedInView.classList.add('hidden');
+        }
+      };
+
+      // Check NVME global object safely
+      if (typeof NVME !== 'undefined' && NVME.auth) {
+        try {
+          const isAuth = await NVME.auth.checkAuth();
+          updateUI(isAuth);
+        } catch (e) {
+          console.error("Auth check failed", e);
+          updateUI(false);
+        }
+      } else {
+        // Fallback: Default to logged out if NVME isn't loaded
+        updateUI(false);
       }
     });
   </script>

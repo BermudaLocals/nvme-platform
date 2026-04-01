@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en" class="nvme-dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>NVME.live — Feed</title>
+    <link rel="stylesheet" href="css/epic-animations.css">
+    <style>
+        /* ============================================================
+           RESET & BASE
+           ============================================================ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; background: #0a0a0f; color: #fff; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+
+        /* ============================================================
+           TOP NAV TABS
+           ============================================================ */
+        .nvme-top-nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            display: flex; justify-content: center; align-items: center; gap: 0;
+            padding: 12px 16px;
+            padding-top: calc(12px + env(safe-area-inset-top, 0px));
+            background: linear-gradient(to bottom, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0.7) 70%, transparent 100%);
+            backdrop-filter: blur(10px);
+        }
+        .nvme-top-nav-tabs {
+            display: flex; gap: 24px; align-items: center;
+        }
+        .nvme-top-nav-tab {
+            font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.5);
+            cursor: pointer; transition: color 0.2s, transform 0.15s;
+            position: relative; padding-bottom: 4px;
+            white-space: nowrap;
+        }
+        .nvme-top-nav-tab:hover { color: rgba(255,255,255,0.8); }
+        .nvme-top-nav-tab.active {
+            color: #fff;
+        }
+        .nvme-top-nav-tab.active::after {
+            content: ''; position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);
+            width: 28px; height: 3px; background: #fff; border-radius: 2px;
+        }
+        .nvme-top-nav-divider { width: 1px; height: 16px; background: rgba(255,255,255,0.2); }
+
+        /* ============================================================
+           FEED CONTAINER
+           ============================================================ */
+        .nvme-feed {
+            height: 100vh; width: 100%;
+            overflow-y: scroll; scroll-snap-type: y mandatory;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .nvme-feed::-webkit-scrollbar { display: none; }
+
+        /* ============================================================
+           VIDEO SLIDE
+           ============================================================ */
+        .nvme-slide {
+            scroll-snap-align: start; scroll-snap-stop: always;
+            height: 100vh; width: 100%; position: relative;
+            background: #000; overflow: hidden;
+        }
+        .nvme-slide-video {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: 1;
+        }
+        .nvme-slide-video-placeholder {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0a0a0f 50%, #16213e 100%);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1;
+        }
+        .nvme-slide-video-placeholder .play-icon {
+            font-size: 64px; opacity: 0.3;
+            animation: nvmePulse 2s ease-in-out infinite;
+        }
+
+        /* ============================================================
+           BOTTOM OVERLAY - Creator Info
+           ============================================================ */
+        .nvme-bottom-overlay {
+            position: absolute; bottom: 0; left: 0; right: 70px;
+            padding: 16px 16px 20px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 60%, transparent 100%);
+            z-index: 10;
+        }
+        .nvme-creator-row {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+        }
+        .nvme-creator-avatar {
+            width: 44px; height: 44px; border-radius: 50%;
+            border: 2px solid #fff; overflow: hidden;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; flex-shrink: 0;
+        }
+        .nvme-creator-name {
+            font-size: 16px; font-weight: 700; color: #fff;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .nvme-creator-handle {
+            font-size: 13px; color: rgba(255,255,255,0.7);
+        }
+        .nvme-follow-btn {
+            background: #ff6b9d; color: #fff; border: none; border-radius: 4px;
+            padding: 4px 12px; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: transform 0.15s, background 0.2s;
+        }
+        .nvme-follow-btn:hover { transform: scale(1.05); background: #ff4777; }
+        .nvme-live-badge {
+            background: #ff4757; color: #fff; border-radius: 4px;
+            padding: 2px 8px; font-size: 11px; font-weight: 700;
+            animation: nvmePulse 1.5s ease-in-out infinite;
+        }
+        .nvme-caption {
+            font-size: 14px; color: #fff; line-height: 1.4;
+            margin-bottom: 10px; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .nvme-caption .hashtag { color: #00d4ff; font-weight: 600; }
+        .nvme-trending-sound {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: rgba(255,255,255,0.9);
+        }
+        .nvme-trending-sound .sound-icon { animation: nvmeSpin 3s linear infinite; }
+        .nvme-sound-marquee {
+            overflow: hidden; max-width: 200px;
+        }
+        .nvme-sound-marquee span {
+            display: inline-block; white-space: nowrap;
+            animation: marquee 8s linear infinite;
+        }
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .nvme-duet-stitch-row {
+            display: flex; gap: 8px; margin-top: 10px;
+        }
+        .nvme-duet-stitch-btn {
+            display: flex; align-items: center; gap: 4px;
+            background: rgba(255,255,255,0.1); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 20px; padding: 4px 12px;
+            font-size: 12px; color: rgba(255,255,255,0.9); cursor: pointer;
+            transition: background 0.2s, transform 0.15s;
+        }
+        .nvme-duet-stitch-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
+
+        /* ============================================================
+           RIGHT SIDEBAR ACTIONS
+           ============================================================ */
+        .nvme-right-actions {
+            position: absolute; right: 8px; bottom: 100px;
+            display: flex; flex-direction: column; align-items: center; gap: 18px;
+            z-index: 20;
+        }
+        .nvme-action-btn {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            cursor: pointer; -webkit-tap-highlight-color: transparent;
+            transition: transform 0.15s;
+        }
+        .nvme-action-btn:active { transform: scale(0.85); }
+        .nvme-action-btn .icon-circle {
+            width: 44px; height: 44px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(8px);
+            transition: background 0.2s;
+        }
+        .nvme-action-btn:hover .icon-circle { background: rgba(255,255,255,0.2); }
+        .nvme-action-btn .action-count {
+            font-size: 11px; font-weight: 600; color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .nvme-action-btn.liked .icon-circle { color: #ff4757; }
+        .nvme-action-btn.liked .action-count { color: #ff4757; }
+
+        /* Gift button special */
+        .nvme-action-btn.gift-btn .icon-circle {
+            background: linear-gradient(135deg, #7c3aed, #ff6b9d);
+            box-shadow: 0 0 15px rgba(124,58,237,0.4);
+            font-size: 24px;
+        }
+
+        /* Creator avatar in sidebar */
+        .nvme-sidebar-avatar {
+            width: 48px; height: 48px; border-radius: 50%;
+            border: 2px solid #fff; overflow: hidden;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; margin-bottom: 6px; cursor: pointer;
+            position: relative;
+        }
+        .nvme-sidebar-avatar .plus-badge {
+            position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+            width: 20px; height: 20px; background: #ff6b9d; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; border: 2px solid #0a0a0f;
+        }
+        .nvme-spinning-disc {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: linear-gradient(135deg, #1a1a2e, #7c3aed);
+            border: 8px solid #333;
+            animation: nvmeSpin 3s linear infinite;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        /* ============================================================
+           DOUBLE-TAP HEART OVERLAY
+           ============================================================ */
+        .nvme-double-tap-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none; z-index: 15;
+        }
+        .nvme-double-tap-heart {
+            position: absolute;
+            left: 50%; top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        /* ============================================================
+           GIFT PANEL
+           ============================================================ */
+        .nvme-gift-panel-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); z-index: 200;
+            display: none; opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .nvme-gift-panel-overlay.show { display: flex; flex-direction: column; justify-content: flex-end; opacity: 1; }
+        .nvme-gift-panel {
+            background: linear-gradient(to top, #0a0a0f 0%, rgba(26,26,46,0.98) 100%);
+            backdrop-filter: blur(30px);
+            border-top-left-radius: 24px; border-top-right-radius: 24px;
+            max-height: 65vh; min-height: 45vh;
+            display: flex; flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.33, 1, 0.68, 1);
+        }
+        .nvme-gift-panel-overlay.show .nvme-gift-panel { transform: translateY(0); }
+        .nvme-gift-panel-handle {
+            width: 36px; height: 4px; background: rgba(255,255,255,0.2);
+            border-radius: 2px; margin: 12px auto 8px;
+        }
+        .nvme-gift-panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 16px 12px;
+        }
+        .nvme-gift-panel-title {
+            font-size: 18px; font-weight: 700;
+            background: linear-gradient(90deg, #7c3aed, #00d4ff, #ff6b9d);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .nvme-gift-balance {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 14px; color: #ffd700; font-weight: 600;
+        }
+        .nvme-gift-balance .add-btn {
+            width: 24px; height: 24px; background: #7c3aed; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: pointer; border: none; color: #fff;
+        }
+        .nvme-gift-search {
+            margin: 0 16px 8px; position: relative;
+        }
+        .nvme-gift-search input {
+            width: 100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px; padding: 10px 12px 10px 36px;
+            font-size: 14px; color: #fff; outline: none;
+            transition: border-color 0.2s;
+        }
+        .nvme-gift-search input:focus { border-color: #7c3aed; }
+        .nvme-gift-search input::placeholder { color: rgba(255,255,255,0.4); }
+        .nvme-gift-search .search-icon {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            font-size: 14px; opacity: 0.4;
+        }
+        .nvme-gift-categories {
+            display: flex; gap: 0; overflow-x: auto; padding: 0 16px 8px;
+            scrollbar-width: none; -ms-overflow-style: none;
+        }
+        .nvme-gift-categories::-webkit-scrollbar { display: none; }
+        .nvme-gift-cat-tab {
+            flex-shrink: 0; padding: 6px 14px; font-size: 13px;
+            color: rgba(255,255,255,0.5); border-radius: 20px;
+            cursor: pointer; transition: all 0.2s; white-space: nowrap;
+            border: none; background: none;
+        }
+        .nvme-gift-cat-tab:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.05); }
+        .nvme-gift-cat-tab.active {
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            color: #fff; font-weight: 600;
+        }
+        .nvme-gift-grid {
+            flex: 1; overflow-y: auto; padding: 8px 12px 16px;
+            display: grid; grid-template-columns: repeat(5, 1fr);
+            gap: 6px; scrollbar-width: none;
+        }
+        .nvme-gift-grid::-webkit-scrollbar { display: none; }
+        .nvme-gift-item {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 10px 4px; border-radius: 12px; cursor: pointer;
+            transition: transform 0.15s, background 0.2s;
+            background: rgba(255,255,255,0.03);
+            position: relative;
+        }
+        .nvme-gift-item:hover { background: rgba(255,255,255,0.08); transform: scale(1.05); }
+        .nvme-gift-item:active { transform: scale(0.95); }
+        .nvme-gift-item .gift-emoji { font-size: 32px; }
+        .nvme-gift-item .gift-name { font-size: 10px; color: rgba(255,255,255,0.7); text-align: center; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+        .nvme-gift-item .gift-cost { font-size: 10px; color: #ffd700; font-weight: 600; }
+        .nvme-gift-item.rarity-rare { border: 1px solid rgba(0,212,255,0.3); }
+        .nvme-gift-item.rarity-epic { border: 1px solid rgba(124,58,237,0.4); background: rgba(124,58,237,0.05); }
+        .nvme-gift-item.rarity-legendary { border: 1px solid rgba(255,215,0,0.4); background: rgba(255,215,0,0.05); box-shadow: 0 0 15px rgba(255,215,0,0.1); }
+        .nvme-gift-item.rarity-bermuda { border: 1px solid rgba(255,107,157,0.4); background: rgba(255,107,157,0.05); }
+
+        /* Gift animation container */
+        .nvme-gift-animation-container {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none; z-index: 99999;
+            overflow: hidden;
+        }
+        .nvme-gift-animated {
+            position: absolute; font-size: 64px;
+            left: 50%; bottom: -100px;
+            pointer-events: none;
+        }
+        .nvme-particle {
+            position: absolute; width: 8px; height: 8px;
+            border-radius: 50%; pointer-events: none;
+        }
+
+        /* ============================================================
+           COMMENT PANEL
+           ============================================================ */
+        .nvme-comment-panel-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); z-index: 300;
+            display: none; opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .nvme-comment-panel-overlay.show { display: flex; flex-direction: column; justify-content: flex-end; opacity: 1; }
+        .nvme-comment-panel {
+            background: #0a0a0f;
+            border-top-left-radius: 20px; border-top-right-radius: 20px;
+            max-height: 55vh; display: flex; flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.33, 1, 0.68, 1);
+        }
+        .nvme-comment-panel-overlay.show .nvme-comment-panel { transform: translateY(0); }
+        .nvme-comment-panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .nvme-comment-panel-header h3 { font-size: 16px; font-weight: 700; }
+        .nvme-comment-panel-close {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: rgba(255,255,255,0.1); border: none; color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: pointer;
+        }
+        .nvme-comments-list {
+            flex: 1; overflow-y: auto; padding: 12px 16px;
+            scrollbar-width: none;
+        }
+        .nvme-comments-list::-webkit-scrollbar { display: none; }
+        .nvme-comment-item {
+            display: flex; gap: 10px; margin-bottom: 16px;
+        }
+        .nvme-comment-avatar {
+            width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            display: flex; align-items: center; justify-content: center; font-size: 14px;
+        }
+        .nvme-comment-body { flex: 1; }
+        .nvme-comment-author { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6); }
+        .nvme-comment-text { font-size: 14px; color: #fff; line-height: 1.4; margin-top: 2px; }
+        .nvme-comment-meta { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; display: flex; gap: 12px; }
+        .nvme-comment-input-row {
+            display: flex; gap: 10px; padding: 12px 16px;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+            border-top: 1px solid rgba(255,255,255,0.06);
+            align-items: center;
+        }
+        .nvme-comment-input {
+            flex: 1; background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;
+            padding: 10px 16px; font-size: 14px; color: #fff;
+            outline: none; transition: border-color 0.2s;
+        }
+        .nvme-comment-input:focus { border-color: #7c3aed; }
+        .nvme-comment-input::placeholder { color: rgba(255,255,255,0.4); }
+        .nvme-comment-send {
+            background: #7c3aed; color: #fff; border: none; border-radius: 20px;
+            padding: 10px 16px; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .nvme-comment-send:hover { background: #6d28d9; }
+
+        /* ============================================================
+           SHARE PANEL
+           ============================================================ */
+        .nvme-share-panel-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); z-index: 300;
+            display: none; opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .nvme-share-panel-overlay.show { display: flex; flex-direction: column; justify-content: flex-end; opacity: 1; }
+        .nvme-share-panel {
+            background: #0a0a0f;
+            border-top-left-radius: 20px; border-top-right-radius: 20px;
+            padding: 20px 16px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.33, 1, 0.68, 1);
+        }
+        .nvme-share-panel-overlay.show .nvme-share-panel { transform: translateY(0); }
+        .nvme-share-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; text-align: center; }
+        .nvme-share-grid {
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+            margin-bottom: 16px;
+        }
+        .nvme-share-item {
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+            cursor: pointer; transition: transform 0.15s;
+        }
+        .nvme-share-item:active { transform: scale(0.9); }
+        .nvme-share-icon {
+            width: 52px; height: 52px; border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px;
+        }
+        .nvme-share-label { font-size: 11px; color: rgba(255,255,255,0.7); }
+        .nvme-share-actions {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+            padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        /* ============================================================
+           LOADING SCREEN
+           ============================================================ */
+        .nvme-loading-screen {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: #0a0a0f; z-index: 10000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.5s;
+        }
+        .nvme-loading-screen.hidden { opacity: 0; pointer-events: none; }
+        .nvme-loading-logo {
+            font-size: 48px; font-weight: 900;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff, #ff6b9d);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 24px;
+            animation: nvmePulse 1.5s ease-in-out infinite;
+        }
+        .nvme-loading-bar {
+            width: 200px; height: 3px; background: rgba(255,255,255,0.1);
+            border-radius: 2px; overflow: hidden;
+        }
+        .nvme-loading-bar-fill {
+            width: 0%; height: 100%;
+            background: linear-gradient(90deg, #7c3aed, #00d4ff);
+            border-radius: 2px;
+            animation: loadProgress 1.5s ease-out forwards;
+        }
+        @keyframes loadProgress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 480px) {
+            .nvme-right-actions { right: 6px; gap: 14px; bottom: 80px; }
+            .nvme-action-btn .icon-circle { width: 40px; height: 40px; font-size: 20px; }
+            .nvme-bottom-overlay { right: 56px; padding: 12px 12px 16px; }
+            .nvme-gift-grid { grid-template-columns: repeat(4, 1fr); }
+            .nvme-top-nav-tab { font-size: 14px; }
+        }
+        @media (min-width: 768px) {
+            .nvme-gift-grid { grid-template-columns: repeat(6, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .nvme-feed { max-width: 480px; margin: 0 auto; }
+            .nvme-gift-grid { grid-template-columns: repeat(8, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- LOADING SCREEN -->
+    <div class="nvme-loading-screen" id="loadingScreen">
+        <div class="nvme-loading-logo">NVME</div>
+        <div class="nvme-loading-bar">
+            <div class="nvme-loading-bar-fill"></div>
+        </div>
+    </div>
+
+    <!-- TOP NAV TABS -->
+    <nav class="nvme-top-nav">
+        <div class="nvme-top-nav-tabs">
+            <span class="nvme-top-nav-tab" data-tab="following">Following</span>
+            <div class="nvme-top-nav-divider"></div>
+            <span class="nvme-top-nav-tab active" data-tab="foryou">For You</span>
+            <div class="nvme-top-nav-divider"></div>
+            <span class="nvme-top-nav-tab" data-tab="trending">Trending</span>
+        </div>
+    </nav>
+
+    <!-- VIDEO FEED -->
+    <div class="nvme-feed" id="feedContainer">
+        <!-- Slides populated by JS -->
+    </div>
+
+    <!-- GIFT ANIMATION CONTAINER -->
+    <div class="nvme-gift-animation-container" id="giftAnimContainer"></div>
+
+    <!-- GIFT PANEL OVERLAY -->
+    <div class="nvme-gift-panel-overlay" id="giftPanelOverlay">
+        <div class="nvme-gift-panel" id="giftPanel">
+            <div class="nvme-gift-panel-handle"></div>
+            <div class="nvme-gift-panel-header">
+                <span class="nvme-gift-panel-title">Send a Gift</span>
+                <div class="nvme-gift-balance">
+                    <span>12,450</span> <span style="font-size:16px;">💎</span>
+                    <button class="add-btn">+</button>
+                </div>
+            </div>
+            <div class="nvme-gift-search">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="giftSearchInput" placeholder="Search 500 gifts...">
+            </div>
+            <div class="nvme-gift-categories" id="giftCategories">
+                <!-- Populated by JS -->
+            </div>
+            <div class="nvme-gift-grid" id="giftGrid">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- COMMENT PANEL OVERLAY -->
+    <div class="nvme-comment-panel-overlay" id="commentPanelOverlay">
+        <div class="nvme-comment-panel">
+            <div class="nvme-comment-panel-header">
+                <h3 id="commentCount">2,847 Comments</h3>
+                <button class="nvme-comment-panel-close" id="commentCloseBtn">✕</button>
+            </div>
+            <div class="nvme-comments-list" id="commentsList">
+                <!-- Comments populated by JS -->
+            </div>
+            <div class="nvme-comment-input-row">
+                <input class="nvme-comment-input" id="commentInput" type="text" placeholder="Add a comment...">
+                <button class="nvme-comment-send" id="commentSendBtn">Post</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SHARE PANEL OVERLAY -->
+    <div class="nvme-share-panel-overlay" id="sharePanelOverlay">
+        <div class="nvme-share-panel">
+            <div class="nvme-share-title">Share to</div>
+            <div class="nvme-share-grid">
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:linear-gradient(135deg,#25D366,#128C7E);">💬</div>
+                    <span class="nvme-share-label">WhatsApp</span>
+                </div>
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:linear-gradient(135deg,#1DA1F2,#0d8ecf);">🐦</div>
+                    <span class="nvme-share-label">Twitter</span>
+                </div>
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:linear-gradient(135deg,#E4405F,#C13584);">📸</div>
+                    <span class="nvme-share-label">Instagram</span>
+                </div>
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:linear-gradient(135deg,#FF0000,#CC0000);">▶️</div>
+                    <span class="nvme-share-label">YouTube</span>
+                </div>
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:linear-gradient(135deg,#0088cc,#006699);">✈️</div>
+                    <span class="nvme-share-label">Telegram</span>
+                </div>
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:linear-gradient(135deg,#1DA1F2,#0d8ecf);">🔗</div>
+                    <span class="nvme-share-label">Copy Link</span>
+                </div>
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:linear-gradient(135deg,#7c3aed,#00d4ff);">📧</div>
+                    <span class="nvme-share-label">Email</span>
+                </div>
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:linear-gradient(135deg,#ff6b9d,#7c3aed);">💾</div>
+                    <span class="nvme-share-label">Save</span>
+                </div>
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:linear-gradient(135deg,#ffd700,#ff6b9d);">🚩</div>
+                    <span class="nvme-share-label">Report</span>
+                </div>
+                <div class="nvme-share-item">
+                    <div class="nvme-share-icon" style="background:rgba(255,255,255,0.1);">🚫</div>
+                    <span class="nvme-share-label">Not Interested</span>
+                </div>
+            </div>
+            <div class="nvme-share-actions">
+                <div class="nvme-duet-stitch-btn">🎭 Duet</div>
+                <div class="nvme-duet-stitch-btn">✂️ Stitch</div>
+                <div class="nvme-duet-stitch-btn">🎵 Sound</div>
+                <div class="nvme-duet-stitch-btn">📌 Pin</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <nav style="position:fixed;bottom:0;left:0;right:0;z-index:100;padding:8px 0;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,rgba(10,10,15,0.98) 0%,rgba(10,10,15,0.9) 60%,transparent 100%);backdrop-filter:blur(10px);display:flex;justify-content:space-around;align-items:center;">
+        <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">🏠</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Home</span>
+        </a>
+        <a href="feed.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">🧭</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Discover</span>
+        </a>
+        <a href="upload.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <div style="width:38px;height:28px;background:linear-gradient(135deg,#7c3aed,#00d4ff);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">+</div>
+        </a>
+        <a href="messages.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">💬</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Inbox</span>
+        </a>
+        <a href="profile.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">👤</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Profile</span>
+        </a>
+    </nav>
+
+    <!-- SCRIPTS -->
+    <script src="js/gifts.js"></script>
+    <script>
+    (function() {
+        'use strict';
+
+        const API = window.NVME_API || 'http://localhost:4000';
+        const TOKEN = localStorage.getItem('nvme_token');
+        const AUTH = TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {};
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        const state = {
+            currentSlide: 0,
+            videos: [],
+            activeTab: 'foryou',
+            giftPanelOpen: false,
+            commentPanelOpen: false,
+            sharePanelOpen: false,
+            likedVideos: new Set(),
+            lastTapTime: 0,
+            lastTapX: 0,
+            lastTapY: 0
+        };
+
+        // ============================================================
+        // MOCK DATA (fallback when API unavailable)
+        // ============================================================
+        const mockVideos = [
+            { id: 1, creator: { name: 'Zara Ocean', handle: '@zara', avatar: '🌊', isLive: false }, caption: 'Bermuda vibes hitting different today 🌴✨ #bermuda #islandlife #nvme', music: 'Island Dreams - Ocean Waves', likes: 14200, comments: 2847, shares: 891, gifts: 342, gradient: 'linear-gradient(135deg, #0a2342, #2d6a4f, #ff6b9d)' },
+            { id: 2, creator: { name: 'Tech Nova', handle: '@technova', avatar: '🤖', isLive: true }, caption: 'Building the future of AI agents live right now! Come hang 🧠⚡ #ai #coding #live', music: 'Synthwave Horizon - CyberPulse', likes: 8750, comments: 1203, shares: 445, gifts: 678, gradient: 'linear-gradient(135deg, #7c3aed, #0a0a0f, #00d4ff)' },
+            { id: 3, creator: { name: 'Chef Bermuda', handle: '@chefbermuda', avatar: '🧑‍🍳', isLive: false }, caption: 'The perfect fish sandwich recipe straight from Hamilton 🐟🍔 #cooking #bermuda #foodtok', music: 'Kitchen Beats - Culinary Vibes', likes: 23100, comments: 4102, shares: 1567, gifts: 234, gradient: 'linear-gradient(135deg, #ff6b35, #0a0a0f, #ffd700)' },
+            { id: 4, creator: { name: 'Surf Legend', handle: '@surflegend', avatar: '🏄', isLive: false }, caption: 'Pipeline was INSANE today 🌊🤙 #surfing #waves #ocean #extreme', music: 'Ocean Storm - Wave Riders', likes: 56800, comments: 7234, shares: 3421, gifts: 1203, gradient: 'linear-gradient(135deg, #00d4ff, #0a0a0f, #0077b6)' },
+            { id: 5, creator: { name: 'DJ Cosmos', handle: '@djcosmos', avatar: '🎧', isLive: true }, caption: 'Late night set from the cosmos 🌌🎵 Live now on NVME! #music #dj #livemusic', music: 'Midnight Galaxy - DJ Cosmos', likes: 31200, comments: 5678, shares: 2134, gifts: 2456, gradient: 'linear-gradient(135deg, #7c3aed, #ff6b9d, #ffd700)' },
+            { id: 6, creator: { name: 'Yoga Luna', handle: '@yogaluna', avatar: '🧘', isLive: false }, caption: 'Morning flow with this sunset view 🌅 Namaste beautiful souls #yoga #wellness #mindfulness', music: 'Zen Garden - Ambient Flow', likes: 19400, comments: 2345, shares: 876, gifts: 567, gradient: 'linear-gradient(135deg, #ff6b9d, #0a0a0f, #ffd700)' },
+            { id: 7, creator: { name: 'Crypto King', handle: '@cryptoking', avatar: '💰', isLive: false }, caption: 'This altcoin is about to 100x 📈 Not financial advice but... #crypto #web3 #defi', music: 'Money Machine - Blockchain Beats', likes: 45600, comments: 8901, shares: 4567, gifts: 890, gradient: 'linear-gradient(135deg, #ffd700, #0a0a0f, #00d4ff)' },
+            { id: 8, creator: { name: 'Dance Queen', handle: '@dancequeen', avatar: '💃', isLive: false }, caption: 'New choreo just dropped!! Who wants a tutorial? 🔥💃 #dance #choreography #viral', music: 'Fire Beat - Dance Floor', likes: 78900, comments: 12345, shares: 6789, gifts: 1567, gradient: 'linear-gradient(135deg, #ff4757, #0a0a0f, #7c3aed)' }
+        ];
+
+        const mockComments = [
+            { author: 'OceanDreamer', avatar: '🌊', text: 'This is absolutely incredible! 🔥🔥', time: '2m ago', likes: 234 },
+            { author: 'IslandVibes', avatar: '🏝️', text: 'Bermuda represent!! 🇧🇲', time: '5m ago', likes: 189 },
+            { author: 'TechWiz99', avatar: '⚡', text: 'How do you make it look so easy?', time: '8m ago', likes: 67 },
+            { author: 'MusicLover', avatar: '🎵', text: 'The sound choice is perfect', time: '12m ago', likes: 45 },
+            { author: 'GlobalFan', avatar: '🌍', text: 'Watching from Tokyo! Love this', time: '15m ago', likes: 123 },
+            { author: 'NVMEFan', avatar: '💎', text: 'NVME is the future of social media', time: '20m ago', likes: 345 },
+            { author: 'ContentKing', avatar: '👑', text: 'You always deliver the best content', time: '25m ago', likes: 78 },
+            { author: 'NightOwl', avatar: '🦉', text: '3am vibes hitting different rn', time: '30m ago', likes: 56 }
+        ];
+
+        // ============================================================
+        // DOM ELEMENTS
+        // ============================================================
+        const feedContainer = document.getElementById('feedContainer');
+        const giftPanelOverlay = document.getElementById('giftPanelOverlay');
+        const commentPanelOverlay = document.getElementById('commentPanelOverlay');
+        const sharePanelOverlay = document.getElementById('sharePanelOverlay');
+        const giftAnimContainer = document.getElementById('giftAnimContainer');
+        const loadingScreen = document.getElementById('loadingScreen');
+
+        // ============================================================
+        // FEED RENDERING
+        // ============================================================
+        function formatCount(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        function createSlide(video, index) {
+            const slide = document.createElement('div');
+            slide.className = 'nvme-slide';
+            slide.dataset.index = index;
+
+            slide.innerHTML = `
+                <div class="nvme-slide-video-placeholder" style="background:${video.gradient}">
+                    <div class="play-icon">▶️</div>
+                </div>
+
+                <!-- RIGHT SIDEBAR ACTIONS -->
+                <div class="nvme-right-actions">
+                    <!-- Creator avatar -->
+                    <div class="nvme-sidebar-avatar">
+                        <span>${video.creator.avatar}</span>
+                        ${!video.creator.isLive ? '<div class="plus-badge">+</div>' : ''}
+                    </div>
+
+                    <!-- Like -->
+                    <div class="nvme-action-btn" data-action="like" data-video="${video.id}">
+                        <div class="icon-circle">${state.likedVideos.has(video.id) ? '❤️' : '🤍'}</div>
+                        <span class="action-count">${formatCount(video.likes)}</span>
+                    </div>
+
+                    <!-- Comment -->
+                    <div class="nvme-action-btn" data-action="comment" data-video="${video.id}">
+                        <div class="icon-circle">💬</div>
+                        <span class="action-count">${formatCount(video.comments)}</span>
+                    </div>
+
+                    <!-- Gift -->
+                    <div class="nvme-action-btn gift-btn" data-action="gift" data-video="${video.id}">
+                        <div class="icon-circle">🎁</div>
+                        <span class="action-count">${formatCount(video.gifts)}</span>
+                    </div>
+
+                    <!-- Share -->
+                    <div class="nvme-action-btn" data-action="share" data-video="${video.id}">
+                        <div class="icon-circle">↗️</div>
+                        <span class="action-count">${formatCount(video.shares)}</span>
+                    </div>
+
+                    <!-- Spinning disc -->
+                    <div class="nvme-spinning-disc"></div>
+                </div>
+
+                <!-- BOTTOM OVERLAY -->
+                <div class="nvme-bottom-overlay">
+                    <div class="nvme-creator-row">
+                        <div class="nvme-creator-avatar">
+                            <span>${video.creator.avatar}</span>
+                        </div>
+                        <div>
+                            <div class="nvme-creator-name">
+                                ${video.creator.name}
+                                ${video.creator.isLive ? '<span class="nvme-live-badge">LIVE</span>' : ''}
+                            </div>
+                            <div class="nvme-creator-handle">${video.creator.handle}</div>
+                        </div>
+                        <button class="nvme-follow-btn">Follow</button>
+                    </div>
+                    <div class="nvme-caption">${video.caption.replace(/#(\w+)/g, '<span class="hashtag">#$1</span>')}</div>
+                    <div class="nvme-trending-sound">
+                        <span class="sound-icon">🎵</span>
+                        <div class="nvme-sound-marquee">
+                            <span>${video.music} &nbsp;&nbsp;&nbsp; ${video.music} &nbsp;&nbsp;&nbsp; </span>
+                        </div>
+                    </div>
+                    <div class="nvme-duet-stitch-row">
+                        <div class="nvme-duet-stitch-btn">🎭 Duet</div>
+                        <div class="nvme-duet-stitch-btn">✂️ Stitch</div>
+                    </div>
+                </div>
+
+                <!-- DOUBLE TAP OVERLAY -->
+                <div class="nvme-double-tap-overlay" data-video="${video.id}"></div>
+            `;
+
+            return slide;
+        }
+
+        function renderFeed(videos) {
+            feedContainer.innerHTML = '';
+            videos.forEach((video, i) => {
+                feedContainer.appendChild(createSlide(video, i));
+            });
+            state.videos = videos;
+            attachSlideEvents();
+        }
+
+        async function loadFeed(tab) {
+            state.activeTab = tab;
+            try {
+                const res = await fetch(`${API}/api/videos?tab=${tab}`, { headers: AUTH });
+                if (res.ok) {
+                    const data = await res.json();
+                    const videos = data.videos || data;
+                    if (videos.length > 0) {
+                        renderFeed(videos);
+                        return;
+                    }
+                }
+            } catch(e) {
+                console.log('API unavailable, using mock data:', e.message);
+            }
+            renderFeed(mockVideos);
+        }
+
+        // ============================================================
+        // SLIDE EVENTS
+        // ============================================================
+        function attachSlideEvents() {
+            // Action buttons
+            document.querySelectorAll('.nvme-action-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const action = this.dataset.action;
+                    const videoId = parseInt(this.dataset.video);
+
+                    if (action === 'like') toggleLike(videoId, this);
+                    else if (action === 'comment') openCommentPanel();
+                    else if (action === 'gift') openGiftPanel();
+                    else if (action === 'share') openSharePanel();
+                });
+            });
+
+            // Double-tap to like
+            document.querySelectorAll('.nvme-double-tap-overlay').forEach(overlay => {
+                overlay.addEventListener('click', function(e) {
+                    const now = Date.now();
+                    const videoId = parseInt(this.dataset.video);
+                    const dx = Math.abs(e.clientX - state.lastTapX);
+                    const dy = Math.abs(e.clientY - state.lastTapY);
+
+                    if (now - state.lastTapTime < 300 && dx < 50 && dy < 50) {
+                        doubleTapLike(videoId, e.clientX, e.clientY, this);
+                        state.lastTapTime = 0;
+                    } else {
+                        state.lastTapTime = now;
+                        state.lastTapX = e.clientX;
+                        state.lastTapY = e.clientY;
+                    }
+                });
+            });
+
+            // Follow buttons
+            document.querySelectorAll('.nvme-follow-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    this.textContent = this.textContent === 'Follow' ? 'Following' : 'Follow';
+                    this.style.background = this.textContent === 'Following' ? '#555' : '#ff6b9d';
+                });
+            });
+        }
+
+        // ============================================================
+        // LIKE SYSTEM
+        // ============================================================
+        function toggleLike(videoId, btn) {
+            const icon = btn.querySelector('.icon-circle');
+            const count = btn.querySelector('.action-count');
+            const video = state.videos.find(v => v.id === videoId);
+
+            if (state.likedVideos.has(videoId)) {
+                state.likedVideos.delete(videoId);
+                icon.textContent = '🤍';
+                btn.classList.remove('liked');
+                if (video) video.likes--;
+            } else {
+                state.likedVideos.add(videoId);
+                icon.textContent = '❤️';
+                btn.classList.add('liked');
+                if (video) video.likes++;
+                // Mini burst
+                createMiniBurst(btn);
+            }
+            if (video) count.textContent = formatCount(video.likes);
+        }
+
+        function doubleTapLike(videoId, x, y, overlay) {
+            if (!state.likedVideos.has(videoId)) {
+                state.likedVideos.add(videoId);
+                // Update sidebar button
+                const slide = overlay.closest('.nvme-slide');
+                const likeBtn = slide.querySelector('[data-action="like"]');
+                if (likeBtn) {
+                    likeBtn.querySelector('.icon-circle').textContent = '❤️';
+                    likeBtn.classList.add('liked');
+                }
+            }
+            // Heart burst animation
+            const heart = document.createElement('div');
+            heart.className = 'nvme-double-tap-heart nvme-animate-bounce-in';
+            heart.textContent = '❤️';
+            heart.style.position = 'absolute';
+            heart.style.left = x + 'px';
+            heart.style.top = y + 'px';
+            heart.style.transform = 'translate(-50%, -50%)';
+            heart.style.fontSize = '80px';
+            heart.style.pointerEvents = 'none';
+            heart.style.zIndex = '99999';
+            heart.style.animation = 'nvmeDoubleTapHeart 1s ease-out forwards';
+            overlay.appendChild(heart);
+
+            // Particle burst
+            if (typeof createParticleExplosion !== 'undefined') {
+                createParticleExplosion(x, y, '#ff4757', 15);
+            } else {
+                miniParticleBurst(x, y, '#ff4757', 12);
+            }
+
+            setTimeout(() => heart.remove(), 1000);
+        }
+
+        function createMiniBurst(element) {
+            const rect = element.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            for (let i = 0; i < 8; i++) {
+                const p = document.createElement('div');
+                p.style.cssText = `position:fixed;left:${cx}px;top:${cy}px;width:6px;height:6px;border-radius:50%;background:#ff4757;pointer-events:none;z-index:99999;`;
+                const angle = (i / 8) * Math.PI * 2;
+                const dist = 30 + Math.random() * 20;
+                const dx = Math.cos(angle) * dist;
+                const dy = Math.sin(angle) * dist;
+                p.style.setProperty('--dx', dx + 'px');
+                p.style.setProperty('--dy', dy + 'px');
+                p.style.animation = 'nvmeParticleExplode 0.5s ease-out forwards';
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 500);
+            }
+        }
+
+        function miniParticleBurst(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${4+Math.random()*8}px;height:${4+Math.random()*8}px;border-radius:50%;background:${color};pointer-events:none;z-index:99999;opacity:1;`;
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 40 + Math.random() * 80;
+                const dx = Math.cos(angle) * dist;
+                const dy = Math.sin(angle) * dist;
+                p.style.setProperty('--dx', dx + 'px');
+                p.style.setProperty('--dy', dy + 'px');
+                p.style.animation = `nvmeParticleExplode ${0.4 + Math.random()*0.4}s ease-out forwards`;
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 800);
+            }
+        }
+
+        // ============================================================
+        // GIFT PANEL
+        // ============================================================
+        let giftModule = null;
+
+        function openGiftPanel() {
+            state.giftPanelOpen = true;
+            giftPanelOverlay.classList.add('show');
+            if (!giftModule) {
+                initGiftPanel();
+            }
+        }
+
+        function closeGiftPanel() {
+            state.giftPanelOpen = false;
+            giftPanelOverlay.classList.remove('show');
+        }
+
+        function initGiftPanel() {
+            try {
+                if (typeof NVMEGifts !== 'undefined') {
+                    giftModule = NVMEGifts;
+                    renderGiftCategories();
+                    renderGifts('standard');
+                    setupGiftSearch();
+                } else {
+                    renderFallbackGifts();
+                }
+            } catch(e) {
+                console.error('Gift init error:', e);
+                renderFallbackGifts();
+            }
+        }
+
+        function renderGiftCategories() {
+            const cats = ['standard','bermuda','luxury','gaming','nature','tech','food_fun','music','sports','emotions','bermuda_dollar'];
+            const labels = ['Standard','Bermuda','Luxury','Gaming','Nature','Tech','Food & Fun','Music','Sports','Emotions','Bermuda $'];
+            const container = document.getElementById('giftCategories');
+            container.innerHTML = '';
+            cats.forEach((cat, i) => {
+                const tab = document.createElement('button');
+                tab.className = 'nvme-gift-cat-tab' + (i === 0 ? ' active' : '');
+                tab.textContent = labels[i];
+                tab.addEventListener('click', () => {
+                    container.querySelectorAll('.nvme-gift-cat-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    renderGifts(cat);
+                });
+                container.appendChild(tab);
+            });
+        }
+
+        function renderGifts(category) {
+            const grid = document.getElementById('giftGrid');
+            grid.innerHTML = '';
+            let gifts = [];
+            try {
+                if (giftModule && typeof giftModule.getGiftsByCategory === 'function') {
+                    gifts = giftModule.getGiftsByCategory(category);
+                } else if (giftModule && giftModule.allGifts) {
+                    gifts = giftModule.allGifts.filter(g => g.category === category);
+                }
+            } catch(e) {
+                gifts = [];
+            }
+
+            if (gifts.length === 0) {
+                // Fallback: generate some basic gifts
+                const fallback = [
+                    { id: 'rose', name: 'Rose', emoji: '🌹', coins: 1, rarity: 'common' },
+                    { id: 'heart', name: 'Heart', emoji: '❤️', coins: 5, rarity: 'common' },
+                    { id: 'star', name: 'Star', emoji: '⭐', coins: 10, rarity: 'common' },
+                    { id: 'diamond', name: 'Diamond', emoji: '💎', coins: 50, rarity: 'rare' },
+                    { id: 'crown', name: 'Crown', emoji: '👑', coins: 100, rarity: 'epic' },
+                    { id: 'rocket', name: 'Rocket', emoji: '🚀', coins: 500, rarity: 'legendary' }
+                ];
+                gifts = fallback;
+            }
+
+            gifts.forEach(gift => {
+                const item = document.createElement('div');
+                item.className = `nvme-gift-item rarity-${gift.rarity || 'common'}`;
+                item.innerHTML = `
+                    <div class="gift-emoji">${gift.emoji}</div>
+                    <div class="gift-name">${gift.name}</div>
+                    <div class="gift-cost">${gift.coins} 💎</div>
+                `;
+                item.addEventListener('click', () => sendGift(gift));
+                grid.appendChild(item);
+            });
+        }
+
+        function renderFallbackGifts() {
+            const grid = document.getElementById('giftGrid');
+            const cats = document.getElementById('giftCategories');
+            cats.innerHTML = '<span class="nvme-gift-cat-tab active">All Gifts</span>';
+            const fallback = [
+                { name: 'Rose', emoji: '🌹', coins: 1 }, { name: 'Heart', emoji: '❤️', coins: 5 },
+                { name: 'Star', emoji: '⭐', coins: 10 }, { name: 'Fire', emoji: '🔥', coins: 25 },
+                { name: 'Diamond', emoji: '💎', coins: 50 }, { name: 'Crown', emoji: '👑', coins: 100 },
+                { name: 'Rocket', emoji: '🚀', coins: 500 }, { name: 'Galaxy', emoji: '🌌', coins: 1000 },
+                { name: 'Phoenix', emoji: '🦅', coins: 2000 }, { name: 'Unicorn', emoji: '🦄', coins: 5000 }
+            ];
+            grid.innerHTML = fallback.map(g => `
+                <div class="nvme-gift-item rarity-${g.coins >= 500 ? 'legendary' : g.coins >= 100 ? 'epic' : g.coins >= 50 ? 'rare' : 'common'}">
+                    <div class="gift-emoji">${g.emoji}</div>
+                    <div class="gift-name">${g.name}</div>
+                    <div class="gift-cost">${g.coins} 💎</div>
+                </div>
+            `).join('');
+        }
+
+        function setupGiftSearch() {
+            const input = document.getElementById('giftSearchInput');
+            if (!input) return;
+            input.addEventListener('input', function() {
+                const query = this.value.toLowerCase().trim();
+                if (!query) {
+                    renderGifts('standard');
+                    return;
+                }
+                let results = [];
+                try {
+                    if (giftModule && typeof giftModule.searchGifts === 'function') {
+                        results = giftModule.searchGifts(query);
+                    } else if (giftModule && giftModule.allGifts) {
+                        results = giftModule.allGifts.filter(g =>
+                            g.name.toLowerCase().includes(query) ||
+                            g.id.toLowerCase().includes(query) ||
+                            (g.category && g.category.toLowerCase().includes(query))
+                        );
+                    }
+                } catch(e) {}
+
+                const grid = document.getElementById('giftGrid');
+                grid.innerHTML = '';
+                (results.length ? results : []).forEach(gift => {
+                    const item = document.createElement('div');
+                    item.className = `nvme-gift-item rarity-${gift.rarity || 'common'}`;
+                    item.innerHTML = `
+                        <div class="gift-emoji">${gift.emoji}</div>
+                        <div class="gift-name">${gift.name}</div>
+                        <div class="gift-cost">${gift.coins} 💎</div>
+                    `;
+                    item.addEventListener('click', () => sendGift(gift));
+                    grid.appendChild(item);
+                });
+            });
+        }
+
+        function sendGift(gift) {
+            console.log('Sending gift:', gift);
+            closeGiftPanel();
+
+            // Play gift animation
+            playGiftAnimation(gift);
+
+            // API call
+            try {
+                fetch(`${API}/api/gifts/send`, {
+                    method: 'POST',
+                    headers: { ...AUTH, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        gift_id: gift.id || gift.name,
+                        video_id: state.videos[state.currentSlide]?.id
+                    })
+                }).catch(() => {});
+            } catch(e) {}
+        }
+
+        function playGiftAnimation(gift) {
+            const anim = document.createElement('div');
+            anim.className = 'nvme-gift-animated';
+            anim.textContent = gift.emoji || '🎁';
+            anim.style.fontSize = '80px';
+
+            // Determine animation class based on rarity
+            let animClass = 'nvme-gift-float-up';
+            const rarity = gift.rarity || 'common';
+            if (rarity === 'legendary') animClass = 'nvme-gift-galaxy-swirl';
+            else if (rarity === 'epic') animClass = 'nvme-gift-spiral';
+            else if (rarity === 'rare') animClass = 'nvme-gift-bounce';
+            else if (rarity === 'bermuda') animClass = 'nvme-gift-moongate-spin';
+            anim.classList.add(animClass);
+
+            giftAnimContainer.appendChild(anim);
+
+            // Screen effects for high rarity
+            if (rarity === 'legendary') {
+                const overlay = document.createElement('div');
+                overlay.className = 'nvme-legendary-overlay';
+                document.body.appendChild(overlay);
+                document.body.classList.add('nvme-legendary-screen');
+                setTimeout(() => {
+                    overlay.remove();
+                    document.body.classList.remove('nvme-legendary-screen');
+                }, 3000);
+            } else if (rarity === 'bermuda') {
+                const bOverlay = document.createElement('div');
+                bOverlay.className = 'nvme-bermuda-effect';
+                document.body.appendChild(bOverlay);
+                setTimeout(() => bOverlay.remove(), 2500);
+            }
+
+            // Particles
+            const cx = window.innerWidth / 2;
+            const cy = window.innerHeight / 2;
+            miniParticleBurst(cx, cy, gift.color || '#ffd700', rarity === 'legendary' ? 30 : 15);
+
+            setTimeout(() => anim.remove(), 2500);
+        }
+
+        // Close gift panel on backdrop click
+        giftPanelOverlay.addEventListener('click', function(e) {
+            if (e.target === this) closeGiftPanel();
+        });
+
+        // ============================================================
+        // COMMENT PANEL
+        // ============================================================
+        function openCommentPanel() {
+            state.commentPanelOpen = true;
+            commentPanelOverlay.classList.add('show');
+            renderComments();
+        }
+
+        function closeCommentPanel() {
+            state.commentPanelOpen = false;
+            commentPanelOverlay.classList.remove('show');
+        }
+
+        function renderComments() {
+            const list = document.getElementById('commentsList');
+            list.innerHTML = mockComments.map(c => `
+                <div class="nvme-comment-item nvme-chat-bubble">
+                    <div class="nvme-comment-avatar">${c.avatar}</div>
+                    <div class="nvme-comment-body">
+                        <div class="nvme-comment-author">${c.author}</div>
+                        <div class="nvme-comment-text">${c.text}</div>
+                        <div class="nvme-comment-meta">
+                            <span>${c.time}</span>
+                            <span>❤️ ${c.likes}</span>
+                            <span>Reply</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('commentCloseBtn').addEventListener('click', closeCommentPanel);
+        commentPanelOverlay.addEventListener('click', function(e) {
+            if (e.target === this) closeCommentPanel();
+        });
+
+        document.getElementById('commentSendBtn').addEventListener('click', function() {
+            const input = document.getElementById('commentInput');
+            const text = input.value.trim();
+            if (!text) return;
+            const list = document.getElementById('commentsList');
+            const html = `
+                <div class="nvme-comment-item nvme-chat-bubble">
+                    <div class="nvme-comment-avatar">😊</div>
+                    <div class="nvme-comment-body">
+                        <div class="nvme-comment-author">You</div>
+                        <div class="nvme-comment-text">${text}</div>
+                        <div class="nvme-comment-meta"><span>Just now</span><span>Reply</span></div>
+                    </div>
+                </div>
+            `;
+            list.insertAdjacentHTML('afterbegin', html);
+            input.value = '';
+        });
+
+        // ============================================================
+        // SHARE PANEL
+        // ============================================================
+        function openSharePanel() {
+            state.sharePanelOpen = true;
+            sharePanelOverlay.classList.add('show');
+        }
+
+        function closeSharePanel() {
+            state.sharePanelOpen = false;
+            sharePanelOverlay.classList.remove('show');
+        }
+
+        sharePanelOverlay.addEventListener('click', function(e) {
+            if (e.target === this) closeSharePanel();
+        });
+
+        // ============================================================
+        // TAB SWITCHING
+        // ============================================================
+        document.querySelectorAll('.nvme-top-nav-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.nvme-top-nav-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                loadFeed(this.dataset.tab);
+            });
+        });
+
+        // ============================================================
+        // INIT
+        // ============================================================
+        window.addEventListener('load', function() {
+            // Hide loading screen
+            setTimeout(() => {
+                loadingScreen.classList.add('hidden');
+                setTimeout(() => loadingScreen.remove(), 500);
+            }, 1500);
+
+            // Load feed
+            loadFeed('foryou');
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (state.giftPanelOpen || state.commentPanelOpen || state.sharePanelOpen) {
+                if (e.key === 'Escape') {
+                    closeGiftPanel();
+                    closeCommentPanel();
+                    closeSharePanel();
+                }
+                return;
+            }
+
+            if (e.key === 'ArrowDown' || e.key === 'j') {
+                feedContainer.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+            } else if (e.key === 'ArrowUp' || e.key === 'k') {
+                feedContainer.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+            } else if (e.key === 'l') {
+                // Like current video
+                const likeBtn = document.querySelector('.nvme-slide:nth-child(' + (state.currentSlide + 1) + ') [data-action="like"]');
+                if (likeBtn) likeBtn.click();
+            } else if (e.key === 'g') {
+                openGiftPanel();
+            }
+        });
+
+        // Track current slide on scroll
+        let scrollTimeout;
+        feedContainer.addEventListener('scroll', function() {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                const idx = Math.round(feedContainer.scrollTop / window.innerHeight);
+                state.currentSlide = idx;
+            }, 100);
+        });
+
+    })();
+    </script>
+</body>
+</html>

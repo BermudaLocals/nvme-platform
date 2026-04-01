@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en" class="nvme-dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>NVME.live — Video Call</title>
+    <link rel="stylesheet" href="css/epic-animations.css">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; background: #0a0a0f; color: #fff; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+        /* ============================================================
+           VIDEO GRID
+           ============================================================ */
+        .vc-container {
+            position: relative; width: 100%; height: 100vh;
+            display: flex; flex-direction: column;
+        }
+        .vc-header {
+            position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 16px 20px;
+            padding-top: calc(16px + env(safe-area-inset-top, 0px));
+            background: linear-gradient(to bottom, rgba(10,10,15,0.9) 0%, transparent 100%);
+        }
+        .vc-header-info { display: flex; align-items: center; gap: 10px; }
+        .vc-header-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+        }
+        .vc-header-name { font-size: 16px; font-weight: 600; }
+        .vc-header-status { font-size: 12px; color: #00d4ff; }
+        .vc-timer {
+            font-size: 14px; color: rgba(255,255,255,0.7);
+            background: rgba(255,255,255,0.1); padding: 4px 12px;
+            border-radius: 20px; backdrop-filter: blur(10px);
+        }
+        .vc-participants-btn {
+            background: rgba(255,255,255,0.1); border: none; color: #fff;
+            padding: 6px 14px; border-radius: 20px; font-size: 13px;
+            cursor: pointer; display: flex; align-items: center; gap: 6px;
+            backdrop-filter: blur(10px);
+        }
+
+        .vc-video-grid {
+            flex: 1; display: grid; gap: 4px; padding: 4px;
+            grid-template-columns: 1fr; grid-template-rows: 1fr;
+        }
+        .vc-video-grid.count-2 { grid-template-columns: 1fr 1fr; }
+        .vc-video-grid.count-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .vc-video-grid.count-3 .vc-video-tile:nth-child(3) { grid-column: 1 / -1; }
+        .vc-video-grid.count-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+        .vc-video-tile {
+            position: relative; background: #111; border-radius: 12px; overflow: hidden;
+            min-height: 200px;
+            animation: nvmeVideoGridItem 0.5s ease-out;
+        }
+        .vc-video-tile video {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        .vc-video-tile .tile-placeholder {
+            position: absolute; inset: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0a0a0f 50%, #16213e 100%);
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 8px;
+        }
+        .vc-video-tile .tile-avatar {
+            width: 72px; height: 72px; border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 32px;
+        }
+        .vc-video-tile .tile-name {
+            font-size: 14px; font-weight: 600;
+            position: absolute; bottom: 12px; left: 12px;
+            background: rgba(0,0,0,0.5); padding: 4px 10px;
+            border-radius: 8px; backdrop-filter: blur(8px);
+        }
+        .vc-video-tile .tile-mic-off {
+            position: absolute; top: 12px; right: 12px;
+            background: rgba(255,71,87,0.8); width: 28px; height: 28px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 14px;
+        }
+
+        /* Self video - draggable */
+        .vc-self-video {
+            position: absolute; bottom: 100px; right: 16px;
+            width: 120px; height: 160px; border-radius: 16px;
+            overflow: hidden; z-index: 30; cursor: grab;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border: 2px solid rgba(124,58,237,0.5);
+            transition: box-shadow 0.2s;
+        }
+        .vc-self-video:active { cursor: grabbing; }
+        .vc-self-video:hover { box-shadow: 0 8px 32px rgba(124,58,237,0.4); }
+        .vc-self-video video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .vc-self-video .self-placeholder {
+            position: absolute; inset: 0;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 36px;
+        }
+        .vc-self-video .self-label {
+            position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+            font-size: 11px; background: rgba(0,0,0,0.5);
+            padding: 2px 8px; border-radius: 6px;
+        }
+
+        /* ============================================================
+           CALL CONTROLS
+           ============================================================ */
+        .vc-controls {
+            position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
+            display: flex; justify-content: center; align-items: center; gap: 16px;
+            padding: 20px 16px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+            background: linear-gradient(to top, rgba(10,10,15,0.95) 0%, transparent 100%);
+        }
+        .vc-ctrl-btn {
+            width: 52px; height: 52px; border-radius: 50%; border: none;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; cursor: pointer; transition: all 0.2s;
+            background: rgba(255,255,255,0.12); color: #fff;
+            backdrop-filter: blur(10px);
+        }
+        .vc-ctrl-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
+        .vc-ctrl-btn.active { background: rgba(124,58,237,0.6); }
+        .vc-ctrl-btn.active:hover { background: rgba(124,58,237,0.8); }
+        .vc-ctrl-btn.danger { background: rgba(255,71,87,0.8); }
+        .vc-ctrl-btn.danger:hover { background: rgba(255,71,87,1); transform: scale(1.1); }
+        .vc-ctrl-btn.muted { background: rgba(255,71,87,0.6); }
+        .vc-ctrl-btn .ctrl-label {
+            position: absolute; bottom: -18px; font-size: 10px;
+            color: rgba(255,255,255,0.6); white-space: nowrap;
+        }
+        .vc-ctrl-wrap { position: relative; }
+
+        /* ============================================================
+           CHAT SIDEBAR
+           ============================================================ */
+        .vc-chat-sidebar {
+            position: absolute; top: 0; right: 0; bottom: 0; width: 320px;
+            background: rgba(10,10,15,0.95); backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255,255,255,0.06);
+            z-index: 25; transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.33,1,0.68,1);
+            display: flex; flex-direction: column;
+        }
+        .vc-chat-sidebar.open { transform: translateX(0); }
+        .vc-chat-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .vc-chat-header h3 { font-size: 16px; font-weight: 700; }
+        .vc-chat-close {
+            width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.1);
+            border: none; color: #fff; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; cursor: pointer;
+        }
+        .vc-chat-messages {
+            flex: 1; overflow-y: auto; padding: 12px; scrollbar-width: none;
+        }
+        .vc-chat-messages::-webkit-scrollbar { display: none; }
+        .vc-chat-msg {
+            display: flex; gap: 8px; margin-bottom: 12px;
+            animation: nvmeChatBubble 0.3s ease-out;
+        }
+        .vc-chat-msg-avatar {
+            width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            display: flex; align-items: center; justify-content: center; font-size: 12px;
+        }
+        .vc-chat-msg-body { flex: 1; }
+        .vc-chat-msg-name { font-size: 12px; color: rgba(255,255,255,0.5); }
+        .vc-chat-msg-text { font-size: 13px; color: #fff; line-height: 1.3; }
+        .vc-chat-input-row {
+            display: flex; gap: 8px; padding: 12px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .vc-chat-input {
+            flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px; padding: 8px 14px; font-size: 13px;
+            color: #fff; outline: none; transition: border-color 0.2s;
+        }
+        .vc-chat-input:focus { border-color: #7c3aed; }
+        .vc-chat-send {
+            background: #7c3aed; color: #fff; border: none; border-radius: 20px;
+            padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+
+        /* ============================================================
+           REACTION EMOJIS (float up during call)
+           ============================================================ */
+        .vc-reactions-container {
+            position: absolute; bottom: 100px; left: 20px;
+            pointer-events: none; z-index: 15;           width: 60px; height: 300px;
+        }
+        .vc-reaction {
+            position: absolute; bottom: 0; left: 50%; font-size: 32px;
+            transform: translateX(-50%);
+            animation: nvmeFloatingEmoji 2.5s ease-out forwards;
+        }
+
+        /* ============================================================
+           INCOMING CALL SCREEN
+           ============================================================ */
+        .vc-incoming-screen {
+            position: fixed; inset: 0; z-index: 100;
+            background: linear-gradient(135deg, #0a0a0f, #1a1a2e, #0a0a0f);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .vc-incoming-screen.hidden { display: none; }
+        .vc-incoming-avatar {
+            width: 120px; height: 120px; border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 56px; margin-bottom: 24px;
+            animation: nvmeIncomingCall 1.5s ease-in-out infinite;
+            box-shadow: 0 0 60px rgba(124,58,237,0.4);
+        }
+        .vc-incoming-name { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        .vc-incoming-label { font-size: 16px; color: rgba(255,255,255,0.6); margin-bottom: 48px; }
+        .vc-incoming-actions { display: flex; gap: 40px; }
+        .vc-incoming-action {
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            cursor: pointer; transition: transform 0.2s;
+        }
+        .vc-incoming-action:hover { transform: scale(1.1); }
+        .vc-incoming-action-btn {
+            width: 64px; height: 64px; border-radius: 50%; border: none;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 28px; cursor: pointer;
+        }
+        .vc-incoming-action-btn.accept { background: #00d4ff; color: #fff; animation: nvmeCallPulse 1.5s infinite; }
+        .vc-incoming-action-btn.decline { background: #ff4757; color: #fff; }
+        .vc-incoming-action-label { font-size: 13px; color: rgba(255,255,255,0.7); }
+
+        /* ============================================================
+           GIFT PANEL (reused from feed)
+           ============================================================ */
+        .vc-gift-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50;
+            display: none; flex-direction: column; justify-content: flex-end;
+        }
+        .vc-gift-overlay.show { display: flex; }
+        .vc-gift-panel {
+            background: linear-gradient(to top, #0a0a0f, rgba(26,26,46,0.98));
+            backdrop-filter: blur(30px);
+            border-top-left-radius: 24px; border-top-right-radius: 24px;
+            max-height: 50vh; display: flex; flex-direction: column;
+            transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.33,1,0.68,1);
+        }
+        .vc-gift-overlay.show .vc-gift-panel { transform: translateY(0); }
+        .vc-gift-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .vc-gift-header h3 {
+            font-size: 16px; font-weight: 700;
+            background: linear-gradient(90deg, #7c3aed, #ffd700);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .vc-gift-grid {
+            flex: 1; overflow-y: auto; padding: 12px;
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+            scrollbar-width: none;
+        }
+        .vc-gift-grid::-webkit-scrollbar { display: none; }
+        .vc-gift-item {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 10px 4px; border-radius: 12px; cursor: pointer;
+            background: rgba(255,255,255,0.03); transition: all 0.15s;
+        }
+        .vc-gift-item:hover { background: rgba(255,255,255,0.08); transform: scale(1.05); }
+        .vc-gift-item .gift-emoji { font-size: 28px; }
+        .vc-gift-item .gift-name { font-size: 10px; color: rgba(255,255,255,0.7); }
+        .vc-gift-item .gift-cost { font-size: 10px; color: #ffd700; font-weight: 600; }
+
+        /* ============================================================
+           BLUR BACKGROUND TOGGLE
+           ============================================================ */
+        .vc-blur-bg video {
+            filter: none;
+        }
+        .vc-blur-bg.blurred video {
+            filter: blur(20px) brightness(0.7);
+        }
+
+        /* ============================================================
+           PARTICIPANTS LIST
+           ============================================================ */
+        .vc-participants-panel {
+            position: absolute; top: 70px; right: 16px; width: 260px;
+            background: rgba(10,10,15,0.95); backdrop-filter: blur(20px);
+            border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
+            z-index: 30; display: none; overflow: hidden;
+        }
+        .vc-participants-panel.show { display: block; animation: nvmeSlideInDown 0.3s ease-out; }
+        .vc-participants-title {
+            padding: 14px 16px; font-size: 14px; font-weight: 700;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .vc-participant-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .vc-participant-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            display: flex; align-items: center; justify-content: center; font-size: 14px;
+        }
+        .vc-participant-name { flex: 1; font-size: 13px; }
+        .vc-participant-icons { display: flex; gap: 6px; font-size: 14px; opacity: 0.6; }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 480px) {
+            .vc-self-video { width: 90px; height: 120px; bottom: 90px; right: 10px; }
+            .vc-ctrl-btn { width: 46px; height: 46px; font-size: 20px; }
+            .vc-controls { gap: 12px; padding: 16px 12px; }
+            .vc-chat-sidebar { width: 100%; }
+            .vc-incoming-avatar { width: 100px; height: 100px; font-size: 44px; }
+            .vc-incoming-name { font-size: 24px; }
+        }
+        @media (min-width: 768px) {
+            .vc-video-grid.count-2 { grid-template-columns: 1fr 1fr; }
+            .vc-video-grid.count-3 { grid-template-columns: 1fr 1fr 1fr; }
+            .vc-video-grid.count-3 .vc-video-tile:nth-child(3) { grid-column: auto; }
+            .vc-video-grid.count-4 { grid-template-columns: 1fr 1fr; }
+        }
+        @media (min-width: 1024px) {
+            .vc-container { max-width: 1200px; margin: 0 auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- INCOMING CALL SCREEN -->
+    <div class="vc-incoming-screen" id="incomingScreen">
+        <div class="vc-incoming-avatar">🧑‍💻</div>
+        <div class="vc-incoming-name">Zara Ocean</div>
+        <div class="vc-incoming-label">Incoming video call...</div>
+        <div class="vc-incoming-actions">
+            <div class="vc-incoming-action" id="declineCall">
+                <button class="vc-incoming-action-btn decline">📞</button>
+                <span class="vc-incoming-action-label">Decline</span>
+            </div>
+            <div class="vc-incoming-action" id="acceptCall">
+                <button class="vc-incoming-action-btn accept">📹</button>
+                <span class="vc-incoming-action-label">Accept</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CALL CONTAINER -->
+    <div class="vc-container" id="callContainer" style="display:none;">
+        <!-- HEADER -->
+        <div class="vc-header">
+            <div class="vc-header-info">
+                <div class="vc-header-avatar">🧑‍💻</div>
+                <div>
+                    <div class="vc-header-name">Zara Ocean</div>
+                    <div class="vc-header-status">● Connected</div>
+                </div>
+            </div>
+            <div class="vc-timer" id="callTimer">00:00</div>
+            <button class="vc-participants-btn" id="participantsBtn">
+                👥 <span id="participantCount">2</span>
+            </button>
+        </div>
+
+        <!-- VIDEO GRID -->
+        <div class="vc-video-grid count-2" id="videoGrid">
+            <!-- Remote participant -->
+            <div class="vc-video-tile" id="remoteTile">
+                <div class="tile-placeholder">
+                    <div class="tile-avatar">🧑‍💻</div>
+                </div>
+                <div class="tile-name">Zara Ocean</div>
+            </div>
+            <!-- Local participant (shown in grid on larger screens) -->
+            <div class="vc-video-tile" id="localGridTile" style="display:none;">
+                <div class="tile-placeholder">
+                    <div class="tile-avatar">😎</div>
+                </div>
+                <div class="tile-name">You</div>
+            </div>
+        </div>
+
+        <!-- SELF VIDEO (draggable) -->
+        <div class="vc-self-video" id="selfVideo">
+            <div class="self-placeholder">😎</div>
+            <div class="self-label">You</div>
+        </div>
+
+        <!-- REACTIONS CONTAINER -->
+        <div class="vc-reactions-container" id="reactionsContainer"></div>
+
+        <!-- CONTROLS -->
+        <div class="vc-controls">
+            <div class="vc-ctrl-wrap">
+                <button class="vc-ctrl-btn" id="btnMute" title="Mute">🎤</button>
+                <span class="ctrl-label" style="display:none;">Mute</span>
+            </div>
+            <div class="vc-ctrl-wrap">
+                <button class="vc-ctrl-btn" id="btnCamera" title="Camera">📷</button>
+                <span class="ctrl-label" style="display:none;">Camera</span>
+            </div>
+            <div class="vc-ctrl-wrap">
+                <button class="vc-ctrl-btn" id="btnScreen" title="Screen Share">🖥️</button>
+                <span class="ctrl-label" style="display:none;">Screen</span>
+            </div>
+            <div class="vc-ctrl-wrap">
+                <button class="vc-ctrl-btn" id="btnEffects" title="Effects">✨</button>
+                <span class="ctrl-label" style="display:none;">Effects</span>
+            </div>
+            <div class="vc-ctrl-wrap">
+                <button class="vc-ctrl-btn" id="btnChat" title="Chat">💬</button>
+                <span class="ctrl-label" style="display:none;">Chat</span>
+            </div>
+            <div class="vc-ctrl-wrap">
+                <button class="vc-ctrl-btn" id="btnGift" title="Gift">🎁</button>
+                <span class="ctrl-label" style="display:none;">Gift</span>
+            </div>
+            <div class="vc-ctrl-wrap">
+                <button class="vc-ctrl-btn" id="btnReact" title="React">😀</button>
+                <span class="ctrl-label" style="display:none;">React</span>
+            </div>
+            <div class="vc-ctrl-wrap">
+                <button class="vc-ctrl-btn" id="btnBlur" title="Blur Background">🌫️</button>
+                <span class="ctrl-label" style="display:none;">Blur</span>
+            </div>
+            <div class="vc-ctrl-wrap">
+                <button class="vc-ctrl-btn danger" id="btnEnd" title="End Call">📵</button>
+                <span class="ctrl-label" style="display:none;">End</span>
+            </div>
+        </div>
+
+        <!-- CHAT SIDEBAR -->
+        <div class="vc-chat-sidebar" id="chatSidebar">
+            <div class="vc-chat-header">
+                <h3>Call Chat</h3>
+                <button class="vc-chat-close" id="chatCloseBtn">✕</button>
+            </div>
+            <div class="vc-chat-messages" id="chatMessages">
+                <!-- Chat messages populated by JS -->
+            </div>
+            <div class="vc-chat-input-row">
+                <input class="vc-chat-input" id="chatInput" type="text" placeholder="Type a message...">
+                <button class="vc-chat-send" id="chatSendBtn">Send</button>
+            </div>
+        </div>
+
+        <!-- PARTICIPANTS PANEL -->
+        <div class="vc-participants-panel" id="participantsPanel">
+            <div class="vc-participants-title">Participants (2)</div>
+            <div id="participantsList">
+                <div class="vc-participant-item">
+                    <div class="vc-participant-avatar">🧑‍💻</div>
+                    <div class="vc-participant-name">Zara Ocean</div>
+                    <div class="vc-participant-icons">🎤 📷</div>
+                </div>
+                <div class="vc-participant-item">
+                    <div class="vc-participant-avatar">😎</div>
+                    <div class="vc-participant-name">You</div>
+                    <div class="vc-participant-icons">🎤 📷</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GIFT PANEL -->
+        <div class="vc-gift-overlay" id="giftOverlay">
+            <div class="vc-gift-panel">
+                <div class="vc-gift-header">
+                    <h3>Send a Gift</h3>
+                    <button class="vc-chat-close" id="giftCloseBtn">✕</button>
+                </div>
+                <div class="vc-gift-grid" id="vcGiftGrid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <nav style="position:fixed;bottom:0;left:0;right:0;z-index:100;padding:8px 0;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,rgba(10,10,15,0.98) 0%,rgba(10,10,15,0.9) 60%,transparent 100%);backdrop-filter:blur(10px);display:flex;justify-content:space-around;align-items:center;">
+        <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">🏠</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Home</span>
+        </a>
+        <a href="tiktok-feed.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">🧭</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Discover</span>
+        </a>
+        <a href="upload.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <div style="width:38px;height:28px;background:linear-gradient(135deg,#7c3aed,#00d4ff);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">+</div>
+        </a>
+        <a href="messages.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">💬</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Inbox</span>
+        </a>
+        <a href="profile.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">👤</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Profile</span>
+        </a>
+    </nav>
+
+    <!-- SCRIPTS -->
+    <script src="js/gifts.js"></script>
+    <script>
+    (function() {
+        'use strict';
+
+        const API = window.NVME_API || 'http://localhost:4000';
+        const TOKEN = localStorage.getItem('nvme_token');
+        const AUTH = TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {};
+
+        // ============================================================
+        // DOM ELEMENTS
+        // ============================================================
+        const incomingScreen = document.getElementById('incomingScreen');
+        const callContainer = document.getElementById('callContainer');
+        const callTimer = document.getElementById('callTimer');
+        const chatSidebar = document.getElementById('chatSidebar');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const giftOverlay = document.getElementById('giftOverlay');
+        const reactionsContainer = document.getElementById('reactionsContainer');
+        const participantsPanel = document.getElementById('participantsPanel');
+        const selfVideo = document.getElementById('selfVideo');
+
+        // Buttons
+        const btnMute = document.getElementById('btnMute');
+        const btnCamera = document.getElementById('btnCamera');
+        const btnScreen = document.getElementById('btnScreen');
+        const btnEffects = document.getElementById('btnEffects');
+        const btnChat = document.getElementById('btnChat');
+        const btnGift = document.getElementById('btnGift');
+        const btnReact = document.getElementById('btnReact');
+        const btnBlur = document.getElementById('btnBlur');
+        const btnEnd = document.getElementById('btnEnd');
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        const state = {
+            callActive: false,
+            callStartTime: null,
+            timerInterval: null,
+            isMuted: false,
+            isCameraOff: false,
+            isScreenSharing: false,
+            isChatOpen: false,
+            isGiftOpen: false,
+            isParticipantsOpen: false,
+            isBlurred: false,
+            localStream: null,
+            participants: [
+                { name: 'You', avatar: '😎', isMuted: false, isCameraOff: false },
+                { name: 'Zara Ocean', avatar: '🧑‍💻', isMuted: false, isCameraOff: false }
+            ],
+            callMessages: [
+                { author: 'Zara Ocean', avatar: '🧑‍💻', text: 'Hey! Ready for our call?', time: '2m ago' },
+                { author: 'You', avatar: '😎', text: 'Absolutely! Let me share my screen.', time: '1m ago' }
+            ]
+        };
+
+        // ============================================================
+        // INCOMING CALL HANDLING
+        // ============================================================
+        document.getElementById('acceptCall').addEventListener('click', startCall);
+        document.getElementById('declineCall').addEventListener('click', declineCall);
+
+        function startCall() {
+            incomingScreen.classList.add('hidden');
+            callContainer.style.display = 'flex';
+            state.callActive = true;
+            state.callStartTime = Date.now();
+            startTimer();
+            renderChatMessages();
+            initCamera();
+        }
+
+        function declineCall() {
+            incomingScreen.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;">
+                    <div style="font-size:64px;margin-bottom:24px;">📵</div>
+                    <div style="font-size:24px;font-weight:700;margin-bottom:8px;">Call Declined</div>
+                    <div style="font-size:16px;color:rgba(255,255,255,0.6);margin-bottom:32px;">Zara Ocean's call was declined</div>
+                    <a href="index.html" style="background:#7c3aed;color:#fff;border:none;border-radius:12px;padding:12px 24px;font-size:16px;font-weight:600;text-decoration:none;cursor:pointer;">Back to Home</a>
+                </div>
+            `;
+        }
+
+        // ============================================================
+        // CALL TIMER
+        // ============================================================
+        function startTimer() {
+            state.timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function updateTimer() {
+            if (!state.callStartTime) return;
+            const elapsed = Math.floor((Date.now() - state.callStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            callTimer.textContent = `${minutes}:${seconds}`;
+        }
+
+        function stopTimer() {
+            clearInterval(state.timerInterval);
+            state.callStartTime = null;
+            callTimer.textContent = '00:00';
+        }
+
+        // ============================================================
+        // CAMERA & MEDIA
+        // ============================================================
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                state.localStream = stream;
+                // In a real app, attach to video elements
+                console.log('Camera initialized');
+            } catch(err) {
+                console.log('Camera access denied or unavailable:', err.message);
+                // Show placeholder
+                selfVideo.querySelector('.self-placeholder').style.display = 'flex';
+            }
+        }
+
+        function toggleMute() {
+            state.isMuted = !state.isMuted;
+            btnMute.classList.toggle('active', state.isMuted);
+            btnMute.textContent = state.isMuted ? '🔇' : '🎤';
+            if (state.localStream) {
+                state.localStream.getAudioTracks().forEach(track => {
+                    track.enabled = !state.isMuted;
+                });
+            }
+            showNotification(state.isMuted ? 'Microphone muted' : 'Microphone unmuted');
+        }
+
+        function toggleCamera() {
+            state.isCameraOff = !state.isCameraOff;
+            btnCamera.classList.toggle('active', state.isCameraOff);
+            btnCamera.textContent = state.isCameraOff ? '📷' : '📷';
+            btnCamera.style.opacity = state.isCameraOff ? '0.5' : '1';
+            if (state.localStream) {
+                state.localStream.getVideoTracks().forEach(track => {
+                    track.enabled = !state.isCameraOff;
+                });
+            }
+            showNotification(state.isCameraOff ? 'Camera turned off' : 'Camera turned on');
+        }
+
+        async function toggleScreenShare() {
+            try {
+                if (!state.isScreenSharing) {
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    state.screenStream = screenStream;
+                    state.isScreenSharing = true;
+                    btnScreen.classList.add('active');
+                    showNotification('Screen sharing started');
+
+                    screenStream.getVideoTracks()[0].onended = () => {
+                        state.isScreenSharing = false;
+                        btnScreen.classList.remove('active');
+                        showNotification('Screen sharing stopped');
+                    };
+                } else {
+                    if (state.screenStream) {
+                        state.screenStream.getTracks().forEach(track => track.stop());
+                    }
+                    state.isScreenSharing = false;
+                    btnScreen.classList.remove('active');
+                    showNotification('Screen sharing stopped');
+                }
+            } catch(err) {
+                console.log('Screen share error:', err);
+                showNotification('Screen sharing not available');
+            }
+        }
+
+        function toggleBlur() {
+            state.isBlurred = !state.isBlurred;
+            btnBlur.classList.toggle('active', state.isBlurred);
+            const remoteTile = document.getElementById('remoteTile');
+            if (state.isBlurred) {
+                remoteTile.style.filter = 'blur(15px) brightness(0.8)';
+                showNotification('Background blurred');
+            } else {
+                remoteTile.style.filter = 'none';
+                showNotification('Background blur removed');
+            }
+        }
+
+        // ============================================================
+        // CONTROLS
+        // ============================================================
+        btnMute.addEventListener('click', toggleMute);
+        btnCamera.addEventListener('click', toggleCamera);
+        btnScreen.addEventListener('click', toggleScreenShare);
+        btnBlur.addEventListener('click', toggleBlur);
+
+        btnEffects.addEventListener('click', function() {
+            showNotification('Effects coming soon! ✨');
+        });
+
+        btnEnd.addEventListener('click', function() {
+            if (confirm('End this call?')) {
+                endCall();
+            }
+        });
+
+        function endCall() {
+            state.callActive = false;
+            stopTimer();
+            if (state.localStream) {
+                state.localStream.getTracks().forEach(track => track.stop());
+            }
+            callContainer.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;">
+                    <div style="font-size:64px;margin-bottom:24px;">👋</div>
+                    <div style="font-size:24px;font-weight:700;margin-bottom:8px;">Call Ended</div>
+                    <div style="font-size:16px;color:rgba(255,255,255,0.6);margin-bottom:32px;">Thanks for the call!</div>
+                    <div style="display:flex;gap:16px;">
+                        <a href="index.html" style="background:rgba(255,255,255,0.1);color:#fff;border:none;border-radius:12px;padding:12px 24px;font-size:16px;font-weight:600;text-decoration:none;cursor:pointer;">Home</a>
+                        <a href="messages.html" style="background:#7c3aed;color:#fff;border:none;border-radius:12px;padding:12px 24px;font-size:16px;font-weight:600;text-decoration:none;cursor:pointer;">Message Zara</a>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ============================================================
+        // CHAT SIDEBAR
+        // ============================================================
+        btnChat.addEventListener('click', toggleChat);
+        document.getElementById('chatCloseBtn').addEventListener('click', toggleChat);
+
+        function toggleChat() {
+            state.isChatOpen = !state.isChatOpen;
+            chatSidebar.classList.toggle('open', state.isChatOpen);
+            btnChat.classList.toggle('active', state.isChatOpen);
+        }
+
+        function renderChatMessages() {
+            chatMessages.innerHTML = state.callMessages.map(msg => `
+                <div class="vc-chat-msg nvme-chat-bubble">
+                    <div class="vc-chat-msg-avatar">${msg.avatar}</div>
+                    <div class="vc-chat-msg-body">
+                        <div class="vc-chat-msg-name">${msg.author}</div>
+                        <div class="vc-chat-msg-text">${msg.text}</div>
+                    </div>
+                </div>
+            `).join('');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        document.getElementById('chatSendBtn').addEventListener('click', sendChatMessage);
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendChatMessage();
+        });
+
+        function sendChatMessage() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+            state.callMessages.push({
+                author: 'You', avatar: '😎', text: text, time: 'Just now'
+            });
+            chatInput.value = '';
+            renderChatMessages();
+
+            // Simulate reply
+            setTimeout(() => {
+                state.callMessages.push({
+                    author: 'Zara Ocean', avatar: '🧑‍💻', text: 'Great! I can see your screen now.', time: 'Just now'
+                });
+                renderChatMessages();
+            }, 2000);
+        }
+
+        // ============================================================
+        // GIFT PANEL
+        // ============================================================
+        btnGift.addEventListener('click', toggleGiftPanel);
+        document.getElementById('giftCloseBtn').addEventListener('click', toggleGiftPanel);
+        giftOverlay.addEventListener('click', function(e) {
+            if (e.target === this) toggleGiftPanel();
+        });
+
+        function toggleGiftPanel() {
+            state.isGiftOpen = !state.isGiftOpen;
+            giftOverlay.classList.toggle('show', state.isGiftOpen);
+            btnGift.classList.toggle('active', state.isGiftOpen);
+            if (state.isGiftOpen) renderGiftPanel();
+        }
+
+        function renderGiftPanel() {
+            const grid = document.getElementById('vcGiftGrid');
+            const giftData = [
+                { name: 'Rose', emoji: '🌹', coins: 1 }, { name: 'Heart', emoji: '❤️', coins: 5 },
+                { name: 'Star', emoji: '⭐', coins: 10 }, { name: 'Fire', emoji: '🔥', coins: 25 },
+                { name: 'Diamond', emoji: '💎', coins: 50 }, { name: 'Crown', emoji: '👑', coins: 100 },
+                { name: 'Rocket', emoji: '🚀', coins: 500 }, { name: 'Galaxy', emoji: '🌌', coins: 1000 },
+                { name: 'Phoenix', emoji: '🦅', coins: 2000 }, { name: 'Unicorn', emoji: '🦄', coins: 5000 }
+            ];
+
+            grid.innerHTML = giftData.map(gift => `
+                <div class="vc-gift-item" data-gift='${JSON.stringify(gift)}'>
+                    <div class="gift-emoji">${gift.emoji}</div>
+                    <div class="gift-name">${gift.name}</div>
+                    <div class="gift-cost">${gift.coins} 💎</div>
+                </div>
+            `).join('');
+
+            grid.querySelectorAll('.vc-gift-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const gift = JSON.parse(this.dataset.gift);
+                    sendCallGift(gift);
+                });
+            });
+        }
+
+        function sendCallGift(gift) {
+            toggleGiftPanel();
+            showNotification(`${gift.emoji} ${gift.name} sent!`);
+
+            // Show floating gift
+            const giftEl = document.createElement('div');
+            giftEl.className = 'nvme-floating-emoji';
+            giftEl.textContent = gift.emoji;
+            giftEl.style.left = (window.innerWidth / 2 - 16) + 'px';
+            giftEl.style.bottom = '200px';
+            giftEl.style.fontSize = '48px';
+            document.body.appendChild(giftEl);
+            setTimeout(() => giftEl.remove(), 2000);
+
+            // API call
+            try {
+                fetch(`${API}/api/gifts/send`, {
+                    method: 'POST',
+                    headers: { ...AUTH, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        gift_id: gift.name.toLowerCase().replace(/ /g, '_'),
+                        call_id: 'current_call'
+                    })
+                }).catch(() => {});
+            } catch(e) {}
+        }
+
+        // ============================================================
+        // REACTIONS
+        // ============================================================
+        btnReact.addEventListener('click', showReactionPicker);
+
+        function showReactionPicker() {
+            const reactions = ['👍', '❤️', '😂', '😮', '😢', '👏', '🔥', '🎉'];
+            const picker = document.createElement('div');
+            picker.style.cssText = `
+                position:fixed;bottom:100px;left:50%;transform:translateX(-50%);
+                background:rgba(10,10,15,0.9);backdrop-filter:blur(20px);
+                border-radius:16px;padding:8px 12px;display:flex;gap:8px;
+                z-index:60;border:1px solid rgba(255,255,255,0.1);
+            `;
+            reactions.forEach(emoji => {
+                const btn = document.createElement('button');
+                btn.textContent = emoji;
+                btn.style.cssText = `background:none;border:none;font-size:24px;cursor:pointer;transition:transform 0.15s;`;
+                btn.addEventListener('mouseenter', () => btn.style.transform = 'scale(1.3)');
+                btn.addEventListener('mouseleave', () => btn.style.transform = 'scale(1)');
+                btn.addEventListener('click', () => {
+                    sendReaction(emoji);
+                    picker.remove();
+                });
+                picker.appendChild(btn);
+            });
+            document.body.appendChild(picker);
+            setTimeout(() => picker.remove(), 5000);
+        }
+
+        function sendReaction(emoji) {
+            const reaction = document.createElement('div');
+            reaction.className = 'vc-reaction';
+            reaction.textContent = emoji;
+            reactionsContainer.appendChild(reaction);
+            setTimeout(() => reaction.remove(), 2500);
+        }
+
+        // ============================================================
+        // PARTICIPANTS PANEL
+        // ============================================================
+        document.getElementById('participantsBtn').addEventListener('click', function() {
+            state.isParticipantsOpen = !state.isParticipantsOpen;
+            participantsPanel.classList.toggle('show', state.isParticipantsOpen);
+        });
+
+        // Close participants panel when clicking outside
+        document.addEventListener('click', function(e) {
+            if (state.isParticipantsOpen &&
+                !participantsPanel.contains(e.target) &&
+                !document.getElementById('participantsBtn').contains(e.target)) {
+                state.isParticipantsOpen = false;
+                participantsPanel.classList.remove('show');
+            }
+        });
+
+        // ============================================================
+        // DRAGGABLE SELF VIDEO
+        // ============================================================
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        selfVideo.addEventListener('mousedown', startDrag);
+        selfVideo.addEventListener('touchstart', startDrag);
+
+        function startDrag(e) {
+            if (e.target.closest('.vc-ctrl-btn')) return;
+            isDragging = true;
+            const rect = selfVideo.getBoundingClientRect();
+            const clientX = e.clientX || e.touches[0].clientX;
+            const clientY = e.clientY || e.touches[0].clientY;
+            dragOffsetX = clientX - rect.left;
+            dragOffsetY = clientY - rect.top;
+            selfVideo.style.transition = 'none';
+            selfVideo.style.cursor = 'grabbing';
+        }
+
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('touchmove', drag);
+
+        function drag(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            const clientX = e.clientX || e.touches[0].clientX;
+            const clientY = e.clientY || e.touches[0].clientY;
+            let x = clientX - dragOffsetX;
+            let y = clientY - dragOffsetY;
+
+            // Constrain to viewport
+            const maxX = window.innerWidth - selfVideo.offsetWidth;
+            const maxY = window.innerHeight - selfVideo.offsetHeight;
+            x = Math.max(0, Math.min(x, maxX));
+            y = Math.max(0, Math.min(y, maxY));
+
+            selfVideo.style.left = x + 'px';
+            selfVideo.style.top = y + 'px';
+            selfVideo.style.right = 'auto';
+            selfVideo.style.bottom = 'auto';
+        }
+
+        document.addEventListener('mouseup', stopDrag);
+        document.addEventListener('touchend', stopDrag);
+
+        function stopDrag() {
+            isDragging = false;
+            selfVideo.style.transition = '';
+            selfVideo.style.cursor = 'grab';
+        }
+
+        // ============================================================
+        // NOTIFICATIONS
+        // ============================================================
+        function showNotification(message) {
+            const notif = document.createElement('div');
+            notif.style.cssText = `
+                position:fixed;top:80px;left:50%;transform:translateX(-50%);
+                background:rgba(10,10,15,0.9);backdrop-filter:blur(20px);
+                border-radius:12px;padding:12px 20px;font-size:14px;color:#fff;
+                z-index:100;animation:nvmeSlideInDown 0.3s ease-out;
+                border:1px solid rgba(255,255,255,0.1);
+            `;
+            notif.textContent = message;
+            document.body.appendChild(notif);
+            setTimeout(() => {
+                notif.style.animation = 'nvmeFadeOut 0.3s ease-out forwards';
+                setTimeout(() => notif.remove(), 300);
+            }, 2000);
+        }
+
+        // ============================================================
+        // KEYBOARD SHORTCUTS
+        // ============================================================
+        document.addEventListener('keydown', function(e) {
+            if (!state.callActive) return;
+
+            if (e.key === 'm' || e.key === 'M') toggleMute();
+            else if (e.key === 'v' || e.key === 'V') toggleCamera();
+            else if (e.key === 's' || e.key === 'S') toggleScreenShare();
+            else if (e.key === 'c' || e.key === 'C') toggleChat();
+            else if (e.key === 'g' || e.key === 'G') toggleGiftPanel();
+            else if (e.key === 'b' || e.key === 'B') toggleBlur();
+            else if (e.key === 'Escape') {
+                if (state.isGiftOpen) toggleGiftPanel();
+                if (state.isChatOpen) toggleChat();
+                if (state.isParticipantsOpen) {
+                    state.isParticipantsOpen = false;
+                    participantsPanel.classList.remove('show');
+                }
+            }
+        });
+
+        // ============================================================
+        // AUTO-INIT (for demo, auto-accept after 3 seconds)
+        // ============================================================
+        setTimeout(() => {
+            if (incomingScreen.classList.contains('hidden')) return;
+            // For demo purposes, auto-start the call
+            // In real app, remove this and let user click accept
+            // startCall();
+        }, 3000);
+
+    })();
+    </script>
+</body>
+</html>

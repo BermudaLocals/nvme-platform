@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en" class="nvme-dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>NVME.live — AI Generator</title>
+    <link rel="stylesheet" href="css/epic-animations.css">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { min-height: 100vh; background: #0a0a0f; color: #fff; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+        body { overflow-y: auto; }
+
+        /* ============================================================
+           ANIMATED GRADIENT BACKGROUND
+           ============================================================ */
+        .ai-bg {
+            position: fixed; inset: 0; z-index: 0;
+            background: linear-gradient(-45deg, #0a0a0f, #1a0a2e, #0a1a2e, #2e0a1a, #0a0a0f);
+            background-size: 400% 400%;
+            animation: aiBgShift 20s ease infinite;
+        }
+        .ai-bg::after {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(ellipse at 30% 20%, rgba(124,58,237,0.08) 0%, transparent 60%),
+                        radial-gradient(ellipse at 70% 80%, rgba(0,212,255,0.06) 0%, transparent 60%),
+                        radial-gradient(ellipse at 50% 50%, rgba(255,107,157,0.04) 0%, transparent 60%);
+        }
+        @keyframes aiBgShift {
+            0%   { background-position: 0% 50%; }
+            50%  { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* ============================================================
+           LAYOUT
+           ============================================================ */
+        .ai-page { position: relative; z-index: 1; min-height: 100vh; padding-bottom: 80px; }
+
+        /* HEADER */
+        .ai-header {
+            padding: 20px 20px 12px;
+            padding-top: calc(20px + env(safe-area-inset-top, 0px));
+            text-align: center;
+        }
+        .ai-logo {
+            font-size: 32px; font-weight: 900;
+            background: linear-gradient(90deg, #7c3aed, #00d4ff, #ff6b9d, #ffd700);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; background-size: 200% 100%;
+            animation: gradientShift1 5s ease infinite;
+        }
+        .ai-subtitle { font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+
+        /* CREDITS */
+        .ai-credits {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,215,0,0.2); border-radius: 24px;
+            padding: 8px 16px; margin-top: 12px;
+        }
+        .ai-credits-label { font-size: 13px; color: rgba(255,255,255,0.6); }
+        .ai-credits-value { font-size: 16px; font-weight: 700; color: #ffd700; }
+        .ai-credits-buy {
+            background: linear-gradient(135deg, #7c3aed, #00d4ff); color: #fff;
+            border: none; border-radius: 16px; padding: 6px 14px;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            transition: transform 0.15s;
+        }
+        .ai-credits-buy:hover { transform: scale(1.05); }
+
+        /* ============================================================
+           TABS
+           ============================================================ */
+        .ai-tabs {
+            display: flex; gap: 0; padding: 0 20px; margin-top: 20px;
+            overflow-x: auto; scrollbar-width: none;
+        }
+        .ai-tabs::-webkit-scrollbar { display: none; }
+        .ai-tab {
+            flex: 1; min-width: 100px; text-align: center;
+            padding: 12px 8px; font-size: 13px; font-weight: 600;
+            color: rgba(255,255,255,0.5); cursor: pointer;
+            border-bottom: 2px solid transparent; transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .ai-tab:hover { color: rgba(255,255,255,0.8); }
+        .ai-tab.active { color: #fff; border-bottom-color: #7c3aed; }
+
+        /* ============================================================
+           MAIN CONTENT AREA
+           ============================================================ */
+        .ai-content { padding: 20px; }
+        .ai-panel {
+            background: rgba(255,255,255,0.04); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.06); border-radius: 20px;
+            padding: 24px; margin-bottom: 20px;
+        }
+        .ai-panel-title {
+            font-size: 18px; font-weight: 700; margin-bottom: 16px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .ai-panel-title .icon { font-size: 22px; }
+
+        /* TEXT TO VIDEO */
+        .ai-textarea {
+            width: 100%; min-height: 120px; background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+            padding: 14px; font-size: 15px; color: #fff; resize: vertical;
+            outline: none; transition: border-color 0.2s;
+            font-family: inherit; line-height: 1.5;
+        }
+        .ai-textarea:focus { border-color: #7c3aed; }
+        .ai-textarea::placeholder { color: rgba(255,255,255,0.3); }
+        .ai-char-count { font-size: 12px; color: rgba(255,255,255,0.4); text-align: right; margin-top: 4px; }
+
+        /* STYLE PRESETS */
+        .ai-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+        .ai-preset {
+            padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.7); cursor: pointer; transition: all 0.2s;
+        }
+        .ai-preset:hover { background: rgba(124,58,237,0.15); border-color: rgba(124,58,237,0.3); color: #fff; }
+        .ai-preset.active { background: linear-gradient(135deg, #7c3aed, #00d4ff); color: #fff; border-color: transparent; }
+
+        /* IMAGE UPLOAD */
+        .ai-upload-zone {
+            border: 2px dashed rgba(255,255,255,0.15); border-radius: 16px;
+            padding: 40px 20px; text-align: center; cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .ai-upload-zone:hover { border-color: #7c3aed; background: rgba(124,58,237,0.05); }
+        .ai-upload-zone .upload-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+        .ai-upload-zone .upload-text { font-size: 14px; color: rgba(255,255,255,0.6); }
+        .ai-upload-zone .upload-hint { font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 4px; }
+        .ai-upload-preview { position: relative; margin-top: 12px; }
+        .ai-upload-preview img {
+            max-width: 100%; max-height: 200px; border-radius: 12px;
+            object-fit: cover;
+        }
+        .ai-upload-preview .remove-btn {
+            position: absolute; top: 8px; right: 8px;
+            width: 28px; height: 28px; border-radius: 50%;
+            background: rgba(255,71,87,0.8); border: none; color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; cursor: pointer;
+        }
+
+        /* AVATAR SELECTOR */
+        .ai-avatars {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px; margin-top: 12px;
+        }
+        .ai-avatar-item {
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+            padding: 12px 8px; border-radius: 12px; cursor: pointer;
+            background: rgba(255,255,255,0.03); border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .ai-avatar-item:hover { background: rgba(124,58,237,0.1); }
+        .ai-avatar-item.active { border-color: #7c3aed; background: rgba(124,58,237,0.15); }
+        .ai-avatar-item .avatar-emoji { font-size: 32px; }
+        .ai-avatar-item .avatar-name { font-size: 10px; color: rgba(255,255,255,0.7); text-align: center; line-height: 1.2; }
+
+        /* VOICE SELECTOR */
+        .ai-voices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .ai-voice {
+            padding: 10px 16px; border-radius: 12px; cursor: pointer;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            display: flex; align-items: center; gap: 8px; transition: all 0.2s;
+        }
+        .ai-voice:hover { background: rgba(124,58,237,0.15); }
+        .ai-voice.active { background: rgba(124,58,237,0.2); border-color: #7c3aed; }
+        .ai-voice .voice-icon { font-size: 20px; }
+        .ai-voice .voice-name { font-size: 13px; color: #fff; }
+        .ai-voice .voice-preview {
+            font-size: 11px; color: rgba(255,255,255,0.5);
+        }
+
+        /* GENERATE BUTTON */
+        .ai-generate-btn {
+            width: 100%; padding: 16px; border-radius: 16px; border: none;
+            font-size: 18px; font-weight: 700; color: #fff; cursor: pointer;
+            background: linear-gradient(135deg, #7c3aed, #00d4ff, #ff6b9d);
+            background-size: 200% 200%;
+            animation: gradientShift1 3s ease infinite;
+            transition: transform 0.15s, box-shadow 0.2s;
+            margin-top: 20px; position: relative; overflow: hidden;
+        }
+        .ai-generate-btn:hover { transform: scale(1.02); box-shadow: 0 8px 32px rgba(124,58,237,0.4); }
+        .ai-generate-btn:active { transform: scale(0.98); }
+        .ai-generate-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .ai-generate-btn.generating {
+            background: linear-gradient(270deg, #7c3aed, #00d4ff, #ff6b9d, #7c3aed);
+            background-size: 600% 600%;
+            animation: nvmeGenerate 4s ease infinite;
+        }
+
+        /* PROGRESS BAR */
+        .ai-progress {
+            margin-top: 20px; display: none;
+        }
+        .ai-progress.show { display: block; }
+        .ai-progress-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 8px;
+        }
+        .ai-progress-label { font-size: 14px; font-weight: 600; }
+        .ai-progress-percent { font-size: 14px; color: #7c3aed; font-weight: 700; }
+        .ai-progress-bar {
+            width: 100%; height: 8px; background: rgba(255,255,255,0.08);
+            border-radius: 4px; overflow: hidden; position: relative;
+        }
+        .ai-progress-fill {
+            height: 100%; width: 0%; border-radius: 4px;
+            background: linear-gradient(90deg, #7c3aed, #00d4ff);
+            transition: width 0.3s; position: relative;
+        }
+        .ai-progress-fill::after {
+            content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: nvmeProgressShine 1.5s infinite;
+        }
+        .ai-progress-status {
+            font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 8px;
+        }
+
+        /* PREVIEW PLAYER */
+        .ai-preview {
+            margin-top: 20px; display: none;
+            background: rgba(0,0,0,0.3); border-radius: 16px; overflow: hidden;
+        }
+        .ai-preview.show { display: block; animation: nvmeFadeIn 0.5s ease-out; }
+        .ai-preview-video {
+            width: 100%; aspect-ratio: 9/16; max-height: 400px;
+            background: #111; display: flex; align-items: center; justify-content: center;
+        }
+        .ai-preview-video video {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        .ai-preview-placeholder {
+            display: flex; flex-direction: column; align-items: center; gap: 12px;
+            color: rgba(255,255,255,0.4);
+        }
+        .ai-preview-placeholder .play-icon { font-size: 48px; }
+        .ai-preview-actions {
+            display: flex; gap: 10px; padding: 16px;
+        }
+        .ai-preview-action {
+            flex: 1; padding: 12px; border-radius: 12px; border: none;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            transition: transform 0.15s;
+        }
+        .ai-preview-action:hover { transform: scale(1.02); }
+        .ai-preview-action.download { background: rgba(255,255,255,0.1); color: #fff; }
+        .ai-preview-action.post-feed { background: #7c3aed; color: #fff; }
+        .ai-preview-action.post-live { background: #ff6b9d; color: #fff; }
+
+        /* RECENT GENERATIONS */
+        .ai-recent-title {
+            font-size: 18px; font-weight: 700; margin: 24px 0 16px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .ai-recent-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+        }
+        .ai-recent-item {
+            aspect-ratio: 9/16; border-radius: 12px; overflow: hidden;
+            background: linear-gradient(135deg, #1a1a2e, #0a0a0f);
+            position: relative; cursor: pointer; transition: transform 0.2s;
+        }
+        .ai-recent-item:hover { transform: scale(1.03); }
+        .ai-recent-item .recent-overlay {
+            position: absolute; inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%);
+            display: flex; flex-direction: column; justify-content: flex-end;
+            padding: 10px;
+        }
+        .ai-recent-item .recent-label { font-size: 11px; color: #fff; line-height: 1.2; }
+        .ai-recent-item .recent-date { font-size: 10px; color: rgba(255,255,255,0.5); }
+        .ai-recent-item .recent-play {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 32px; opacity: 0.6;
+        }
+
+        /* ============================================================
+           TAB CONTENT VISIBILITY
+           ============================================================ */
+        .ai-tab-content { display: none; }
+        .ai-tab-content.active { display: block; }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 480px) {
+            .ai-content { padding: 16px; }
+            .ai-panel { padding: 18px; }
+            .ai-avatars { grid-template-columns: repeat(4, 1fr); }
+            .ai-recent-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 768px) {
+            .ai-content { max-width: 640px; margin: 0 auto; padding: 24px; }
+            .ai-avatars { grid-template-columns: repeat(6, 1fr); }
+            .ai-recent-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .ai-content { max-width: 720px; }
+            .ai-recent-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="ai-page">
+        <!-- ANIMATED BACKGROUND -->
+        <div class="ai-bg"></div>
+
+        <!-- HEADER -->
+        <div class="ai-header">
+            <div class="ai-logo">NVME AI</div>
+            <div class="ai-subtitle">Generate stunning videos with AI</div>
+            <div class="ai-credits">
+                <span class="ai-credits-label">Credits:</span>
+                <span class="ai-credits-value" id="creditsValue">1,250</span>
+                <button class="ai-credits-buy">+ Buy More</button>
+            </div>
+        </div>
+
+        <!-- TABS -->
+        <div class="ai-tabs" id="aiTabs">
+            <div class="ai-tab active" data-tab="text-to-video">📝 Text to Video</div>
+            <div class="ai-tab" data-tab="image-to-video">🖼️ Image to Video</div>
+            <div class="ai-tab" data-tab="ai-avatar">🧑‍💻 AI Avatar</div>
+            <div class="ai-tab" data-tab="voice-clone">🎙️ Voice Clone</div>
+        </div>
+
+        <!-- TAB CONTENT -->
+        <div class="ai-content">
+
+            <!-- TEXT TO VIDEO PANEL -->
+            <div class="ai-tab-content active" id="tab-text-to-video">
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">✍️</span> Describe Your Video</div>
+                    <textarea class="ai-textarea" id="textInput" placeholder="A cinematic shot of a Bermuda beach at sunset, waves crashing, pink sand glowing, drone shot from above..." maxlength="500"></textarea>
+                    <div class="ai-char-count"><span id="textCharCount">0</span>/500</div>
+                </div>
+
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">🎨</span> Style Presets</div>
+                    <div class="ai-presets" id="textPresets">
+                        <div class="ai-preset active" data-style="cinematic">🎬 Cinematic</div>
+                        <div class="ai-preset" data-style="tiktok">📱 TikTok</div>
+                        <div class="ai-preset" data-style="youtube">📺 YouTube</div>
+                        <div class="ai-preset" data-style="bermuda">🏖️ Bermuda Vibes</div>
+                        <div class="ai-preset" data-style="dark">🌙 Dark Mode</div>
+                        <div class="ai-preset" data-style="anime">🎌 Anime</div>
+                        <div class="ai-preset" data-style="3d">🎮 3D Render</div>
+                        <div class="ai-preset" data-style="vintage">📷 Vintage</div>
+                    </div>
+                </div>
+
+                <button class="ai-generate-btn" id="textGenerateBtn">
+                    <span>✨ Generate Video</span>
+                </button>
+
+                <!-- PROGRESS -->
+                <div class="ai-progress" id="textProgress">
+                    <div class="ai-progress-header">
+                        <span class="ai-progress-label">Generating your video...</span>
+                        <span class="ai-progress-percent" id="textPercent">0%</span>
+                    </div>
+                    <div class="ai-progress-bar">
+                        <div class="ai-progress-fill" id="textProgressFill"></div>
+                    </div>
+                    <div class="ai-progress-status" id="textProgressStatus">Initializing AI model...</div>
+                </div>
+
+                <!-- PREVIEW -->
+                <div class="ai-preview" id="textPreview">
+                    <div class="ai-preview-video">
+                        <div class="ai-preview-placeholder">
+                            <div class="play-icon">▶️</div>
+                            <div>Video preview will appear here</div>
+                        </div>
+                    </div>
+                    <div class="ai-preview-actions">
+                        <button class="ai-preview-action download" data-type="text">⬇️ Download</button>
+                        <button class="ai-preview-action post-feed" data-type="text">📤 Post to Feed</button>
+                        <button class="ai-preview-action post-live" data-type="text">📡 Go Live</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- IMAGE TO VIDEO PANEL -->
+            <div class="ai-tab-content" id="tab-image-to-video">
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">📤</span> Upload Your Image</div>
+                    <div class="ai-upload-zone" id="imageUploadZone">
+                        <div class="upload-icon">📸</div>
+                        <div class="upload-text">Click to upload or drag & drop</div>
+                        <div class="upload-hint">PNG, JPG, WEBP up to 10MB</div>
+                        <input type="file" id="imageFileInput" accept="image/*" style="display:none;">
+                    </div>
+                    <div class="ai-upload-preview" id="imagePreview" style="display:none;">
+                        <img id="previewImage" src="" alt="Preview">
+                        <button class="remove-btn" id="removeImage">✕</button>
+                    </div>
+                </div>
+
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">🎬</span> Animation Style</div>
+                    <div class="ai-presets" id="imagePresets">
+                        <div class="ai-preset active" data-style="zoom-in">🔍 Zoom In</div>
+                        <div class="ai-preset" data-style="pan">↔️ Pan</div>
+                        <div class="ai-preset" data-style="parallax">🔄 Parallax</div>
+                        <div class="ai-preset" data-style="morph">✨ Morph</div>
+                        <div class="ai-preset" data-style="wave">🌊 Wave</div>
+                        <div class="ai-preset" data-style="3d-rotate">🔃 3D Rotate</div>
+                    </div>
+                </div>
+
+                <button class="ai-generate-btn" id="imageGenerateBtn" disabled>
+                    <span>✨ Generate Video</span>
+                </button>
+
+                <!-- PROGRESS -->
+                <div class="ai-progress" id="imageProgress">
+                    <div class="ai-progress-header">
+                        <span class="ai-progress-label">Animating your image...</span>
+                        <span class="ai-progress-percent" id="imagePercent">0%</span>
+                    </div>
+                    <div class="ai-progress-bar">
+                        <div class="ai-progress-fill" id="imageProgressFill"></div>
+                    </div>
+                    <div class="ai-progress-status" id="imageProgressStatus">Analyzing image...</div>
+                </div>
+
+                <!-- PREVIEW -->
+                <div class="ai-preview" id="imagePreviewPanel">
+                    <div class="ai-preview-video">
+                        <div class="ai-preview-placeholder">
+                            <div class="play-icon">▶️</div>
+                            <div>Animated video preview</div>
+                        </div>
+                    </div>
+                    <div class="ai-preview-actions">
+                        <button class="ai-preview-action download" data-type="image">⬇️ Download</button>
+                        <button class="ai-preview-action post-feed" data-type="image">📤 Post to Feed</button>
+                        <button class="ai-preview-action post-live" data-type="image">📡 Go Live</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI AVATAR PANEL -->
+            <div class="ai-tab-content" id="tab-ai-avatar">
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">🧑‍💻</span> Choose NVME Creator</div>
+                    <div class="ai-avatars" id="avatarGrid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">✍️</span> Script</div>
+                    <textarea class="ai-textarea" id="avatarScript" placeholder="Hello everyone! Welcome to my channel. Today I'm going to show you..." maxlength="300"></textarea>
+                    <div class="ai-char-count"><span id="avatarCharCount">0</span>/300</div>
+                </div>
+
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">🎤</span> Voice Style</div>
+                    <div class="ai-voices" id="voiceGrid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">🎨</span> Video Style</div>
+                    <div class="ai-presets" id="avatarPresets">
+                        <div class="ai-preset active" data-style="talking-head">🗣️ Talking Head</div>
+                        <div class="ai-preset" data-style="news-anchor">📺 News Anchor</div>
+                        <div class="ai-preset" data-style="vlogger">📹 Vlogger</div>
+                        <div class="ai-preset" data-style="presentation">📊 Presentation</div>
+                        <div class="ai-preset" data-style="interview">🎤 Interview</div>
+                    </div>
+                </div>
+
+                <button class="ai-generate-btn" id="avatarGenerateBtn" disabled>
+                    <span>✨ Generate Avatar Video</span>
+                </button>
+
+                <!-- PROGRESS -->
+                <div class="ai-progress" id="avatarProgress">
+                    <div class="ai-progress-header">
+                        <span class="ai-progress-label">Creating avatar video...</span>
+                        <span class="ai-progress-percent" id="avatarPercent">0%</span>
+                    </div>
+                    <div class="ai-progress-bar">
+                        <div class="ai-progress-fill" id="avatarProgressFill"></div>
+                    </div>
+                    <div class="ai-progress-status" id="avatarProgressStatus">Loading avatar model...</div>
+                </div>
+
+                <!-- PREVIEW -->
+                <div class="ai-preview" id="avatarPreviewPanel">
+                    <div class="ai-preview-video">
+                        <div class="ai-preview-placeholder">
+                            <div class="play-icon">▶️</div>
+                            <div>Avatar video preview</div>
+                        </div>
+                    </div>
+                    <div class="ai-preview-actions">
+                        <button class="ai-preview-action download" data-type="avatar">⬇️ Download</button>
+                        <button class="ai-preview-action post-feed" data-type="avatar">📤 Post to Feed</button>
+                        <button class="ai-preview-action post-live" data-type="avatar">📡 Go Live</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VOICE CLONE PANEL -->
+            <div class="ai-tab-content" id="tab-voice-clone">
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">🎙️</span> Upload Voice Sample</div>
+                    <div class="ai-upload-zone" id="voiceUploadZone">
+                        <div class="upload-icon">🎤</div>
+                        <div class="upload-text">Upload a clear voice recording (30s to 5min)</div>
+                        <div class="upload-hint">MP3, WAV, M4A up to 50MB</div>
+                        <input type="file" id="voiceFileInput" accept="audio/*" style="display:none;">
+                    </div>
+                    <div id="voiceFileInfo" style="display:none; margin-top:12px; padding:12px; background:rgba(124,58,237,0.1); border-radius:12px; font-size:13px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span id="voiceFileName">voice_sample.mp3</span>
+                            <button id="removeVoice" style="background:none; border:none; color:#ff6b9d; cursor:pointer;">Remove</button>
+                        </div>
+                        <div id="voiceDuration" style="color:rgba(255,255,255,0.5); margin-top:4px;">Duration: 2:34</div>
+                    </div>
+                </div>
+
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">📝</span> Text to Speak</div>
+                    <textarea class="ai-textarea" id="voiceText" placeholder="Enter the text you want to be spoken in your cloned voice..." maxlength="1000"></textarea>
+                    <div class="ai-char-count"><span id="voiceCharCount">0</span>/1000</div>
+                </div>
+
+                <div class="ai-panel">
+                    <div class="ai-panel-title"><span class="icon">🎨</span> Voice Style</div>
+                    <div class="ai-voices" id="cloneVoiceGrid">
+                        <div class="ai-voice active" data-clone="natural">
+                            <div class="voice-icon">🗣️</div>
+                            <div class="voice-name">Natural</div>
+                            <div class="voice-preview">Your exact voice</div>
+                        </div>
+                        <div class="ai-voice" data-clone="energetic">
+                            <div class="voice-icon">⚡</div>
+                            <div class="voice-name">Energetic</div>
+                            <div class="voice-preview">Upbeat and lively</div>
+                        </div>
+                        <div class="ai-voice" data-clone="calm">
+                            <div class="voice-icon">🌊</div>
+                            <div class="voice-name">Calm</div>
+                            <div class="voice-preview">Soothing and relaxed</div>
+                        </div>
+                        <div class="ai-voice" data-clone="professional">
+                            <div class="voice-icon">👔</div>
+                            <div class="voice-name">Professional</div>
+                            <div class="voice-preview">Clear and authoritative</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="ai-generate-btn" id="voiceGenerateBtn" disabled>
+                    <span>✨ Generate Voice</span>
+                </button>
+
+                <!-- PROGRESS -->
+                <div class="ai-progress" id="voiceProgress">
+                    <div class="ai-progress-header">
+                        <span class="ai-progress-label">Cloning your voice...</span>
+                        <span class="ai-progress-percent" id="voicePercent">0%</span>
+                    </div>
+                    <div class="ai-progress-bar">
+                        <div class="ai-progress-fill" id="voiceProgressFill"></div>
+                    </div>
+                    <div class="ai-progress-status" id="voiceProgressStatus">Analyzing voice patterns...</div>
+                </div>
+
+                <!-- PREVIEW -->
+                <div class="ai-preview" id="voicePreviewPanel">
+                    <div style="padding:24px; text-align:center;">
+                        <div style="font-size:48px; margin-bottom:16px;">🎧</div>
+                        <div style="font-size:16px; font-weight:600; margin-bottom:8px;">Voice Clone Preview</div>
+                        <audio id="voiceAudioPreview" controls style="width:100%; margin-top:12px; border-radius:8px;">
+                            <source src="" type="audio/mpeg">
+                        </audio>
+                    </div>
+                    <div class="ai-preview-actions">
+                        <button class="ai-preview-action download" data-type="voice">⬇️ Download</button>
+                        <button class="ai-preview-action post-feed" data-type="voice">📤 Share</button>
+                        <button class="ai-preview-action post-live" data-type="voice">📡 Use in Live</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RECENT GENERATIONS -->
+            <div class="ai-recent-title">⏱️ Recent Generations</div>
+            <div class="ai-recent-grid" id="recentGrid">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <nav style="position:fixed;bottom:0;left:0;right:0;z-index:100;padding:8px 0;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,rgba(10,10,15,0.98) 0%,rgba(10,10,15,0.9) 60%,transparent 100%);backdrop-filter:blur(10px);display:flex;justify-content:space-around;align-items:center;">
+        <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">🏠</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Home</span>
+        </a>
+        <a href="tiktok-feed.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">🧭</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Discover</span>
+        </a>
+        <a href="upload.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <div style="width:38px;height:28px;background:linear-gradient(135deg,#7c3aed,#00d4ff);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">+</div>
+        </a>
+        <a href="messages.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">💬</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Inbox</span>
+        </a>
+        <a href="profile.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;">
+            <span style="font-size:22px;">👤</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.5);">Profile</span>
+        </a>
+    </nav>
+
+    <!-- SCRIPTS -->
+    <script src="js/gifts.js"></script>
+    <script>
+    (function() {
+        'use strict';
+
+        const API = window.NVME_API || 'http://localhost:4000';
+        const TOKEN = localStorage.getItem('nvme_token');
+        const AUTH = TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {};
+
+        // ============================================================
+        // NVME CREATORS (29 creators for AI Avatar)
+        // ============================================================
+        const NVME_CREATORS = [
+            { name: 'Zara Ocean', emoji: '🧑‍💻', desc: 'Tech & Gaming' },
+            { name: 'Kai Blaze', emoji: '🔥', desc: 'Comedy & Pranks' },
+            { name: 'Luna Star', emoji: '🌙', desc: 'Fashion & Beauty' },
+            { name: 'Jax Thunder', emoji: '⚡', desc: 'Sports & Fitness' },
+            { name: 'Mika Rain', emoji: '🌧️', desc: 'Music & Dance' },
+            { name: 'Nova Lux', emoji: '✨', desc: 'Luxury & Lifestyle' },
+            { name: 'Rex Stone', emoji: '🪨', desc: 'Construction & DIY' },
+            { name: 'Ivy Bloom', emoji: '🌿', desc: 'Nature & Travel' },
+            { name: 'Dash Wave', emoji: '🏄', desc: 'Surfing & Beach' },
+            { name: 'Echo Pulse', emoji: '📡', desc: 'Tech Reviews' },
+            { name: 'Pixie Frost', emoji: '🧊', desc: 'Art & Design' },
+            { name: 'Blaze Fury', emoji: '🗡️', desc: 'Martial Arts' },
+            { name: 'Coral Reef', emoji: '🪸', desc: 'Marine Life' },
+            { name: 'Phoenix Rise', emoji: '🦅', desc: 'Motivation' },
+            { name: 'Storm Cloud', emoji: '⛈️', desc: 'Music Production' },
+            { name: 'Ruby Glow', emoji: '💎', desc: 'Jewelry & Crafts' },
+            { name: 'Titan Forge', emoji: '🔨', desc: 'Blacksmithing' },
+            { name: 'Zephyr West', emoji: '🌾', desc: 'Farming & Homestead' },
+            { name: 'Neon Byte', emoji: '💾', desc: 'Coding & AI' },
+            { name: 'Crystal Clear', emoji: '💧', desc: 'Wellness & Health' },
+            { name: 'Shadow Knight', emoji: '🥷', desc: 'Gaming & Esports' },
+            { name: 'Aurora Dawn', emoji: '🌅', desc: 'Meditation & Yoga' },
+            { name: 'Volt Electric', emoji: '🔌', desc: 'Electric Vehicles' },
+            { name: 'Jade Garden', emoji: '🎋', desc: 'Cooking & Recipes' },
+            { name: 'Titanium Edge', emoji: '⚙️', desc: 'Engineering' },
+            { name: 'Sunset Blaze', emoji: '🌄', desc: 'Photography' },
+            { name: 'Midnight Wolf', emoji: '🐺', desc: 'Horror & Mystery' },
+            { name: 'Glimmer Star', emoji: '⭐', desc: 'Dance & Choreography' },
+            { name: 'Ocean Deep', emoji: '🌊', desc: 'Diving & Ocean' }
+        ];
+
+        const VOICE_STYLES = [
+            { id: 'narrator', name: 'Narrator', icon: '📖', desc: 'Deep and authoritative', preview: 'Rich, commanding tone' },
+            { id: 'energetic', name: 'Energetic', icon: '⚡', desc: 'Upbeat and lively', preview: 'High energy delivery' },
+            { id: 'calm', name: 'Calm', icon: '🌊', desc: 'Soothing and relaxed', preview: 'Peaceful and gentle' },
+            { id: 'professional', name: 'Professional', icon: '👔', desc: 'Clear and business-like', preview: 'Polished and articulate' },
+            { id: 'friendly', name: 'Friendly', icon: '😊', desc: 'Warm and approachable', preview: 'Conversational and inviting' },
+            { id: 'dramatic', name: 'Dramatic', icon: '🎭', desc: 'Theatrical and impactful', preview: 'Bold and expressive' },
+            { id: 'whisper', name: 'Whisper', icon: '🤫', desc: 'Soft and intimate', preview: 'ASMR-style delivery' },
+            { id: 'news', name: 'News Anchor', icon: '📺', desc: 'Broadcast quality', preview: 'Professional news tone' }
+        ];
+
+        const RECENT_GENERATIONS = [
+            { title: 'Bermuda sunset timelapse', style: 'Cinematic', date: '2h ago', icon: '🏖️' },
+            { title: 'Product review intro', style: 'YouTube', date: '5h ago', icon: '📹' },
+            { title: 'Dance challenge edit', style: 'TikTok', date: '1d ago', icon: '💃' },
+            { title: 'AI avatar greeting', style: 'Talking Head', date: '1d ago', icon: '🧑‍💻' },
+            { title: 'Nature documentary clip', style: 'Cinematic', date: '2d ago', icon: '🦁' },
+            { title: 'Gaming highlight reel', style: '3D Render', date: '3d ago', icon: '🎮' }
+        ];
+
+        // ============================================================
+        // DOM ELEMENTS
+        // ============================================================
+        const tabs = document.querySelectorAll('.ai-tab');
+        const tabContents = document.querySelectorAll('.ai-tab-content');
+        const avatarGrid = document.getElementById('avatarGrid');
+        const voiceGrid = document.getElementById('voiceGrid');
+        const recentGrid = document.getElementById('recentGrid');
+
+        // Text inputs
+        const textInput = document.getElementById('textInput');
+        const textCharCount = document.getElementById('textCharCount');
+        const textGenerateBtn = document.getElementById('textGenerateBtn');
+        const textProgress = document.getElementById('textProgress');
+        const textProgressFill = document.getElementById('textProgressFill');
+        const textProgressStatus = document.getElementById('textProgressStatus');
+        const textPercent = document.getElementById('textPercent');
+        const textPreview = document.getElementById('textPreview');
+
+        // Image inputs
+        const imageUploadZone = document.getElementById('imageUploadZone');
+        const imageFileInput = document.getElementById('imageFileInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImage = document.getElementById('previewImage');
+        const removeImage = document.getElementById('removeImage');
+        const imageGenerateBtn = document.getElementById('imageGenerateBtn');
+        const imageProgress = document.getElementById('imageProgress');
+        const imageProgressFill = document.getElementById('imageProgressFill');
+        const imageProgressStatus = document.getElementById('imageProgressStatus');
+        const imagePercent = document.getElementById('imagePercent');
+        const imagePreviewPanel = document.getElementById('imagePreviewPanel');
+
+        // Avatar inputs
+        const avatarScript = document.getElementById('avatarScript');
+        const avatarCharCount = document.getElementById('avatarCharCount');
+        const avatarGenerateBtn = document.getElementById('avatarGenerateBtn');
+        const avatarProgress = document.getElementById('avatarProgress');
+        const avatarProgressFill = document.getElementById('avatarProgressFill');
+        const avatarProgressStatus = document.getElementById('avatarProgressStatus');
+        const avatarPercent = document.getElementById('avatarPercent');
+        const avatarPreviewPanel = document.getElementById('avatarPreviewPanel');
+
+        // Voice inputs
+        const voiceUploadZone = document.getElementById('voiceUploadZone');
+        const voiceFileInput = document.getElementById('voiceFileInput');
+        const voiceFileInfo = document.getElementById('voiceFileInfo');
+        const voiceFileName = document.getElementById('voiceFileName');
+        const removeVoice = document.getElementById('removeVoice');
+        const voiceText = document.getElementById('voiceText');
+        const voiceCharCount = document.getElementById('voiceCharCount');
+        const voiceGenerateBtn = document.getElementById('voiceGenerateBtn');
+        const voiceProgress = document.getElementById('voiceProgress');
+        const voiceProgressFill = document.getElementById('voiceProgressFill');
+        const voiceProgressStatus = document.getElementById('voiceProgressStatus');
+        const voicePercent = document.getElementById('voicePercent');
+        const voicePreviewPanel = document.getElementById('voicePreviewPanel');
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        const state = {
+            currentTab: 'text-to-video',
+            textSelectedStyle: 'cinematic',
+            imageSelectedStyle: 'zoom-in',
+            imageUploaded: false,
+            selectedAvatar: null,
+            selectedVoice: 'narrator',
+            avatarSelectedStyle: 'talking-head',
+            voiceUploaded: false,
+            cloneStyle: 'natural',
+            credits: 1250
+        };
+
+        // ============================================================
+        // TAB SWITCHING
+        // ============================================================
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                const target = this.dataset.tab;
+                tabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById('tab-' + target).classList.add('active');
+                state.currentTab = target;
+            });
+        });
+
+        // ============================================================
+        // PRESET STYLE SELECTORS
+        // ============================================================
+        function initPresets(containerId, stateKey) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.querySelectorAll('.ai-preset').forEach(preset => {
+                preset.addEventListener('click', function() {
+                    container.querySelectorAll('.ai-preset').forEach(p => p.classList.remove('active'));
+                    this.classList.add('active');
+                    state[stateKey] = this.dataset.style;
+                });
+            });
+        }
+        initPresets('textPresets', 'textSelectedStyle');
+        initPresets('imagePresets', 'imageSelectedStyle');
+        initPresets('avatarPresets', 'avatarSelectedStyle');
+
+        // ============================================================
+        // CHARACTER COUNTS
+        // ============================================================
+        function bindCharCount(input, counter, max) {
+            input.addEventListener('input', function() {
+                counter.textContent = this.value.length;
+                updateButtons();
+            });
+        }
+        bindCharCount(textInput, textCharCount, 500);
+        bindCharCount(avatarScript, avatarCharCount, 300);
+        bindCharCount(voiceText, voiceCharCount, 1000);
+
+        // ============================================================
+        // AVATAR GRID
+        // ============================================================
+        function renderAvatars() {
+            avatarGrid.innerHTML = NVME_CREATORS.map((creator, idx) => `
+                <div class="ai-avatar-item" data-idx="${idx}">
+                    <div class="avatar-emoji">${creator.emoji}</div>
+                    <div class="avatar-name">${creator.name}</div>
+                </div>
+            `).join('');
+
+            avatarGrid.querySelectorAll('.ai-avatar-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    avatarGrid.querySelectorAll('.ai-avatar-item').forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+                    state.selectedAvatar = NVME_CREATORS[parseInt(this.dataset.idx)];
+                    updateButtons();
+                });
+            });
+        }
+        renderAvatars();
+
+        // ============================================================
+        // VOICE GRID
+        // ============================================================
+        function renderVoices() {
+            voiceGrid.innerHTML = VOICE_STYLES.map(voice => `
+                <div class="ai-voice" data-voice="${voice.id}">
+                    <div class="voice-icon">${voice.icon}</div>
+                    <div>
+                        <div class="voice-name">${voice.name}</div>
+                        <div class="voice-preview">${voice.desc}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            voiceGrid.querySelectorAll('.ai-voice').forEach(item => {
+                item.addEventListener('click', function() {
+                    voiceGrid.querySelectorAll('.ai-voice').forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+                    state.selectedVoice = this.dataset.voice;
+                });
+            });
+        }
+        renderVoices();
+
+        // ============================================================
+        // IMAGE UPLOAD
+        // ============================================================
+        imageUploadZone.addEventListener('click', () => imageFileInput.click());
+        imageFileInput.addEventListener('change', handleImageUpload);
+
+        imageUploadZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.style.borderColor = '#7c3aed';
+            this.style.background = 'rgba(124,58,237,0.05)';
+        });
+        imageUploadZone.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            this.style.borderColor = '';
+            this.style.background = '';
+        });
+        imageUploadZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.style.borderColor = '';
+            this.style.background = '';
+            if (e.dataTransfer.files.length > 0) {
+                imageFileInput.files = e.dataTransfer.files;
+                handleImageUpload();
+            }
+        });
+
+        function handleImageUpload() {
+            const file = imageFileInput.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                alert('Please upload an image file');
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Image must be under 10MB');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImage.src = e.target.result;
+                imageUploadZone.style.display = 'none';
+                imagePreview.style.display = 'block';
+                state.imageUploaded = true;
+                updateButtons();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        removeImage.addEventListener('click', function() {
+            imageFileInput.value = '';
+            previewImage.src = '';
+            imageUploadZone.style.display = '';
+            imagePreview.style.display = 'none';
+            state.imageUploaded = false;
+            updateButtons();
+        });
+
+        // ============================================================
+        // VOICE UPLOAD
+        // ============================================================
+        voiceUploadZone.addEventListener('click', () => voiceFileInput.click());
+        voiceFileInput.addEventListener('change', handleVoiceUpload);
+
+        function handleVoiceUpload() {
+            const file = voiceFileInput.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('audio/')) {
+                alert('Please upload an audio file');
+                return;
+            }
+            if (file.size > 50 * 1024 * 1024) {
+                alert('Audio must be under 50MB');
+                return;
+            }
+            voiceFileName.textContent = file.name;
+            voiceDuration.textContent = 'Duration: Analyzing...';
+            voiceUploadZone.style.display = 'none';
+            voiceFileInfo.style.display = 'block';
+            state.voiceUploaded = true;
+            // Simulate duration
+            setTimeout(() => {
+                const mins = Math.floor(Math.random() * 3) + 1;
+                const secs = Math.floor(Math.random() * 60);
+                voiceDuration.textContent = `Duration: ${mins}:${secs.toString().padStart(2,'0')}`;
+            }, 1000);
+            updateButtons();
+        }
+
+        removeVoice.addEventListener('click', function() {
+            voiceFileInput.value = '';
+            voiceUploadZone.style.display = '';
+            voiceFileInfo.style.display = 'none';
+            state.voiceUploaded = false;
+            updateButtons();
+        });
+
+        // ============================================================
+        // VOICE CLONE STYLE
+        // ============================================================
+        document.querySelectorAll('#cloneVoiceGrid .ai-voice').forEach(item => {
+            item.addEventListener('click', function() {
+                document.querySelectorAll('#cloneVoiceGrid .ai-voice').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+                state.cloneStyle = this.dataset.clone;
+            });
+        });
+
+        // ============================================================
+        // UPDATE BUTTON STATES
+        // ============================================================
+        function updateButtons() {
+            // Text to video - needs text input
+            textGenerateBtn.disabled = textInput.value.trim().length < 10;
+
+            // Image to video - needs uploaded image
+            imageGenerateBtn.disabled = !state.imageUploaded;
+
+            // Avatar - needs avatar selected + script written
+            avatarGenerateBtn.disabled = !state.selectedAvatar || avatarScript.value.trim().length < 10;
+
+            // Voice - needs voice sample + text
+            voiceGenerateBtn.disabled = !state.voiceUploaded || voiceText.value.trim().length < 10;
+        }
+
+        // ============================================================
+        // GENERATION SIMULATION
+        // ============================================================
+        const GENERATION_STEPS = [
+            'Initializing AI model...',
+            'Processing prompt...',
+            'Generating scene composition...',
+            'Rendering frames...',
+            'Applying style effects...',
+            'Enhancing quality...',
+            'Adding motion interpolation...',
+            'Color grading...',
+            'Finalizing output...',
+            'Almost done...'
+        ];
+
+        function simulateGeneration(progressEl, fillEl, statusEl, percentEl, previewEl, btnEl, cost) {
+            if (state.credits < cost) {
+                alert('Not enough credits! You need ' + cost + ' credits.');
+                return;
+            }
+
+            state.credits -= cost;
+            document.getElementById('creditsValue').textContent = state.credits.toLocaleString();
+
+            progressEl.classList.add('show');
+            previewEl.classList.remove('show');
+            btnEl.disabled = true;
+            btnEl.classList.add('generating');
+            btnEl.querySelector('span').textContent = '⏳ Generating...';
+
+            let progress = 0;
+            let stepIndex = 0;
+            const stepInterval = setInterval(() => {
+                if (progress >= 100) {
+                    clearInterval(stepInterval);
+                    btnEl.classList.remove('generating');
+                    btnEl.querySelector('span').textContent = '✨ Generate Video';
+                    updateButtons();
+                    previewEl.classList.add('show');
+                    statusEl.textContent = '✅ Generation complete!';
+
+                    // Scroll to preview
+                    setTimeout(() => {
+                        previewEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 300);
+
+                    // Add to recent
+                    addRecentGeneration();
+                    return;
+                }
+
+                progress += Math.random() * 8 + 2;
+                progress = Math.min(progress, 100);
+                fillEl.style.width = progress + '%';
+                percentEl.textContent = Math.round(progress) + '%';
+
+                if (stepIndex < GENERATION_STEPS.length && Math.random() > 0.4) {
+                    statusEl.textContent = GENERATION_STEPS[stepIndex];
+                    stepIndex++;
+                }
+
+                if (progress >= 85) {
+                    statusEl.textContent = 'Finalizing and saving...';
+                }
+            }, 300);
+        }
+
+        textGenerateBtn.addEventListener('click', () => {
+            simulateGeneration(textProgress, textProgressFill, textProgressStatus, textPercent, textPreview, textGenerateBtn, 50);
+        });
+
+        imageGenerateBtn.addEventListener('click', () => {
+            simulateGeneration(imageProgress, imageProgressFill, imageProgressStatus, imagePercent, imagePreviewPanel, imageGenerateBtn, 75);
+        });
+
+        avatarGenerateBtn.addEventListener('click', () => {
+            simulateGeneration(avatarProgress, avatarProgressFill, avatarProgressStatus, avatarPercent, avatarPreviewPanel, avatarGenerateBtn, 100);
+        });
+
+        voiceGenerateBtn.addEventListener('click', () => {
+            voiceProgress.classList.add('show');
+            voicePreviewPanel.classList.remove('show');
+            voiceGenerateBtn.disabled = true;
+            voiceGenerateBtn.classList.add('generating');
+            voiceGenerateBtn.querySelector('span').textContent = '⏳ Cloning voice...';
+
+            const VOICE_STEPS = [
+                'Analyzing voice patterns...',
+                'Extracting vocal features...',
+                'Building voice profile...',
+                'Synthesizing speech...',
+                'Applying tone modulation...',
+                'Smoothing transitions...',
+                'Finalizing audio...',
+                'Cloning complete!'
+            ];
+
+            let progress = 0;
+            let stepIndex = 0;
+            const stepInterval = setInterval(() => {
+                if (progress >= 100) {
+                    clearInterval(stepInterval);
+                    voiceGenerateBtn.classList.remove('generating');
+                    voiceGenerateBtn.querySelector('span').textContent = '✨ Generate Voice';
+                    updateButtons();
+                    voicePreviewPanel.classList.add('show');
+                    voiceProgressStatus.textContent = '✅ Voice cloned successfully!';
+                    voicePreviewPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                progress += Math.random() * 10 + 3;
+                progress = Math.min(progress, 100);
+                voiceProgressFill.style.width = progress + '%';
+                voicePercent.textContent = Math.round(progress) + '%';
+                if (stepIndex < VOICE_STEPS.length && Math.random() > 0.3) {
+                    voiceProgressStatus.textContent = VOICE_STEPS[stepIndex];
+                    stepIndex++;
+                }
+            }, 350);
+
+            state.credits -= 30;
+            document.getElementById('creditsValue').textContent = state.credits.toLocaleString();
+        });
+
+        // ============================================================
+        // RECENT GENERATIONS
+        // ============================================================
+        function renderRecent() {
+            recentGrid.innerHTML = RECENT_GENERATIONS.map(item => `
+                <div class="ai-recent-item">
+                    <div class="recent-play">▶️</div>
+                    <div class="recent-overlay">
+                        <div class="recent-label">${item.icon} ${item.title}</div>
+                        <div class="recent-date">${item.style} • ${item.date}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        renderRecent();
+
+        function addRecentGeneration() {
+            const titles = [
+                'AI generated masterpiece',
+                'Cinematic landscape shot',
+                'Avatar introduction video',
+                'Bermuda beach vibes',
+                'Product showcase',
+                'Animated artwork'
+            ];
+            const styles = ['Cinematic', 'TikTok', 'YouTube', '3D Render', 'Dark Mode', 'Anime'];
+            const icons = ['🎬', '📱', '📺', '🎮', '🌙', '🎌'];
+
+            RECENT_GENERATIONS.unshift({
+                title: titles[Math.floor(Math.random() * titles.length)],
+                style: styles[Math.floor(Math.random() * styles.length)],
+                date: 'Just now',
+                icon: icons[Math.floor(Math.random() * icons.length)]
+            });
+
+            if (RECENT_GENERATIONS.length > 12) RECENT_GENERATIONS.pop();
+            renderRecent();
+        }
+
+        // ============================================================
+        // DOWNLOAD / POST ACTIONS
+        // ============================================================
+        document.querySelectorAll('.ai-preview-action.download').forEach(btn => {
+            btn.addEventListener('click', function() {
+                showNotification('📥 Preparing download...');
+                setTimeout(() => showNotification('✅ Video saved to downloads!'), 1500);
+            });
+        });
+
+        document.querySelectorAll('.ai-preview-action.post-feed').forEach(btn => {
+            btn.addEventListener('click', function() {
+                showNotification('📤 Posting to your feed...');
+                setTimeout(() => showNotification('✅ Posted to your feed!'), 1500);
+            });
+        });
+
+        document.querySelectorAll('.ai-preview-action.post-live').forEach(btn => {
+            btn.addEventListener('click', function() {
+                window.location.href = 'live.html';
+            });
+        });
+
+        // ============================================================
+        // CREDITS BUY BUTTON
+        // ============================================================
+        document.querySelector('.ai-credits-buy').addEventListener('click', function() {
+            const amount = prompt('Enter credit amount to buy (100 credits = $1.00):', '500');
+            if (amount && !isNaN(amount)) {
+                state.credits += parseInt(amount);
+                document.getElementById('creditsValue').textContent = state.credits.toLocaleString();
+                showNotification('💰 ' + amount + ' credits added!');
+            }
+        });
+
+        // ============================================================
+        // NOTIFICATION SYSTEM
+        // ============================================================
+        function showNotification(message) {
+            const notif = document.createElement('div');
+            notif.style.cssText = `
+                position:fixed;top:80px;left:50%;transform:translateX(-50%);
+                background:rgba(10,10,15,0.95);backdrop-filter:blur(20px);
+                border-radius:12px;padding:14px 22px;font-size:14px;color:#fff;
+                z-index:200;animation:nvmeSlideInDown 0.3s ease-out;
+                border:1px solid rgba(124,58,237,0.3);
+                box-shadow:0 8px 32px rgba(0,0,0,0.5);
+            `;
+            notif.textContent = message;
+            document.body.appendChild(notif);
+            setTimeout(() => {
+                notif.style.animation = 'nvmeFadeOut 0.3s ease-out forwards';
+                setTimeout(() => notif.remove(), 300);
+            }, 2500);
+        }
+
+        // ============================================================
+        // INITIAL STATE
+        // ============================================================
+        updateButtons();
+
+    })();
+    </script>
+</body>
+</html>

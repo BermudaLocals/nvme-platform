@@ -1,0 +1,1400 @@
+/* ============================================================
+   NVME.live — epic-animations.css
+   E.P.I.C. Level Animations
+   ============================================================ */
+
+/* ============================================================
+   1. PARTICLE EXPLOSION KEYFRAMES (50 animations)
+   ============================================================ */
+
+@keyframes nvmeParticleExplode {
+  0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}
+
+@keyframes nvmeParticleSpiral {
+  0%   { transform: rotate(0deg) translateX(0) scale(1); opacity: 1; }
+  100% { transform: rotate(720deg) translateX(120px) scale(0); opacity: 0; }
+}
+
+@keyframes nvmeParticleFloat {
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-200px) scale(0.3); opacity: 0; }
+}
+
+@keyframes nvmeParticleDrift {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(80px, -150px) rotate(360deg); opacity: 0; }
+}
+
+@keyframes nvmeParticleBurst {
+  0%   { transform: scale(0); opacity: 1; }
+  50%  { transform: scale(1.5); opacity: 0.8; }
+  100% { transform: scale(0.2); opacity: 0; }
+}
+
+@keyframes nvmeParticleSpark {
+  0%   { transform: translate(0, 0) scaleX(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scaleX(3); opacity: 0; }
+}
+
+@keyframes nvmeParticleRise {
+  0%   { transform: translateY(0) scale(1); opacity: 0.9; }
+  60%  { opacity: 1; }
+  100% { transform: translateY(-300px) scale(0); opacity: 0; }
+}
+
+@keyframes nvmeParticleFall {
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(200px) scale(0.5); opacity: 0; }
+}
+
+@keyframes nvmeParticlePulse {
+  0%   { transform: scale(0); opacity: 1; }
+  50%  { transform: scale(2); opacity: 0.5; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes nvmeParticleWave {
+  0%   { transform: translateX(0) translateY(0); opacity: 1; }
+  25%  { transform: translateX(40px) translateY(-60px); }
+  50%  { transform: translateX(-30px) translateY(-120px); opacity: 0.7; }
+  100% { transform: translateX(0) translateY(-200px); opacity: 0; }
+}
+
+@keyframes nvmeParticleZigzag {
+  0%   { transform: translate(0, 0); opacity: 1; }
+  25%  { transform: translate(50px, -40px); }
+  50%  { transform: translate(-30px, -80px); }
+  75%  { transform: translate(40px, -120px); }
+  100% { transform: translate(0, -160px); opacity: 0; }
+}
+
+@keyframes nvmeParticleOrbit {
+  0%   { transform: rotate(0deg) translateX(60px) rotate(0deg); opacity: 1; }
+  100% { transform: rotate(1080deg) translateX(0deg) rotate(-1080deg); opacity: 0; }
+}
+
+@keyframes nvmeParticleShatter {
+  0%   { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0) rotate(180deg) translate(var(--dx), var(--dy)); opacity: 0; }
+}
+
+@keyframes nvmeParticleGlow {
+  0%   { transform: scale(0); opacity: 0; box-shadow: 0 0 5px currentColor; }
+  50%  { transform: scale(1.5); opacity: 1; box-shadow: 0 0 30px currentColor; }
+  100% { transform: scale(0); opacity: 0; box-shadow: 0 0 5px currentColor; }
+}
+
+@keyframes nvmeParticleSwirl {
+  0%   { transform: rotate(0deg) translateX(0) translateY(0); opacity: 1; }
+  100% { transform: rotate(540deg) translateX(100px) translateY(-100px); opacity: 0; }
+}
+
+@keyframes nvmeParticleCascade {
+  0%   { transform: translateY(-20px); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translateY(180px); opacity: 0; }
+}
+
+@keyframes nvmeParticleFountain {
+  0%   { transform: translateY(0) translateX(0) scale(1); opacity: 1; }
+  50%  { transform: translateY(-100px) translateX(var(--dx)); }
+  100% { transform: translateY(50px) translateX(var(--dx)) scale(0.3); opacity: 0; }
+}
+
+@keyframes nvmeParticleConfetti {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(200px) rotate(720deg); opacity: 0; }
+}
+
+@keyframes nvmeParticleRadiate {
+  0%   { transform: translate(0, 0) scale(2); opacity: 0.8; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}
+
+@keyframes nvmeParticleTwinkle {
+  0%   { transform: scale(0) rotate(0deg); opacity: 0; }
+  50%  { transform: scale(1.2) rotate(180deg); opacity: 1; }
+  100% { transform: scale(0) rotate(360deg); opacity: 0; }
+}
+
+@keyframes nvmeParticleComet {
+  0%   { transform: translate(0, 0) scale(1.5); opacity: 1; box-shadow: 0 0 20px currentColor, 0 -30px 10px currentColor; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; box-shadow: none; }
+}
+
+@keyframes nvmeParticleMeteor {
+  0%   { transform: translate(0, 0) scaleY(1); opacity: 1; }
+  100% { transform: translate(100px, 200px) scaleY(4); opacity: 0; }
+}
+
+@keyframes nvmeParticleExpanding {
+  0%   { transform: scale(0); opacity: 1; border-radius: 50%; }
+  100% { transform: scale(8); opacity: 0; border-radius: 50%; }
+}
+
+@keyframes nvmeParticleFlicker {
+  0%   { opacity: 1; transform: translate(0, 0); }
+  25%  { opacity: 0.3; transform: translate(10px, -20px); }
+  50%  { opacity: 1; transform: translate(-5px, -40px); }
+  75%  { opacity: 0.5; transform: translate(15px, -60px); }
+  100% { opacity: 0; transform: translate(0, -80px); }
+}
+
+@keyframes nvmeParticleScatter {
+  0%   { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(calc(var(--dx) * 2), calc(var(--dy) * 2)); opacity: 0; }
+}
+
+@keyframes nvmeParticleBubble {
+  0%   { transform: translateY(0) scale(0.5); opacity: 0.8; }
+  50%  { transform: translateY(-60px) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-120px) scale(0); opacity: 0; }
+}
+
+@keyframes nvmeParticleRain {
+  0%   { transform: translateY(-20px); opacity: 0; }
+  10%  { opacity: 1; }
+  100% { transform: translateY(300px); opacity: 0; }
+}
+
+@keyframes nvmeParticleSnow {
+  0%   { transform: translateY(0) translateX(0) rotate(0deg); opacity: 1; }
+  50%  { transform: translateY(100px) translateX(30px) rotate(180deg); }
+  100% { transform: translateY(200px) translateX(-20px) rotate(360deg); opacity: 0; }
+}
+
+@keyframes nvmeParticleLava {
+  0%   { transform: scale(0) translateY(0); opacity: 1; background: #ff6b35; }
+  50%  { transform: scale(1.5) translateY(-40px); background: #ff4757; }
+  100% { transform: scale(0.3) translateY(-80px); opacity: 0; }
+}
+
+@keyframes nvmeParticleElectric {
+  0%   { transform: translate(0, 0); opacity: 1; filter: brightness(2); }
+  20%  { transform: translate(20px, -10px); opacity: 0.5; }
+  40%  { transform: translate(-15px, -30px); opacity: 1; }
+  60%  { transform: translate(25px, -50px); opacity: 0.3; }
+  100% { transform: translate(0, -80px); opacity: 0; }
+}
+
+@keyframes nvmeParticleDiamond {
+  0%   { transform: rotate(45deg) scale(0); opacity: 1; }
+  50%  { transform: rotate(45deg) scale(1.5); opacity: 0.8; }
+  100% { transform: rotate(45deg) scale(0); opacity: 0; }
+}
+
+@keyframes nvmeParticleRipple {
+  0%   { transform: scale(0); opacity: 0.8; border: 2px solid currentColor; }
+  100% { transform: scale(10); opacity: 0; border: 1px solid currentColor; }
+}
+
+@keyframes nvmeParticleSmoke {
+  0%   { transform: translateY(0) scale(1); opacity: 0.6; }
+  100% { transform: translateY(-150px) scale(3); opacity: 0; }
+}
+
+@keyframes nvmeParticleFlame {
+  0%   { transform: translateY(0) scaleX(1); opacity: 0.9; }
+  50%  { transform: translateY(-40px) scaleX(1.5); }
+  100% { transform: translateY(-80px) scaleX(0.5); opacity: 0; }
+}
+
+@keyframes nvmeParticleFrost {
+  0%   { transform: scale(0) rotate(0deg); opacity: 1; }
+  100% { transform: scale(2) rotate(360deg); opacity: 0; }
+}
+
+@keyframes nvmeParticlePlasma {
+  0%   { transform: scale(0); opacity: 1; background: radial-gradient(circle, #7c3aed, transparent); }
+  100% { transform: scale(5); opacity: 0; }
+}
+
+@keyframes nvmeParticleLaser {
+  0%   { transform: scaleY(0); opacity: 1; }
+  50%  { transform: scaleY(3); opacity: 0.8; }
+  100% { transform: scaleY(0); opacity: 0; }
+}
+
+@keyframes nvmeParticleNova {
+  0%   { transform: scale(0) rotate(0deg); opacity: 1; }
+  50%  { transform: scale(2) rotate(180deg); opacity: 0.6; }
+  100% { transform: scale(4) rotate(360deg); opacity: 0; }
+}
+
+@keyframes nvmeParticleGravity {
+  0%   { transform: translate(var(--dx), 0); opacity: 1; }
+  100% { transform: translate(var(--dx), 200px); opacity: 0; }
+}
+
+@keyframes nvmeParticleAntiGrav {
+  0%   { transform: translate(var(--dx), 0); opacity: 1; }
+  100% { transform: translate(var(--dx), -200px); opacity: 0; }
+}
+
+@keyframes nvmeParticleSpin {
+  0%   { transform: rotate(0deg) translateX(0); opacity: 1; }
+  100% { transform: rotate(1440deg) translateX(100px); opacity: 0; }
+}
+
+@keyframes nvmeParticleBounce {
+  0%   { transform: translateY(0); opacity: 1; }
+  33%  { transform: translateY(-80px); }
+  66%  { transform: translateY(-20px); }
+  100% { transform: translateY(-120px); opacity: 0; }
+}
+
+@keyframes nvmeParticleTrail {
+  0%   { transform: translate(0, 0); opacity: 1; width: 8px; height: 8px; }
+  100% { transform: translate(var(--dx), var(--dy)); opacity: 0; width: 2px; height: 2px; }
+}
+
+@keyframes nvmeParticlePetal {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  25%  { transform: translate(30px, -40px) rotate(90deg); }
+  50%  { transform: translate(-20px, -80px) rotate(180deg); }
+  75%  { transform: translate(40px, -120px) rotate(270deg); }
+  100% { transform: translate(10px, -160px) rotate(360deg); opacity: 0; }
+}
+
+@keyframes nvmeParticleHeart {
+  0%   { transform: scale(0) rotate(-45deg); opacity: 1; }
+  50%  { transform: scale(1.3) rotate(-45deg); opacity: 0.8; }
+  100% { transform: scale(0) rotate(-45deg) translateY(-100px); opacity: 0; }
+}
+
+@keyframes nvmeParticleStar5 {
+  0%   { transform: scale(0) rotate(0deg); opacity: 1; }
+  50%  { transform: scale(1.5) rotate(72deg); opacity: 0.8; }
+  100% { transform: scale(0) rotate(144deg) translateY(-80px); opacity: 0; }
+}
+
+@keyframes nvmeParticleText {
+  0%   { transform: scale(0); opacity: 0; }
+  20%  { transform: scale(1.2); opacity: 1; }
+  80%  { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.5) translateY(-100px); opacity: 0; }
+}
+
+/* ============================================================
+   2. GIFT FLOAT-UP ANIMATIONS
+   ============================================================ */
+
+@keyframes nvmeGiftFloatUp {
+  0%   { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+  15%  { transform: translate(-50%, -30px) scale(1.2); opacity: 1; }
+  30%  { transform: translate(-50%, -60px) scale(1); }
+  100% { transform: translate(-50%, -300px) scale(0.8); opacity: 0; }
+}
+
+@keyframes nvmeGiftDrift {
+  0%   { transform: translate(-50%, 0) scale(0.5) rotate(0deg); opacity: 0; }
+  15%  { transform: translate(-50%, -30px) scale(1.1) rotate(5deg); opacity: 1; }
+  50%  { transform: translate(-40%, -120px) scale(1) rotate(-5deg); }
+  100% { transform: translate(-60%, -350px) scale(0.6) rotate(0deg); opacity: 0; }
+}
+
+@keyframes nvmeGiftSpiral {
+  0%   { transform: translate(-50%, 0) scale(0) rotate(0deg); opacity: 0; }
+  10%  { transform: translate(-50%, 0) scale(1.3) rotate(0deg); opacity: 1; }
+  100% { transform: translate(-50%, -250px) scale(0.5) rotate(1080deg); opacity: 0; }
+}
+
+@keyframes nvmeGiftBounce {
+  0%   { transform: translate(-50%, 0) scale(0); opacity: 0; }
+  20%  { transform: translate(-50%, 0) scale(1.3); opacity: 1; }
+  40%  { transform: translate(-50%, -100px) scale(1); }
+  55%  { transform: translate(-50%, -30px) scale(1.1); }
+  70%  { transform: translate(-50%, -150px) scale(0.9); }
+  85%  { transform: translate(-50%, -80px) scale(1); }
+  100% { transform: translate(-50%, -250px) scale(0.6); opacity: 0; }
+}
+
+@keyframes nvmeGiftExplode {
+  0%   { transform: translate(-50%, 0) scale(0); opacity: 0; }
+  10%  { transform: translate(-50%, 0) scale(2); opacity: 1; }
+  30%  { transform: translate(-50%, 0) scale(1.5); }
+  100% { transform: translate(-50%, -200px) scale(0); opacity: 0; }
+}
+
+@keyframes nvmeGiftMatrixRain {
+  0%   { transform: translate(-50%, -100vh) scale(1); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translate(-50%, 50vh) scale(0.8); opacity: 0; }
+}
+
+@keyframes nvmeScreenFlash {
+  0%   { opacity: 0; }
+  10%  { opacity: 1; }
+  30%  { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+@keyframes nvmeScreenShake {
+  0%   { transform: translate(0, 0); }
+  10%  { transform: translate(-5px, 5px); }
+  20%  { transform: translate(5px, -5px); }
+  30%  { transform: translate(-3px, 3px); }
+  40%  { transform: translate(3px, -3px); }
+  50%  { transform: translate(-2px, 2px); }
+  60%  { transform: translate(2px, -2px); }
+  70%  { transform: translate(-1px, 1px); }
+  80%  { transform: translate(1px, -1px); }
+  90%  { transform: translate(0, 1px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ============================================================
+   3. BERMUDA-THEMED ANIMATIONS
+   ============================================================ */
+
+@keyframes nvmeWavePulse {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 0; background: radial-gradient(ellipse, rgba(0,212,255,0.4), transparent 70%); }
+  30%  { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+}
+
+@keyframes nvmeCoralGrow {
+  0%   { clip-path: inset(100% 0 0 0); opacity: 0; }
+  40%  { clip-path: inset(50% 0 0 0); opacity: 1; }
+  100% { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+
+@keyframes nvmeGombeyDance {
+  0%   { transform: translate(-50%, 0) scale(0.5) rotate(0deg); opacity: 0; }
+  15%  { transform: translate(-50%, 0) scale(1.2) rotate(-15deg); opacity: 1; }
+  30%  { transform: translate(-50%, 0) scale(1) rotate(15deg); }
+  45%  { transform: translate(-50%, -20px) scale(1.1) rotate(-10deg); }
+  60%  { transform: translate(-50%, 0) scale(1) rotate(10deg); }
+  75%  { transform: translate(-50%, -15px) scale(1.05) rotate(-5deg); }
+  90%  { transform: translate(-50%, 0) scale(1) rotate(0deg); }
+  100% { transform: translate(-50%, -200px) scale(0.6) rotate(0deg); opacity: 0; }
+}
+
+@keyframes nvmeMoongateSpin {
+  0%   { transform: translate(-50%, 0) scale(0) rotate(0deg); opacity: 0; }
+  20%  { transform: translate(-50%, 0) scale(1.3) rotate(72deg); opacity: 1; }
+  40%  { transform: translate(-50%, 0) scale(1) rotate(144deg); box-shadow: 0 0 40px rgba(255,215,0,0.6); }
+  60%  { transform: translate(-50%, -30px) scale(1.1) rotate(216deg); box-shadow: 0 0 60px rgba(255,215,0,0.8); }
+  80%  { transform: translate(-50%, 0) scale(0.9) rotate(288deg); }
+  100% { transform: translate(-50%, -250px) scale(0.3) rotate(360deg); opacity: 0; }
+}
+
+@keyframes bermudaPinkSand {
+  0%   { opacity: 0; filter: hue-rotate(0deg); }
+  25%  { opacity: 0.4; filter: hue-rotate(0deg); }
+  50%  { opacity: 0.6; filter: hue-rotate(10deg); }
+  75%  { opacity: 0.4; filter: hue-rotate(0deg); }
+  100% { opacity: 0; filter: hue-rotate(0deg); }
+}
+
+@keyframes bermudaTriangleVortex {
+  0%   { opacity: 0; transform: rotate(0deg) scale(0.5); }
+  20%  { opacity: 0.6; transform: rotate(90deg) scale(1); }
+  50%  { opacity: 0.8; transform: rotate(270deg) scale(1.3); }
+  80%  { opacity: 0.6; transform: rotate(540deg) scale(1); }
+  100% { opacity: 0; transform: rotate(720deg) scale(0.5); }
+}
+
+@keyframes bermudaGlow {
+  0%   { filter: hue-rotate(0deg) brightness(1); }
+  50%  { filter: hue-rotate(30deg) brightness(1.2); }
+  100% { filter: hue-rotate(0deg) brightness(1); }
+}
+
+@keyframes bermudaSandStorm {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.nvme-bermuda-effect::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(255,107,157,0.15), transparent 70%);
+  pointer-events: none;
+  z-index: 99996;
+  animation: bermudaPinkSand 2.5s ease-out forwards;
+}
+
+.nvme-bermuda-triangle-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 99996;
+  background: conic-gradient(from 0deg at 50% 50%,
+    rgba(124,58,237,0.1) 0deg,
+    rgba(0,212,255,0.1) 120deg,
+    rgba(255,107,157,0.1) 240deg,
+    rgba(124,58,237,0.1) 360deg);
+  animation: bermudaTriangleVortex 3s linear forwards;
+}
+
+/* ============================================================
+   4. LEGENDARY GIFT ANIMATIONS
+   ============================================================ */
+
+@keyframes nvmeRainbowBurst {
+  0%   { transform: translate(-50%, 0) scale(0); opacity: 0; filter: hue-rotate(0deg); }
+  15%  { transform: translate(-50%, 0) scale(2); opacity: 1; }
+  30%  { transform: translate(-50%, 0) scale(1.8); filter: hue-rotate(60deg); }
+  50%  { transform: translate(-50%, -30px) scale(1.5); filter: hue-rotate(180deg); }
+  70%  { transform: translate(-50%, -60px) scale(1.2); filter: hue-rotate(270deg); }
+  100% { transform: translate(-50%, -250px) scale(0.3); opacity: 0; filter: hue-rotate(360deg); }
+}
+
+@keyframes nvmeLightningStrike {
+  0%   { transform: translate(-50%, 0) scale(0.5); opacity: 0; filter: brightness(1); }
+  10%  { transform: translate(-50%, 0) scale(3); opacity: 1; filter: brightness(3); }
+  20%  { transform: translate(-50%, 0) scale(1); opacity: 0.3; filter: brightness(1); }
+  30%  { transform: translate(-50%, 0) scale(2.5); opacity: 1; filter: brightness(2.5); }
+  40%  { transform: translate(-50%, 0) scale(1.2); opacity: 0.5; }
+  100% { transform: translate(-50%, -200px) scale(0); opacity: 0; }
+}
+
+@keyframes nvmeGalaxySwirl {
+  0%   { transform: translate(-50%, 0) scale(0) rotate(0deg); opacity: 0; }
+  10%  { transform: translate(-50%, 0) scale(0.8) rotate(36deg); opacity: 1; }
+  30%  { transform: translate(-50%, 0) scale(1.5) rotate(108deg); }
+  50%  { transform: translate(-50%, -40px) scale(1.3) rotate(180deg); box-shadow: 0 0 60px rgba(124,58,237,0.8); }
+  70%  { transform: translate(-50%, -80px) scale(1.1) rotate(252deg); }
+  100% { transform: translate(-50%, -250px) scale(0.2) rotate(360deg); opacity: 0; }
+}
+
+@keyframes nvmeScreenShake {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  10%  { transform: translate(-10px, -5px) rotate(-1deg); }
+  20%  { transform: translate(10px, 5px) rotate(1deg); }
+  30%  { transform: translate(-8px, 3px) rotate(-0.5deg); }
+  40%  { transform: translate(8px, -3px) rotate(0.5deg); }
+  50%  { transform: translate(-5px, 2px) rotate(-0.3deg); }
+  60%  { transform: translate(5px, -2px) rotate(0.3deg); }
+  70%  { transform: translate(-3px, 1px); }
+  80%  { transform: translate(3px, -1px); }
+  90%  { transform: translate(-1px, 0); }
+  100% { transform: translate(0, 0); }
+}
+
+.nvme-legendary-screen {
+  animation: nvmeScreenShake 3s ease-out;
+}
+
+.nvme-legendary-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at 50% 50%, transparent 20%, rgba(0,0,0,0.85) 100%);
+  z-index: 99997;
+  pointer-events: none;
+  animation: nvmeScreenFlash 3s ease-out forwards;
+}
+
+/* ============================================================
+   5. VIDEO PLAYER ANIMATIONS
+   ============================================================ */
+
+@keyframes nvmeLikeBurst {
+  0%   { transform: scale(0) rotate(-15deg); opacity: 0; }
+  30%  { transform: scale(1.4) rotate(0deg); opacity: 1; }
+  60%  { transform: scale(0.9) rotate(5deg); }
+  100% { transform: scale(1) rotate(0deg) translateY(-20px); opacity: 0; }
+}
+
+.nvme-like-burst {
+  animation: nvmeLikeBurst 0.8s ease-out forwards;
+}
+
+@keyframes nvmeCommentPop {
+  0%   { transform: translateX(100%) scale(0.5); opacity: 0; }
+  30%  { transform: translateX(0) scale(1.1); opacity: 1; }
+  50%  { transform: translateX(0) scale(1); }
+  100% { transform: translateX(-20%) scale(0.9); opacity: 0; }
+}
+
+.nvme-comment-pop {
+  animation: nvmeCommentPop 2.5s ease-out forwards;
+}
+
+@keyframes nvmeShareRipple {
+  0%   { transform: scale(0); opacity: 0.8; border-color: rgba(0,212,255,0.8); }
+  50%  { transform: scale(1); opacity: 0.4; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+.nvme-share-ripple {
+  animation: nvmeShareRipple 0.6s ease-out forwards;
+}
+
+@keyframes nvmeDoubleTapHeart {
+  0%   { transform: scale(0); opacity: 0; }
+  15%  { transform: scale(1.8); opacity: 1; }
+  30%  { transform: scale(0.8); }
+  45%  { transform: scale(1.3); }
+  60%  { transform: scale(1); }
+  100% { transform: scale(0.8) translateY(-40px); opacity: 0; }
+}
+
+.nvme-double-tap-heart {
+  animation: nvmeDoubleTapHeart 1s ease-out forwards;
+  font-size: 100px;
+  color: #ff4757;
+  text-shadow: 0 0 30px rgba(255,71,87,0.6);
+}
+
+@keyframes nvmeViewCount {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.2); color: #ffd700; }
+  100% { transform: scale(1); }
+}
+
+.nvme-view-count-pop {
+  animation: nvmeViewCount 0.5s ease-out;
+}
+
+@keyframes nvmePlayButton {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  30%  { transform: translate(-50%, -50%) scale(1.2); opacity: 0.7; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+.nvme-play-button {
+  animation: nvmePlayButton 0.6s ease-out forwards;
+}
+
+/* ============================================================
+   6. EPIC GRADIENT BACKGROUNDS
+   ============================================================ */
+
+@keyframes gradientShift1 {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes gradientShift2 {
+  0%   { background-position: 0% 0%; }
+  50%  { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+@keyframes gradientShift3 {
+  0%   { background-position: 50% 0%; }
+  50%  { background-position: 50% 100%; }
+  100% { background-position: 50% 0%; }
+}
+
+@keyframes gradientMorph {
+  0%   { border-radius: 60% 40% 30% 70%/60% 30% 70% 40%; }
+  50%  { border-radius: 30% 60% 70% 40%/50% 60% 30% 60%; }
+  100% { border-radius: 60% 40% 30% 70%/60% 30% 70% 40%; }
+}
+
+.nvme-gradient-bg-epic {
+  background: linear-gradient(-45deg, #0a0a0f, #7c3aed, #00d4ff, #ff6b9d, #0a0a0f);
+  background-size: 400% 400%;
+  animation: gradientShift1 15s ease infinite;
+}
+
+.nvme-gradient-bg-dream {
+  background: linear-gradient(135deg, #0a0a0f 0%, #7c3aed 25%, #00d4ff 50%, #ff6b9d 75%, #ffd700 100%);
+  background-size: 300% 300%;
+  animation: gradientShift2 20s ease infinite;
+}
+
+.nvme-gradient-bg-cyber {
+  background: linear-gradient(45deg, #0a0a0f, #7c3aed, #0a0a0f, #00d4ff, #0a0a0f);
+  background-size: 500% 500%;
+  animation: gradientShift3 12s ease infinite;
+}
+
+.nvme-gradient-bg-morph {
+  background: linear-gradient(135deg, #7c3aed, #00d4ff, #ff6b9d);
+  animation: gradientMorph 8s ease-in-out infinite;
+}
+
+/* ============================================================
+   7. HOLOGRAPHIC CARD EFFECTS
+   ============================================================ */
+
+@keyframes holoShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes holoColorShift {
+  0%   { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+@keyframes holoFloat {
+  0%, 100% { transform: translateY(0) rotateX(0deg) rotateY(0deg); }
+  25%  { transform: translateY(-5px) rotateX(2deg) rotateY(-2deg); }
+  50%  { transform: translateY(-10px) rotateX(0deg) rotateY(0deg); }
+  75%  { transform: translateY(-5px) rotateX(-2deg) rotateY(2deg); }
+}
+
+.nvme-holo-card {
+  position: relative;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border-radius: 16px;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+.nvme-holo-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255,255,255,0.1) 45%,
+    rgba(255,255,255,0.2) 50%,
+    rgba(255,255,255,0.1) 55%,
+    transparent 60%
+  );
+  background-size: 200% 100%;
+  animation: holoShimmer 3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.nvme-holo-card::after {
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(124,58,237,0.1),
+    rgba(0,212,255,0.1),
+    rgba(255,107,157,0.1),
+    rgba(255,215,0,0.1),
+    rgba(124,58,237,0.1)
+  );
+  animation: holoColorShift 6s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.nvme-holo-card:hover {
+  animation: holoFloat 2s ease-in-out infinite;
+}
+
+/* Rainbow holographic variant */
+.nvme-holo-rainbow::before {
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255,0,0,0.1) 35%,
+    rgba(255,165,0,0.1) 40%,
+    rgba(255,255,0,0.1) 45%,
+    rgba(0,128,0,0.1) 50%,
+    rgba(0,0,255,0.1) 55%,
+    rgba(128,0,128,0.1) 60%,
+    transparent 65%
+  );
+  background-size: 300% 100%;
+}
+
+/* ============================================================
+   8. 3D CARD FLIP FOR PROFILES
+   ============================================================ */
+
+@keyframes nvmeCardFlip {
+  0%   { transform: rotateY(0deg); }
+  100% { transform: rotateY(180deg); }
+}
+
+@keyframes nvmeCardFlipBack {
+  0%   { transform: rotateY(180deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+.nvme-card-3d {
+  perspective: 1000px;
+  width: 100%;
+  height: 100%;
+}
+
+.nvme-card-3d-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform-style: preserve-3d;
+}
+
+.nvme-card-3d:hover .nvme-card-3d-inner {
+  transform: rotateY(180deg);
+}
+
+.nvme-card-3d-front,
+.nvme-card-3d-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.nvme-card-3d-front {
+  background: linear-gradient(135deg, #1a1a2e, #7c3aed);
+}
+
+.nvme-card-3d-back {
+  background: linear-gradient(135deg, #7c3aed, #00d4ff);
+  transform: rotateY(180deg);
+}
+
+/* ============================================================
+   9. GLASSMORPHISM PANELS
+   ============================================================ */
+
+.nvme-glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.nvme-glass-dark {
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  border: 1px solid rgba(124, 58, 237, 0.15);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5),
+              inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.nvme-glass-colored {
+  background: rgba(124, 58, 237, 0.1);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(124, 58, 237, 0.2);
+}
+
+@keyframes glassPulse {
+  0%, 100% { border-color: rgba(124, 58, 237, 0.15); }
+  50%  { border-color: rgba(0, 212, 255, 0.3); }
+}
+
+.nvme-glass-pulse {
+  animation: glassPulse 3s ease-in-out infinite;
+}
+
+/* ============================================================
+   10. NEON GLOW TEXT EFFECTS
+   ============================================================ */
+
+@keyframes neonFlicker {
+  0%, 19.999%, 22%, 62.999%, 64%, 64.999%, 70%, 100% {
+    opacity: 1;
+    text-shadow:
+      0 0 4px currentColor,
+      0 0 11px currentColor,
+      0 0 19px currentColor,
+      0 0 40px currentColor,
+      0 0 80px currentColor;
+  }
+  20%, 21.999%, 63%, 63.999%, 65%, 69.999% {
+    opacity: 0.6;
+    text-shadow: none;
+  }
+}
+
+@keyframes neonPulse {
+  0%, 100% {
+    text-shadow:
+      0 0 4px currentColor,
+      0 0 11px currentColor,
+      0 0 19px currentColor;
+  }
+  50% {
+    text-shadow:
+      0 0 4px currentColor,
+      0 0 11px currentColor,
+      0 0 19px currentColor,
+      0 0 40px currentColor,
+      0 0 80px currentColor,
+      0 0 120px currentColor;
+  }
+}
+
+@keyframes neonColorCycle {
+  0%   { color: #ff4757; }
+  20%  { color: #ffd700; }
+  40%  { color: #00d4ff; }
+  60%  { color: #7c3aed; }
+  80%  { color: #ff6b9d; }
+  100% { color: #ff4757; }
+}
+
+.nvme-neon-text {
+  color: currentColor;
+  text-shadow:
+    0 0 4px currentColor,
+    0 0 11px currentColor,
+    0 0 19px currentColor,
+    0 0 40px currentColor;
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+.nvme-neon-text-pink {
+  color: #ff6b9d;
+  text-shadow:
+    0 0 4px #ff6b9d,
+    0 0 11px #ff6b9d,
+    0 0 19px #ff6b9d,
+    0 0 40px #ff6b9d;
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+.nvme-neon-text-cyan {
+  color: #00d4ff;
+  text-shadow:
+    0 0 4px #00d4ff,
+    0 0 11px #00d4ff,
+    0 0 19px #00d4ff,
+    0 0 40px #00d4ff;
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+.nvme-neon-text-purple {
+  color: #7c3aed;
+  text-shadow:
+    0 0 4px #7c3aed,
+    0 0 11px #7c3aed,
+    0 0 19px #7c3aed,
+    0 0 40px #7c3aed;
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+.nvme-neon-text-gold {
+  color: #ffd700;
+  text-shadow:
+    0 0 4px #ffd700,
+    0 0 11px #ffd700,
+    0 0 19px #ffd700,
+    0 0 40px #ffd700;
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+.nvme-neon-flicker {
+  animation: neonFlicker 1.5s infinite alternate;
+}
+
+.nvme-neon-cycle {
+  animation: neonColorCycle 5s linear infinite;
+  text-shadow:
+    0 0 4px currentColor,
+    0 0 11px currentColor,
+    0 0 19px currentColor,
+    0 0 40px currentColor;
+}
+
+/* ============================================================
+   11. SVG NOISE & FILTER EFFECTS
+   ============================================================ */
+
+.nvme-noise-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 99995;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  mix-blend-mode: overlay;
+}
+
+.nvme-grain {
+  position: relative;
+}
+
+.nvme-grain::after {
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  pointer-events: none;
+  animation: grainShift 0.5s steps(1) infinite;
+}
+
+@keyframes grainShift {
+  0%   { transform: translate(0, 0); }
+  10%  { transform: translate(-5%, -5%); }
+  20%  { transform: translate(-10%, 5%); }
+  30%  { transform: translate(5%, -10%); }
+  40%  { transform: translate(-5%, 15%); }
+  50%  { transform: translate(-10%, 5%); }
+  60%  { transform: translate(15%, 0); }
+  70%  { transform: translate(0, 10%); }
+  80%  { transform: translate(3%, 15%); }
+  90%  { transform: translate(-10%, 10%); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ============================================================
+   12. SCROLL SNAP & TIKTOK FEED HELPERS
+   ============================================================ */
+
+.nvme-snap-container {
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+  height: 100vh;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.nvme-snap-item {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  height: 100vh;
+  width: 100%;
+  position: relative;
+}
+
+.nvme-scroll-fade-top {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+}
+
+.nvme-scroll-fade-bottom {
+  mask-image: linear-gradient(to bottom, black 0%, black 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 80%, transparent 100%);
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.nvme-hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.nvme-hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================================
+   13. RESPONSIVE UTILITY CLASSES
+   ============================================================ */
+
+/* Mobile-first helpers */
+.nvme-mobile-only { display: block; }
+.nvme-desktop-only { display: none; }
+.nvme-tablet-only { display: none; }
+
+@media (min-width: 768px) {
+  .nvme-mobile-only { display: none; }
+  .nvme-tablet-only { display: block; }
+  .nvme-desktop-only { display: none; }
+}
+
+@media (min-width: 1024px) {
+  .nvme-mobile-only { display: none; }
+  .nvme-tablet-only { display: none; }
+  .nvme-desktop-only { display: block; }
+}
+
+/* Safe area for notched devices */
+.nvme-safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.nvme-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.nvme-safe-left { padding-left: env(safe-area-inset-left, 0px); }
+.nvme-safe-right { padding-right: env(safe-area-inset-right, 0px); }
+
+/* ============================================================
+   14. TAP & TOUCH ANIMATIONS
+   ============================================================ */
+
+@keyframes nvmeTapRipple {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 0.5; }
+  100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+}
+
+.nvme-tap-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.4);
+  pointer-events: none;
+  animation: nvmeTapRipple 0.6s ease-out forwards;
+}
+
+@keyframes nvmeSwipeUp {
+  0%   { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes nvmeSwipeDown {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes nvmeSlideInLeft {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes nvmeSlideInRight {
+  0%   { transform: translateX(100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes nvmeSlideInUp {
+  0%   { transform: translateY(100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes nvmeSlideInDown {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes nvmeFadeIn {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes nvmeFadeOut {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes nvmeScaleIn {
+  0%   { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes nvmeScaleOut {
+  0%   { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes nvmeZoomIn {
+  0%   { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes nvmeBounceIn {
+  0%   { transform: scale(0.3); opacity: 0; }
+  50%  { transform: scale(1.05); }
+  70%  { transform: scale(0.9); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes nvmeRotateIn {
+  0%   { transform: rotate(-200deg) scale(0); opacity: 0; }
+  100% { transform: rotate(0deg) scale(1); opacity: 1; }
+}
+
+@keyframes nvmeFlipX {
+  0%   { transform: perspective(400px) rotateX(90deg); opacity: 0; }
+  40%  { transform: perspective(400px) rotateX(-10deg); }
+  70%  { transform: perspective(400px) rotateX(10deg); }
+  100% { transform: perspective(400px) rotateX(0deg); opacity: 1; }
+}
+
+@keyframes nvmeFlipY {
+  0%   { transform: perspective(400px) rotateY(90deg); opacity: 0; }
+  40%  { transform: perspective(400px) rotateY(-10deg); }
+  70%  { transform: perspective(400px) rotateY(10deg); }
+  100% { transform: perspective(400px) rotateY(0deg); opacity: 1; }
+}
+
+/* Animation utility classes */
+.nvme-animate-slide-up { animation: nvmeSlideInUp 0.4s ease-out; }
+.nvme-animate-slide-down { animation: nvmeSlideInDown 0.4s ease-out; }
+.nvme-animate-slide-left { animation: nvmeSlideInLeft 0.4s ease-out; }
+.nvme-animate-slide-right { animation: nvmeSlideInRight 0.4s ease-out; }
+.nvme-animate-fade-in { animation: nvmeFadeIn 0.3s ease-out; }
+.nvme-animate-fade-out { animation: nvmeFadeOut 0.3s ease-out; }
+.nvme-animate-scale-in { animation: nvmeScaleIn 0.3s ease-out; }
+.nvme-animate-bounce-in { animation: nvmeBounceIn 0.6s ease-out; }
+.nvme-animate-zoom-in { animation: nvmeZoomIn 0.3s ease-out; }
+.nvme-animate-rotate-in { animation: nvmeRotateIn 0.6s ease-out; }
+.nvme-animate-flip-x { animation: nvmeFlipX 0.6s ease-out; }
+.nvme-animate-flip-y { animation: nvmeFlipY 0.6s ease-out; }
+
+/* ============================================================
+   15. GIFT ANIMATION CLASSES (applied to gift elements)
+   ============================================================ */
+
+.nvme-gift-float-up { animation: nvmeGiftFloatUp 2s ease-out forwards; }
+.nvme-gift-drift { animation: nvmeGiftDrift 2.5s ease-out forwards; }
+.nvme-gift-spiral { animation: nvmeGiftSpiral 2s linear forwards; }
+.nvme-gift-bounce { animation: nvmeGiftBounce 2.5s ease-out forwards; }
+.nvme-gift-explode { animation: nvmeGiftExplode 1.5s ease-out forwards; }
+.nvme-gift-matrix-rain { animation: nvmeGiftMatrixRain 2s linear forwards; }
+.nvme-gift-wave-pulse { animation: nvmeWavePulse 2s ease-out forwards; }
+.nvme-gift-coral-grow { animation: nvmeCoralGrow 1.5s ease-out forwards; }
+.nvme-gift-gombey-dance { animation: nvmeGombeyDance 2.5s ease-out forwards; }
+.nvme-gift-moongate-spin { animation: nvmeMoongateSpin 2s ease-out forwards; }
+.nvme-gift-rainbow-burst { animation: nvmeRainbowBurst 2s ease-out forwards; }
+.nvme-gift-lightning-strike { animation: nvmeLightningStrike 1.5s ease-out forwards; }
+.nvme-gift-galaxy-swirl { animation: nvmeGalaxySwirl 2.5s ease-out forwards; }
+.nvme-gift-screen-shake { animation: nvmeScreenShake 0.8s ease-out forwards; }
+
+/* ============================================================
+   16. LOADING & SKELETON ANIMATIONS
+   ============================================================ */
+
+@keyframes nvmeSkeletonPulse {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.nvme-skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+  background-size: 200% 100%;
+  animation: nvmeSkeletonPulse 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes nvmeSpin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.nvme-spinner {
+  animation: nvmeSpin 1s linear infinite;
+}
+
+@keyframes nvmePulse {
+  0%, 100% { opacity: 1; }
+  50%  { opacity: 0.5; }
+}
+
+.nvme-pulse {
+  animation: nvmePulse 2s ease-in-out infinite;
+}
+
+@keyframes nvmeTyping {
+  0%   { opacity: 0; }
+  50%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.nvme-typing-dot {
+  animation: nvmeTyping 1.4s infinite;
+}
+
+.nvme-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.nvme-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ============================================================
+   17. BUTTON & INTERACTIVE STATES
+   ============================================================ */
+
+@keyframes nvmeButtonGlow {
+  0%, 100% { box-shadow: 0 0 5px currentColor; }
+  50%  { box-shadow: 0 0 20px currentColor, 0 0 40px currentColor; }
+}
+
+.nvme-btn-glow {
+  animation: nvmeButtonGlow 2s ease-in-out infinite;
+}
+
+@keyframes nvmeShimmer {
+  0%   { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+.nvme-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%);
+  background-size: 1000px 100%;
+  animation: nvmeShimmer 2s infinite linear;
+}
+
+/* ============================================================
+   18. CHAT & COMMENT ANIMATIONS
+   ============================================================ */
+
+@keyframes nvmeChatBubble {
+  0%   { transform: scale(0) translateY(10px); opacity: 0; }
+  50%  { transform: scale(1.05) translateY(-2px); }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.nvme-chat-bubble {
+  animation: nvmeChatBubble 0.3s ease-out;
+}
+
+@keyframes nvmeFloatingEmoji {
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-200px) scale(0.5); opacity: 0; }
+}
+
+.nvme-floating-emoji {
+  animation: nvmeFloatingEmoji 2s ease-out forwards;
+  position: fixed;
+  font-size: 32px;
+  pointer-events: none;
+  z-index: 99999;
+}
+
+/* ============================================================
+   19. VIDEO CALL ANIMATIONS
+   ============================================================ */
+
+@keyframes nvmeIncomingCall {
+  0%, 100% { transform: scale(1); }
+  50%  { transform: scale(1.05); }
+}
+
+.nvme-incoming-call {
+  animation: nvmeIncomingCall 1s ease-in-out infinite;
+}
+
+@keyframes nvmeCallPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.7); }
+  70%  { box-shadow: 0 0 0 20px rgba(0, 212, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0); }
+}
+
+.nvme-call-pulse {
+  animation: nvmeCallPulse 1.5s infinite;
+}
+
+@keyframes nvmeVideoGridItem {
+  0%   { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.nvme-video-grid-item {
+  animation: nvmeVideoGridItem 0.5s ease-out;
+}
+
+/* ============================================================
+   20. AI GENERATOR ANIMATIONS
+   ============================================================ */
+
+@keyframes nvmeGenerate {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.nvme-generating {
+  background: linear-gradient(270deg, #7c3aed, #00d4ff, #ff6b9d, #7c3aed);
+  background-size: 600% 600%;
+  animation: nvmeGenerate 4s ease infinite;
+}
+
+@keyframes nvmeProgressShine {
+  0%   { left: -100%; }
+  100% { left: 100%; }
+}
+
+.nvme-progress-shine::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 50%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: nvmeProgressShine 1.5s infinite;
+}
+
+/* ============================================================
+   21. GLOBAL DARK THEME BASE
+   ============================================================ */
+
+body.nvme-dark {
+  background-color: #0a0a0f;
+  color: #ffffff;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.nvme-dark a { color: #00d4ff; text-decoration: none; }
+.nvme-dark a:hover { color: #7c3aed; }
+
+/* Selection color */
+.nvme-dark ::selection {
+  background: rgba(124, 58, 237, 0.4);
+  color: #fff;
+}
+
+/* Focus outline */
+.nvme-dark *:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+/* Scrollbar */
+.nvme-dark ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.nvme-dark ::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.03);
+}
+
+.nvme-dark ::-webkit-scrollbar-thumb {
+  background: rgba(124, 58, 237, 0.4);
+  border-radius: 3px;
+}
+
+.nvme-dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 58, 237, 0.6);
+}
+
+/* ============================================================
+   22. COLOR UTILITY CLASSES
+   ============================================================ */
+
+.nvme-color-purple { color: #7c3aed; }
+.nvme-color-cyan { color: #00d4ff; }
+.nvme-color-pink { color: #ff6b9d; }
+.nvme-color-gold { color: #ffd700; }
+.nvme-color-red { color: #ff4757; }
+.nvme-color-green { color: #00d4ff; }
+.nvme-color-white { color: #ffffff; }
+.nvme-color-gray { color: #8b8b8b; }
+
+.nvme-bg-purple { background-color: #7c3aed; }
+.nvme-bg-cyan { background-color: #00d4ff; }
+.nvme-bg-pink { background-color: #ff6b9d; }
+.nvme-bg-gold { background-color: #ffd700; }
+.nvme-bg-dark { background-color: #0a0a0f; }
+.nvme-bg-dark-light { background-color: #1a1a2e; }
+
+/* ============================================================
+   23. NVME GIFT PANEL GRID RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 480px) {
+  .nvme-gift-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+  .nvme-gift-item {
+    padding: 8px 4px !important;
+  }
+  .nvme-gift-item > div:first-child {
+    font-size: 24px !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .nvme-gift-grid {
+    grid-template-columns: repeat(6, 1fr) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .nvme-gift-grid {
+    grid-template-columns: repeat(8, 1fr) !important;
+  }
+}

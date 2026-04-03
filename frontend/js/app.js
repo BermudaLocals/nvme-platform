@@ -448,6 +448,21 @@ const NVME = {
     return /^[+]?[\d\s()-]{10,}$/.test(phone);
   },
 
+  // Validation helpers (used by login.html and signup.html)
+  validate: {
+    email(value) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    },
+    phone(value) {
+      return /^[+]?[\d\s()-]{10,}$/.test(value);
+    },
+    username(value) {
+      return /^[a-zA-Z0-9_]{3,20}$/.test(value);
+    },
+    password(value) {
+      return value && value.length >= 6;
+    }
+  },
   // Get URL parameters
   getUrlParams() {
     return Object.fromEntries(new URLSearchParams(window.location.search));

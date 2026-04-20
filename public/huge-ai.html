@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NVME - HUGE AI Avatar</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a0a2e 50%, #2d1b69 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+        
+        .anyma-container {
+            position: fixed;
+            top: 10%;
+            left: 10%;
+            width: 80%;
+            height: 80%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .huge-avatar {
+            width: 600px;
+            height: 600px;
+            position: relative;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-30px) rotate(2deg); }
+            50% { transform: translateY(-10px) rotate(0deg); }
+            75% { transform: translateY(-20px) rotate(-2deg); }
+        }
+        
+        .avatar-core {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, 
+                #ff006e 0%, 
+                #8338ec 30%, 
+                #3a86ff 60%, 
+                #00f5d4 100%);
+            position: relative;
+            box-shadow: 
+                0 0 100px rgba(255, 0, 110, 0.8),
+                0 0 200px rgba(131, 56, 236, 0.6),
+                0 0 300px rgba(58, 134, 255, 0.4),
+                inset 0 0 100px rgba(255, 255, 255, 0.2);
+            animation: pulse 4s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); filter: hue-rotate(0deg); }
+            50% { transform: scale(1.05); filter: hue-rotate(30deg); }
+        }
+        
+        .ai-face {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 70%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .eyes {
+            display: flex;
+            gap: 80px;
+            margin-bottom: 60px;
+        }
+        
+        .eye {
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle at 30% 30%, #fff 0%, #a5f3fc 50%, #00d4aa 100%);
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 60px rgba(0, 212, 170, 0.8), inset 0 0 30px rgba(0, 0, 0, 0.3);
+            animation: blink 5s infinite;
+        }
+        
+        .eye::after {
+            content: '';
+            position: absolute;
+            top: 30%;
+            left: 30%;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(#000, #1a1a2e);
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0, 212, 170, 0.9);
+        }
+        
+        @keyframes blink {
+            0%, 48%, 52%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(0.1); }
+        }
+        
+        .mouth {
+            width: 200px;
+            height: 100px;
+            border-bottom: 15px solid rgba(255, 255, 255, 0.9);
+            border-radius: 0 0 200px 200px;
+            box-shadow: 0 20px 50px rgba(0, 245, 212, 0.5);
+            animation: smile 3s ease-in-out infinite;
+        }
+        
+        @keyframes smile {
+            0%, 100% { transform: scaleX(1); }
+            50% { transform: scaleX(1.1); }
+        }
+        
+        .orbit {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: orbit-rotate 20s linear infinite;
+        }
+        
+        .orbit-particle {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(45deg, #ff006e, #8338ec);
+            border-radius: 50%;
+            box-shadow: 0 0 50px currentColor;
+        }
+        
+        .orbit-particle:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%); }
+        .orbit-particle:nth-child(2) { top: 50%; right: 0; transform: translateY(-50%); }
+        .orbit-particle:nth-child(3) { bottom: 0; left: 50%; transform: translateX(-50%); }
+        .orbit-particle:nth-child(4) { top: 50%; left: 0; transform: translateY(-50%); }
+        
+        @keyframes orbit-rotate {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        .status-text {
+            margin-top: 60px;
+            text-align: center;
+            color: white;
+        }
+        
+        .status-text h1 {
+            font-size: 72px;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff006e, #8338ec, #3a86ff, #00f5d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 100px rgba(131, 56, 236, 0.5);
+            animation: glow-text 3s ease-in-out infinite;
+            letter-spacing: -2px;
+        }
+        
+        @keyframes glow-text {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.3); }
+        }
+        
+        .status-text .subtitle {
+            font-size: 32px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 20px;
+            font-weight: 300;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+        }
+        
+        .status-text .stats {
+            font-size: 24px;
+            color: rgba(0, 245, 212, 0.9);
+            margin-top: 30px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            animation: particle-float 10s infinite linear;
+        }
+        
+        @keyframes particle-float {
+            from { transform: translateY(100vh) scale(0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            to { transform: translateY(-100vh) scale(1); opacity: 0; }
+        }
+        
+        @media (max-width: 768px) {
+            .huge-avatar { width: 350px; height: 350px; }
+            .eye { width: 70px; height: 70px; }
+            .eyes { gap: 40px; margin-bottom: 30px; }
+            .mouth { width: 120px; height: 60px; border-width: 8px; }
+            .status-text h1 { font-size: 40px; }
+            .status-text .subtitle { font-size: 18px; }
+            .orbit { width: 450px; height: 450px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="particles" id="particles"></div>
+    
+    <div class="anyma-container">
+        <div class="huge-avatar">
+            <div class="orbit">
+                <div class="orbit-particle"></div>
+                <div class="orbit-particle"></div>
+                <div class="orbit-particle"></div>
+                <div class="orbit-particle"></div>
+            </div>
+            
+            <div class="avatar-core">
+                <div class="ai-face">
+                    <div class="eyes">
+                        <div class="eye"></div>
+                        <div class="eye"></div>
+                    </div>
+                    <div class="mouth"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status-text">
+            <h1>&#10021; NVME &#10021;</h1>
+            <div class="subtitle">AI CREATOR PLATFORM</div>
+            <div class="stats" id="stats">
+                <span>50,435 CREATORS</span> | 
+                <span>500+ GIFTS</span> | 
+                <span>PLATFORM LIVE</span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const particlesContainer = document.getElementById('particles');
+        for (let i = 0; i < 50; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 10 + 's';
+            particle.style.animationDuration = (10 + Math.random() * 10) + 's';
+            particlesContainer.appendChild(particle);
+        }
+        
+        async function updateStats() {
+            try {
+                const res = await fetch('/api/creators/stats');
+                const data = await res.json();
+                document.getElementById('stats').innerHTML = `
+                    <span>${data.creators.toLocaleString()} CREATORS</span> | 
+                    <span>${data.gifts.toLocaleString()} GIFTS</span> | 
+                    <span>${data.status.toUpperCase()}</span>
+                `;
+            } catch(e) {
+                console.log('Stats update failed');
+            }
+        }
+        updateStats();
+        setInterval(updateStats, 5000);
+    </script>
+</body>
+</html>

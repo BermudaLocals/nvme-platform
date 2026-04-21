@@ -6,6 +6,8 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const tiktokFeatures = require('./tiktok-features');
+const tiktokImport = require('./tiktok-import');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -83,6 +85,10 @@ app.get('/api/health', (req, res) => {
   };
   res.json(checks);
 });
+
+// ─── TIKTOK-STYLE FEATURES (VS Battles, FYP, Duet, Stitch, Challenges, Analytics, Live Rooms, Shop, Sounds, Payouts) ─
+tiktokFeatures.setupRoutes(app);
+tiktokImport.setupRoutes(app);
 
 // ─── CREATORS ────────────────────────────────────────────────────────────────
 app.get('/api/creators/stats', (req, res) => {

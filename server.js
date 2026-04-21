@@ -496,6 +496,11 @@ app.post('/api/game/crown-anchor/roll', (req, res) => {
 });
 
 // ─── CATCH-ALL → SPA ─────────────────────────────────────────────────────────
+
+// PWA App route
+app.get('/app', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app.html'));
+});
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

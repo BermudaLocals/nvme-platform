@@ -1,83 +1,1018 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="NVME">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="description" content="NVME - Creator platform with 55% revenue share, 10v10 battles, and no shadowbans">
-<title>NVME - Creator Platform</title>
-<link rel="manifest" href="/manifest.json?v=210">
-<link rel="apple-touch-icon" href="/icons/icon-192.png?v=210">
-<link rel="icon" type="image/png" href="/icons/icon-192.png?v=210">
-<link rel="stylesheet" href="/styles.css?v=210">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="description" content="NVME.live – The AI-Powered Super-Platform Where Creators Earn Real Money. Bermuda's Premier Creator Platform."/>
+<title>NVME.live – Create. Earn. Dominate.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#080810;
+  --surface:#0f0f1a;
+  --card:#131320;
+  --card2:#161628;
+  --border:rgba(255,255,255,0.07);
+  --border-hot:rgba(255,46,90,0.35);
+  --accent:#ff2e5a;
+  --accent2:#ff8800;
+  --gold:#ffc840;
+  --green:#00f5a0;
+  --blue:#3d8bff;
+  --text:#eeeeff;
+  --muted:#7777aa;
+  --dim:#44446a;
+  --radius:16px;
+  --glow-red:0 0 60px rgba(255,46,90,0.25);
+  --glow-gold:0 0 60px rgba(255,200,64,0.2);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'DM Sans',sans-serif;
+  overflow-x:hidden;
+  line-height:1.6;
+}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--accent);border-radius:4px}
+
+/* NOISE */
+body::after{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:9998;mix-blend-mode:overlay;
+}
+
+/* ── NAV ─────────────────────────────────────────────────────── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:500;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 40px;height:64px;
+  background:rgba(8,8,16,0.88);
+  backdrop-filter:blur(24px) saturate(180%);
+  border-bottom:1px solid var(--border);
+}
+.logo{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:26px;letter-spacing:4px;
+  background:linear-gradient(120deg,#ff2e5a,#ff8800);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.nav-right{display:flex;align-items:center;gap:10px}
+.nav-link{
+  padding:7px 18px;border-radius:8px;
+  color:var(--muted);font-size:14px;font-weight:500;
+  text-decoration:none;transition:.2s;cursor:pointer;background:none;border:none;
+  font-family:'DM Sans',sans-serif;
+}
+.nav-link:hover{color:var(--text);background:rgba(255,255,255,0.05)}
+.btn-nav{
+  padding:8px 22px;border-radius:9px;
+  background:linear-gradient(135deg,#ff2e5a,#ff8800);
+  border:none;color:#fff;font-size:14px;font-weight:600;
+  cursor:pointer;font-family:'DM Sans',sans-serif;
+  transition:.2s;letter-spacing:.3px;
+}
+.btn-nav:hover{opacity:.85;transform:translateY(-1px)}
+
+/* ── TICKER ──────────────────────────────────────────────────── */
+.ticker{
+  position:fixed;top:64px;left:0;right:0;z-index:499;
+  background:linear-gradient(90deg,#ff2e5a,#ff8800,#ff2e5a);
+  background-size:200% 100%;
+  animation:tickerBg 4s linear infinite;
+  padding:8px 0;overflow:hidden;
+}
+@keyframes tickerBg{from{background-position:0 0}to{background-position:200% 0}}
+.ticker-track{
+  display:flex;gap:0;white-space:nowrap;
+  animation:scrollTicker 30s linear infinite;
+  will-change:transform;
+}
+.ticker-item{
+  padding:0 32px;font-size:12px;font-weight:700;
+  letter-spacing:.8px;text-transform:uppercase;color:#fff;
+  opacity:.95;display:flex;align-items:center;gap:8px;
+}
+.ticker-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.6)}
+@keyframes scrollTicker{
+  from{transform:translateX(0)}
+  to{transform:translateX(-50%)}
+}
+
+/* ── HERO ─────────────────────────────────────────────────────── */
+.hero{
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;
+  padding:160px 24px 80px;
+  position:relative;overflow:hidden;
+}
+.hero-orb{
+  position:absolute;border-radius:50%;filter:blur(80px);
+  pointer-events:none;
+}
+.orb1{width:600px;height:600px;top:-100px;left:-200px;background:radial-gradient(circle,rgba(255,46,90,0.15),transparent 70%)}
+.orb2{width:500px;height:500px;bottom:-100px;right:-150px;background:radial-gradient(circle,rgba(255,136,0,0.12),transparent 70%)}
+.orb3{width:300px;height:300px;top:50%;left:50%;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(61,139,255,0.08),transparent 70%)}
+
+.hero-pill{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,46,90,0.1);
+  border:1px solid rgba(255,46,90,0.25);
+  border-radius:100px;padding:6px 16px 6px 10px;
+  font-size:13px;font-weight:600;color:var(--accent);
+  margin-bottom:28px;
+  opacity:0;animation:riseIn .5s .1s ease forwards;
+}
+.hero-pill-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--accent);animation:pulse 1.5s infinite;
+}
+.hero-h1{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(72px,12vw,148px);
+  line-height:.9;letter-spacing:3px;
+  background:linear-gradient(145deg,#ffffff 0%,#ffcc80 40%,#ff2e5a 80%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  margin-bottom:28px;
+  opacity:0;animation:riseIn .6s .2s ease forwards;
+}
+.hero-desc{
+  font-size:clamp(16px,2vw,20px);color:var(--muted);
+  max-width:600px;margin:0 auto 44px;
+  opacity:0;animation:riseIn .6s .3s ease forwards;
+  line-height:1.7;
+}
+.hero-desc strong{color:var(--text);font-weight:600}
+
+.hero-stats{
+  display:flex;gap:56px;justify-content:center;flex-wrap:wrap;
+  margin-bottom:52px;
+  opacity:0;animation:riseIn .6s .4s ease forwards;
+}
+.h-stat-val{
+  font-family:'Bebas Neue',sans-serif;font-size:44px;letter-spacing:1px;
+  background:linear-gradient(135deg,var(--gold),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;display:block;
+}
+.h-stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-top:-4px}
+
+.btn-cta{
+  display:inline-block;
+  padding:20px 56px;border-radius:14px;
+  background:linear-gradient(135deg,#ff2e5a,#ff8800);
+  color:#fff;font-size:20px;font-weight:700;
+  letter-spacing:.3px;border:none;cursor:pointer;
+  font-family:'DM Sans',sans-serif;
+  box-shadow:0 8px 48px rgba(255,46,90,0.45);
+  text-decoration:none;transition:.3s;
+  opacity:0;animation:riseIn .6s .5s ease forwards;
+}
+.btn-cta:hover{transform:translateY(-4px);box-shadow:0 16px 64px rgba(255,46,90,0.6)}
+
+.hero-fine{
+  margin-top:14px;font-size:13px;color:var(--dim);
+  opacity:0;animation:riseIn .6s .55s ease forwards;
+}
+.hero-fine span{color:var(--muted)}
+
+.hero-earnings-bar{
+  margin-top:32px;
+  display:inline-flex;align-items:center;gap:10px;
+  background:rgba(255,200,64,0.07);
+  border:1px solid rgba(255,200,64,0.2);
+  border-radius:12px;padding:12px 24px;
+  font-size:15px;color:var(--gold);
+  opacity:0;animation:riseIn .6s .6s ease forwards;
+}
+.hero-earnings-bar strong{font-size:18px;font-weight:700}
+
+/* ── COUNTDOWN ────────────────────────────────────────────────── */
+.countdown-wrap{
+  display:flex;justify-content:center;
+  padding:20px 24px 80px;
+  opacity:0;animation:riseIn .6s .65s ease forwards;
+}
+.countdown-box{
+  background:rgba(255,136,0,0.06);
+  border:1px solid rgba(255,136,0,0.2);
+  border-radius:var(--radius);padding:24px 56px;
+  text-align:center;
+}
+.cd-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
+.cd-time{
+  font-family:'JetBrains Mono',monospace;font-size:56px;font-weight:600;
+  background:linear-gradient(135deg,var(--gold),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  letter-spacing:4px;
+}
+
+/* ── SECTION SHELL ────────────────────────────────────────────── */
+.section{padding:100px 24px;max-width:1200px;margin:0 auto}
+.section-full{padding:100px 24px;background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.section-inner{max-width:1200px;margin:0 auto}
+
+.s-eyebrow{
+  display:inline-block;font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:2px;color:var(--accent);
+  margin-bottom:12px;
+}
+.s-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(40px,6vw,72px);
+  letter-spacing:2px;text-align:center;margin-bottom:14px;
+}
+.s-sub{
+  text-align:center;color:var(--muted);font-size:16px;
+  max-width:560px;margin:0 auto 64px;line-height:1.7;
+}
+
+/* ── FEATURES GRID ───────────────────────────────────────────── */
+.features-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+  gap:20px;
+}
+.feat-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;padding:32px;
+  position:relative;overflow:hidden;
+  transition:transform .3s, border-color .3s, box-shadow .3s;
+  cursor:default;
+}
+.feat-card:hover{
+  transform:translateY(-6px);
+  border-color:var(--border-hot);
+  box-shadow:var(--glow-red);
+}
+.feat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  transform:scaleX(0);transform-origin:left;transition:.3s;
+}
+.feat-card:hover::before{transform:scaleX(1)}
+.feat-lock{
+  position:absolute;top:18px;right:18px;
+  background:rgba(255,46,90,0.12);
+  border:1px solid rgba(255,46,90,0.25);
+  border-radius:8px;padding:3px 10px;
+  font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.5px;
+}
+.feat-icon{font-size:40px;margin-bottom:18px;display:block}
+.feat-card h3{font-size:20px;font-weight:700;margin-bottom:10px;letter-spacing:-.2px}
+.feat-card p{color:var(--muted);font-size:14px;line-height:1.7;margin-bottom:18px}
+.feat-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(0,245,160,0.08);
+  border:1px solid rgba(0,245,160,0.2);
+  border-radius:100px;padding:4px 12px;
+  font-size:12px;color:var(--green);font-weight:600;
+}
+.feat-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block}
+
+/* ── TESTIMONIALS ─────────────────────────────────────────────── */
+.testi-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  gap:20px;
+}
+.testi-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:28px;
+  transition:transform .3s,border-color .3s;
+}
+.testi-card:hover{transform:translateY(-3px);border-color:rgba(255,200,64,0.25)}
+.tc-header{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.tc-avatar{
+  width:48px;height:48px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:15px;flex-shrink:0;
+  font-family:'Bebas Neue',sans-serif;letter-spacing:1px;
+}
+.tc-name{font-weight:700;font-size:15px}
+.tc-handle{font-size:12px;color:var(--muted)}
+.tc-earned{
+  margin-bottom:14px;
+  background:rgba(0,245,160,0.07);
+  border:1px solid rgba(0,245,160,0.18);
+  border-radius:8px;padding:8px 14px;
+  font-size:13px;font-weight:600;color:var(--green);
+  display:flex;align-items:center;gap:6px;
+}
+.tc-quote{color:var(--muted);font-size:14px;line-height:1.75;font-style:italic}
+.tc-quote::before{content:'"';font-size:28px;color:var(--border-hot);line-height:0;vertical-align:-10px;margin-right:2px}
+.tc-joined{font-size:11px;color:var(--dim);margin-top:14px;text-transform:uppercase;letter-spacing:.8px}
+
+/* ── LIVE ACTIVITY ────────────────────────────────────────────── */
+.live-header{display:flex;flex-direction:column;align-items:center;margin-bottom:40px}
+.live-badge{
+  display:inline-flex;align-items:center;gap:7px;
+  background:rgba(255,46,90,0.1);
+  border:1px solid rgba(255,46,90,0.25);
+  border-radius:100px;padding:5px 14px;
+  font-size:12px;font-weight:700;color:var(--accent);
+  text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;
+}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease infinite}
+.activity-stream{
+  max-width:640px;margin:0 auto;
+  display:flex;flex-direction:column;gap:10px;
+}
+.act-item{
+  display:flex;align-items:center;gap:14px;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:14px 18px;
+  animation:slideRight .4s ease;
+}
+.act-pip{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.pip-join{background:var(--accent)}
+.pip-earn{background:var(--green)}
+.pip-video{background:var(--blue)}
+.act-text{flex:1;font-size:14px}
+.act-text strong{color:var(--accent);font-weight:600}
+.act-time{font-size:11px;color:var(--dim);flex-shrink:0}
+
+/* ── GLOBAL STATS BAR ─────────────────────────────────────────── */
+.stats-bar{
+  display:flex;justify-content:center;gap:80px;flex-wrap:wrap;
+  padding:60px 24px;
+  background:linear-gradient(135deg,rgba(255,46,90,0.05),rgba(255,136,0,0.05));
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+}
+.sb-item{text-align:center}
+.sb-num{
+  font-family:'Bebas Neue',sans-serif;font-size:56px;letter-spacing:2px;
+  background:linear-gradient(135deg,var(--gold),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;display:block;
+}
+.sb-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+
+/* ── FINAL CTA ────────────────────────────────────────────────── */
+.final-cta{
+  padding:120px 24px;text-align:center;
+  background:radial-gradient(ellipse 80% 60% at 50% 100%,rgba(255,46,90,0.1) 0%,transparent 70%);
+}
+.cta-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(48px,8vw,96px);
+  letter-spacing:2px;margin-bottom:24px;
+  background:linear-gradient(135deg,#fff 0%,var(--gold) 60%,var(--accent) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.cta-perks{
+  display:flex;justify-content:center;gap:64px;flex-wrap:wrap;
+  margin:48px 0;
+}
+.cp-val{
+  font-family:'Bebas Neue',sans-serif;font-size:44px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;display:block;
+}
+.cp-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-top:-4px}
+.spots-row{
+  margin-top:20px;font-size:14px;color:var(--muted);
+}
+.spots-row strong{color:var(--accent)}
+.spots-sub{margin-top:6px;font-size:13px;color:var(--dim)}
+
+/* ── FOOTER ───────────────────────────────────────────────────── */
+footer{
+  border-top:1px solid var(--border);
+  padding:48px 40px 32px;
+  display:flex;flex-direction:column;align-items:center;gap:20px;
+}
+.footer-logo{
+  font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:4px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.footer-links{display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+.footer-links a{color:var(--dim);text-decoration:none;font-size:13px;transition:.2s}
+.footer-links a:hover{color:var(--muted)}
+.footer-copy{color:var(--dim);font-size:12px;text-align:center}
+
+/* ── AI CHAT WIDGET ───────────────────────────────────────────── */
+.chat-widget{
+  position:fixed;bottom:24px;right:24px;z-index:600;
+  display:flex;flex-direction:column;align-items:flex-end;gap:12px;
+}
+.chat-panel{
+  background:var(--card2);
+  border:1px solid rgba(255,46,90,0.3);
+  border-radius:20px 20px 4px 20px;
+  width:300px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.03);
+  overflow:hidden;
+  transition:all .3s cubic-bezier(.34,1.56,.64,1);
+  transform-origin:bottom right;
+}
+.chat-panel.hidden{transform:scale(0.7);opacity:0;pointer-events:none}
+.chat-top{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 16px;
+  background:linear-gradient(135deg,rgba(255,46,90,0.15),rgba(255,136,0,0.1));
+  border-bottom:1px solid var(--border);
+}
+.chat-avatar{
+  width:32px;height:32px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;
+}
+.chat-title{font-size:13px;font-weight:600;flex:1}
+.chat-online{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:10px;color:var(--green);
+}
+.chat-online-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite}
+.chat-close{
+  background:none;border:none;color:var(--muted);
+  cursor:pointer;font-size:18px;padding:2px 4px;transition:.2s;
+}
+.chat-close:hover{color:var(--text)}
+.chat-messages{
+  height:200px;overflow-y:auto;padding:14px;
+  display:flex;flex-direction:column;gap:10px;
+  scroll-behavior:smooth;
+}
+.chat-messages::-webkit-scrollbar{width:3px}
+.chat-messages::-webkit-scrollbar-thumb{background:var(--border-hot)}
+.chat-msg{
+  padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.6;
+  max-width:90%;animation:fadeMsg .3s ease;
+}
+@keyframes fadeMsg{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.chat-msg.bot{
+  background:rgba(255,255,255,0.05);border:1px solid var(--border);
+  align-self:flex-start;border-radius:4px 12px 12px 12px;
+}
+.chat-msg.user{
+  background:linear-gradient(135deg,rgba(255,46,90,0.25),rgba(255,136,0,0.2));
+  border:1px solid rgba(255,46,90,0.2);
+  align-self:flex-end;border-radius:12px 4px 12px 12px;
+}
+.chat-msg.typing{color:var(--muted);font-style:italic}
+.chat-input-row{
+  display:flex;gap:8px;padding:12px;
+  border-top:1px solid var(--border);
+}
+.chat-input{
+  flex:1;background:rgba(255,255,255,0.05);
+  border:1px solid var(--border);border-radius:8px;
+  padding:8px 12px;color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:13px;outline:none;
+  transition:.2s;
+}
+.chat-input:focus{border-color:rgba(255,46,90,0.4)}
+.chat-send{
+  padding:8px 14px;border-radius:8px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;color:#fff;cursor:pointer;font-size:13px;
+  font-family:'DM Sans',sans-serif;font-weight:600;transition:.2s;
+}
+.chat-send:hover{opacity:.85}
+.chat-fab{
+  width:52px;height:52px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;color:#fff;font-size:22px;cursor:pointer;
+  box-shadow:0 4px 24px rgba(255,46,90,0.5);
+  display:flex;align-items:center;justify-content:center;
+  transition:.3s;
+}
+.chat-fab:hover{transform:scale(1.08)}
+
+/* ── API CONSOLE ──────────────────────────────────────────────── */
+.api-console{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:32px;margin:64px 0 0;
+  font-family:'JetBrains Mono',monospace;
+}
+.api-console-header{
+  display:flex;align-items:center;gap:8px;margin-bottom:20px;
+  font-size:14px;font-weight:600;
+}
+.api-dot{width:12px;height:12px;border-radius:50%}
+.api-dot-r{background:#ff5f57}
+.api-dot-y{background:#febc2e}
+.api-dot-g{background:#28c840}
+.api-tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.api-tab{
+  padding:6px 16px;border-radius:8px;font-size:12px;
+  background:rgba(255,255,255,0.04);border:1px solid var(--border);
+  cursor:pointer;transition:.2s;color:var(--muted);font-family:'JetBrains Mono',monospace;
+}
+.api-tab.active,.api-tab:hover{background:rgba(255,46,90,0.12);border-color:var(--border-hot);color:var(--accent)}
+.api-endpoint-line{
+  font-size:13px;margin-bottom:8px;
+  display:flex;align-items:center;gap:10px;
+}
+.method{
+  display:inline-block;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.5px;
+}
+.method.get{background:rgba(0,245,160,0.15);color:var(--green)}
+.method.post{background:rgba(255,136,0,0.15);color:var(--accent2)}
+.api-url{color:var(--muted)}
+.api-desc{color:var(--dim);font-size:11px}
+.api-status{
+  display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;padding-top:20px;
+  border-top:1px solid var(--border);
+}
+.status-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 12px;border-radius:100px;font-size:11px;font-weight:600;
+  font-family:'DM Sans',sans-serif;
+}
+.chip-green{background:rgba(0,245,160,0.1);border:1px solid rgba(0,245,160,0.25);color:var(--green)}
+.chip-yellow{background:rgba(255,200,64,0.1);border:1px solid rgba(255,200,64,0.25);color:var(--gold)}
+.chip-dot{width:6px;height:6px;border-radius:50%}
+.chip-green .chip-dot{background:var(--green)}
+.chip-yellow .chip-dot{background:var(--gold)}
+
+/* ── KEYFRAMES ────────────────────────────────────────────────── */
+@keyframes riseIn{
+  from{opacity:0;transform:translateY(24px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes pulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.4;transform:scale(.75)}
+}
+@keyframes slideRight{
+  from{opacity:0;transform:translateX(-12px)}
+  to{opacity:1;transform:translateX(0)}
+}
+
+/* ── RESPONSIVE ───────────────────────────────────────────────── */
+@media(max-width:768px){
+  nav{padding:0 16px}
+  .hero-stats{gap:28px}
+  .stats-bar{gap:40px}
+  .cta-perks{gap:36px}
+  .cd-time{font-size:40px}
+  .countdown-box{padding:20px 32px}
+  footer{padding:40px 20px 28px}
+  .features-grid{grid-template-columns:1fr}
+  .testi-grid{grid-template-columns:1fr}
+}
+</style>
 </head>
 <body>
-<div id="app">
-  <div id="splash" class="splash">
-    <div class="splash-logo">NVME</div>
-    <div class="splash-sub">Creator Platform</div>
-    <div class="splash-spinner"></div>
+
+<!-- ═══ NAV ════════════════════════════════════════════════════ -->
+<nav>
+  <div class="logo">NVME.live</div>
+  <div class="nav-right">
+    <button class="nav-link" onclick="document.querySelector('.activity-stream').scrollIntoView({behavior:'smooth'})">Feed</button>
+    <button class="nav-link" id="loginBtn">Log In</button>
+    <button class="btn-nav" onclick="window.location.href='/app'">Sign Up Free</button>
   </div>
+</nav>
 
-  <div id="main" class="main hidden">
-    <div id="page-container" class="page-container"></div>
-
-    <nav class="bottom-nav">
-      <button class="nav-btn active" data-page="home">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-        <span>Home</span>
-      </button>
-      <button class="nav-btn" data-page="discover">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <span>Discover</span>
-      </button>
-      <button class="nav-btn nav-btn-create" data-page="create">
-        <div class="create-icon">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-        </div>
-      </button>
-      <button class="nav-btn" data-page="live">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1v-3.5l4 4v-11l-4 4z"/></svg>
-        <span>LIVE</span>
-      </button>
-      <button class="nav-btn" data-page="profile">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-        <span>Profile</span>
-      </button>
-    </nav>
+<!-- ═══ TICKER ═════════════════════════════════════════════════ -->
+<div class="ticker">
+  <div class="ticker-track" id="tickerTrack">
+    <span class="ticker-item">⚡ 1,247 creators signed up today<span class="ticker-dot"></span></span>
+    <span class="ticker-item">💰 @mike_viral earned $340<span class="ticker-dot"></span></span>
+    <span class="ticker-item">🎁 $18,400 in gifts sent today<span class="ticker-dot"></span></span>
+    <span class="ticker-item">🔴 847 live streams right now<span class="ticker-dot"></span></span>
+    <span class="ticker-item">🤖 12,847 AI videos created today<span class="ticker-dot"></span></span>
+    <span class="ticker-item">💎 Top creators earned $84,000 this week<span class="ticker-dot"></span></span>
+    <span class="ticker-item">⚡ 1,247 creators signed up today<span class="ticker-dot"></span></span>
+    <span class="ticker-item">💰 @mike_viral earned $340<span class="ticker-dot"></span></span>
+    <span class="ticker-item">🎁 $18,400 in gifts sent today<span class="ticker-dot"></span></span>
+    <span class="ticker-item">🔴 847 live streams right now<span class="ticker-dot"></span></span>
+    <span class="ticker-item">🤖 12,847 AI videos created today<span class="ticker-dot"></span></span>
+    <span class="ticker-item">💎 Top creators earned $84,000 this week<span class="ticker-dot"></span></span>
   </div>
 </div>
 
-<script src="/app.js?v=210"></script>
+<!-- ═══ HERO ════════════════════════════════════════════════════ -->
+<div class="hero">
+  <div class="hero-orb orb1"></div>
+  <div class="hero-orb orb2"></div>
+  <div class="hero-orb orb3"></div>
+
+  <div class="hero-pill">
+    <div class="hero-pill-dot"></div>
+    1,247 creators signed up today
+  </div>
+  <h1 class="hero-h1">CREATE.<br/>EARN.<br/>DOMINATE.</h1>
+  <p class="hero-desc">
+    The AI-Powered Super-Platform Where Creators Earn Real Money.<br/>
+    <strong>TikTok + WhatsApp + YouTube + CapCut + AI = NVME</strong>
+  </p>
+
+  <div class="hero-stats">
+    <div>
+      <span class="h-stat-val" id="heroCreators">50,000+</span>
+      <span class="h-stat-lbl">Active Creators</span>
+    </div>
+    <div>
+      <span class="h-stat-val" id="heroEarned">$4.2M+</span>
+      <span class="h-stat-lbl">Earned This Month</span>
+    </div>
+    <div>
+      <span class="h-stat-val">98%</span>
+      <span class="h-stat-lbl">Satisfaction Rate</span>
+    </div>
+  </div>
+
+  <a href="/app" class="btn-cta" id="heroCTA">🚀 UNLOCK NVME.LIVE NOW 🚀</a>
+  <p class="hero-fine">
+    <span>✨ No credit card required</span> &nbsp;•&nbsp;
+    <span>Free 14-day trial</span> &nbsp;•&nbsp;
+    <span>Cancel anytime ✨</span>
+  </p>
+  <div class="hero-earnings-bar">
+    💰 Top creators earned <strong>&nbsp;$84,000&nbsp;</strong> this week
+  </div>
+</div>
+
+<!-- ═══ COUNTDOWN ══════════════════════════════════════════════ -->
+<div class="countdown-wrap">
+  <div class="countdown-box">
+    <div class="cd-label">⚡ Early bird pricing ends in</div>
+    <div class="cd-time" id="countdown">23:59:47</div>
+  </div>
+</div>
+
+<!-- ═══ FEATURES ═══════════════════════════════════════════════ -->
+<section class="section" id="features">
+  <div style="text-align:center">
+    <span class="s-eyebrow">🔒 Locked Until You Join</span>
+    <div class="s-title">What You're Missing Right Now</div>
+    <p class="s-sub">These features are live and creators are already earning. Every minute you wait is money left on the table.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feat-card">
+      <span class="feat-lock">🔒 Locked</span>
+      <span class="feat-icon">📱</span>
+      <h3>TikTok-Style Vertical Feed</h3>
+      <p>Earn money from every single view with our revolutionary CPM monetization system. Creators earn $2–10 per 1,000 views.</p>
+      <span class="feat-badge">47 creators earned $500+ today</span>
+    </div>
+    <div class="feat-card">
+      <span class="feat-lock">🔒 Locked</span>
+      <span class="feat-icon">🤖</span>
+      <h3>AI Video Generator</h3>
+      <p>Create professional videos in seconds. Text-to-video, 29 AI avatars, voice cloning, and lip-sync technology.</p>
+      <span class="feat-badge">12,847 AI videos created today</span>
+    </div>
+    <div class="feat-card">
+      <span class="feat-lock">🔒 Locked</span>
+      <span class="feat-icon">🎁</span>
+      <h3>500+ Animated Gifts</h3>
+      <p>Receive legendary gifts from fans and convert them to real money instantly. Bermuda-themed gifts with epic animations.</p>
+      <span class="feat-badge">$18,400 in gifts sent today</span>
+    </div>
+    <div class="feat-card">
+      <span class="feat-lock">🔒 Locked</span>
+      <span class="feat-icon">📹</span>
+      <h3>HD Video Calling</h3>
+      <p>WhatsApp-style video calls with up to 4 people. WebRTC powered, crystal clear quality, completely free.</p>
+      <span class="feat-badge">2,341 calls happening now</span>
+    </div>
+    <div class="feat-card">
+      <span class="feat-lock">🔒 Locked</span>
+      <span class="feat-icon">💰</span>
+      <h3>Instant Wallet</h3>
+      <p>Receive payments instantly. Support for Apple Pay, Google Pay, PayPal, and crypto. Your money, your way.</p>
+      <span class="feat-badge">Average payout: $340/week</span>
+    </div>
+    <div class="feat-card">
+      <span class="feat-lock">🔒 Locked</span>
+      <span class="feat-icon">🔴</span>
+      <h3>Go Live & Earn</h3>
+      <p>Stream live, receive gifts in real-time, and build your community. Top live earners make $1,000+ per stream.</p>
+      <span class="feat-badge">847 live streams right now</span>
+    </div>
+  </div>
+
+  <!-- API Console -->
+  <div class="api-console">
+    <div class="api-console-header">
+      <div class="api-dot api-dot-r"></div>
+      <div class="api-dot api-dot-y"></div>
+      <div class="api-dot api-dot-g"></div>
+      <span style="color:var(--muted);margin-left:8px">NVME API — Mothership v2.0</span>
+    </div>
+    <div class="api-tabs">
+      <div class="api-tab active" onclick="showApiTab('all',this)">All Endpoints</div>
+      <div class="api-tab" onclick="showApiTab('payments',this)">💳 Payments</div>
+      <div class="api-tab" onclick="showApiTab('receptionist',this)">📞 Receptionist</div>
+      <div class="api-tab" onclick="showApiTab('jobs',this)">💼 Jobs</div>
+      <div class="api-tab" onclick="showApiTab('legal',this)">⚖️ Legal</div>
+      <div class="api-tab" onclick="showApiTab('game',this)">🎲 Game</div>
+    </div>
+    <div id="apiEndpoints">
+      <div class="api-endpoint-line data-all data-payments"><span class="method post">POST</span><span class="api-url">/api/payments/checkout</span><span class="api-desc">— 8 providers: PayPal, Stripe, Cash App, Apple Pay, Google Pay, Crypto, Wire, Bermuda Bank</span></div>
+      <div class="api-endpoint-line data-all data-payments"><span class="method get">GET</span><span class="api-url">/api/payments/providers</span><span class="api-desc">— List all payment providers &amp; status</span></div>
+      <div class="api-endpoint-line data-all data-payments"><span class="method post">POST</span><span class="api-url">/api/payments/payout</span><span class="api-desc">— Trigger creator payout</span></div>
+      <div class="api-endpoint-line data-all data-receptionist"><span class="method post">POST</span><span class="api-url">/api/receptionist/voice</span><span class="api-desc">— Twilio TwiML voice menu</span></div>
+      <div class="api-endpoint-line data-all data-receptionist"><span class="method post">POST</span><span class="api-url">/api/receptionist/menu</span><span class="api-desc">— Handle DTMF digit selection</span></div>
+      <div class="api-endpoint-line data-all data-receptionist"><span class="method post">POST</span><span class="api-url">/api/receptionist/sms</span><span class="api-desc">— AI SMS auto-responder</span></div>
+      <div class="api-endpoint-line data-all data-jobs"><span class="method get">GET</span><span class="api-url">/api/jobs</span><span class="api-desc">— Browse job board (filter by category/type/search)</span></div>
+      <div class="api-endpoint-line data-all data-jobs"><span class="method post">POST</span><span class="api-url">/api/jobs</span><span class="api-desc">— Post a new job listing</span></div>
+      <div class="api-endpoint-line data-all data-jobs"><span class="method post">POST</span><span class="api-url">/api/jobs/:id/apply</span><span class="api-desc">— Submit job application</span></div>
+      <div class="api-endpoint-line data-all data-legal"><span class="method post">POST</span><span class="api-url">/api/legal/generate</span><span class="api-desc">— Generate: creator_contract, nda, dmca, brand_deal</span></div>
+      <div class="api-endpoint-line data-all data-legal"><span class="method get">GET</span><span class="api-url">/api/legal/templates</span><span class="api-desc">— List available legal templates</span></div>
+      <div class="api-endpoint-line data-all data-game"><span class="method get">GET</span><span class="api-url">/api/game/crown-anchor</span><span class="api-desc">— Crown &amp; Anchor game info</span></div>
+      <div class="api-endpoint-line data-all data-game"><span class="method post">POST</span><span class="api-url">/api/game/crown-anchor/roll</span><span class="api-desc">— Place bet &amp; roll the dice</span></div>
+      <div class="api-endpoint-line data-all"><span class="method post">POST</span><span class="api-url">/api/ai/chat</span><span class="api-desc">— Zara AI chat (OpenRouter)</span></div>
+      <div class="api-endpoint-line data-all"><span class="method get">GET</span><span class="api-url">/api/health</span><span class="api-desc">— Service health &amp; key status</span></div>
+    </div>
+    <div class="api-status" id="apiStatus">
+      <span class="status-chip chip-green"><span class="chip-dot"></span>Server Online</span>
+      <span class="status-chip chip-green"><span class="chip-dot"></span>Jobs Board</span>
+      <span class="status-chip chip-green"><span class="chip-dot"></span>Legal Generator</span>
+      <span class="status-chip chip-green"><span class="chip-dot"></span>Crown &amp; Anchor</span>
+      <span class="status-chip chip-yellow"><span class="chip-dot"></span>Twilio (add key)</span>
+      <span class="status-chip chip-yellow"><span class="chip-dot"></span>PayPal (add key)</span>
+      <span class="status-chip chip-yellow"><span class="chip-dot"></span>Stripe (add key)</span>
+      <span class="status-chip chip-yellow"><span class="chip-dot"></span>OpenRouter (add key)</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ TESTIMONIALS ═══════════════════════════════════════════ -->
+<div class="section-full">
+  <div class="section-inner">
+    <div style="text-align:center">
+      <span class="s-eyebrow">💎 Real Results</span>
+      <div class="s-title">Creators Are Earning Real Money</div>
+      <p class="s-sub">Don't take our word for it. These creators joined NVME and changed their lives.</p>
+    </div>
+    <div class="testi-grid">
+      <div class="testi-card">
+        <div class="tc-header">
+          <div class="tc-avatar" style="background:linear-gradient(135deg,#ff2e5a,#ff8800)">SM</div>
+          <div><div class="tc-name">@sarah_makes</div><div class="tc-handle">Lifestyle Creator</div></div>
+        </div>
+        <div class="tc-earned">💰 Earned $3,240 this month</div>
+        <p class="tc-quote">I was posting on TikTok for years with nothing to show for it. Switched to NVME and made my first $500 in week one. The AI tools are INSANE. This is the future.</p>
+        <div class="tc-joined">Joined 3 weeks ago</div>
+      </div>
+      <div class="testi-card">
+        <div class="tc-header">
+          <div class="tc-avatar" style="background:linear-gradient(135deg,#3d8bff,#7b2fff)">JT</div>
+          <div><div class="tc-name">@james_tech</div><div class="tc-handle">Tech Creator</div></div>
+        </div>
+        <div class="tc-earned">💰 Earned $8,750 this month</div>
+        <p class="tc-quote">The gift system is where it's at. My fans send me legendary gifts worth $100+ each. I quit my 9-5 last month. NVME literally changed my life.</p>
+        <div class="tc-joined">Joined 2 months ago</div>
+      </div>
+      <div class="testi-card">
+        <div class="tc-header">
+          <div class="tc-avatar" style="background:linear-gradient(135deg,#00f5a0,#00bcd4)">EK</div>
+          <div><div class="tc-name">@emma_creates</div><div class="tc-handle">Lifestyle Creator</div></div>
+        </div>
+        <div class="tc-earned">💰 Earned $1,890 this month</div>
+        <p class="tc-quote">The AI video generator alone is worth 10x the subscription. I create 5 videos a day in minutes. My engagement went through the roof!</p>
+        <div class="tc-joined">Joined 5 weeks ago</div>
+      </div>
+      <div class="testi-card">
+        <div class="tc-header">
+          <div class="tc-avatar" style="background:linear-gradient(135deg,#ff8800,#ffd700)">MC</div>
+          <div><div class="tc-name">@mike_content</div><div class="tc-handle">Business Creator</div></div>
+        </div>
+        <div class="tc-earned">💰 Earned $5,120 this month</div>
+        <p class="tc-quote">I thought it was too good to be true. Then I got my first payout. $500 directly to my PayPal. Now I'm making more than my old corporate job.</p>
+        <div class="tc-joined">Joined 6 weeks ago</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LIVE ACTIVITY ══════════════════════════════════════════ -->
+<section class="section">
+  <div class="live-header">
+    <div class="live-badge"><div class="live-dot"></div> Live Activity</div>
+    <div class="s-title" style="font-size:clamp(32px,4vw,52px)">Real-Time Creator Community</div>
+  </div>
+  <div class="activity-stream" id="activityStream">
+    <div class="act-item"><div class="act-pip pip-join"></div><div class="act-text"><strong>@mike_viral</strong> joined NVME</div><div class="act-time">just now</div></div>
+    <div class="act-item"><div class="act-pip pip-earn"></div><div class="act-text"><strong>@emma_content</strong> earned $89</div><div class="act-time">5m ago</div></div>
+    <div class="act-item"><div class="act-pip pip-video"></div><div class="act-text"><strong>@alex_studio</strong> uploaded a video</div><div class="act-time">just now</div></div>
+    <div class="act-item"><div class="act-pip pip-earn"></div><div class="act-text"><strong>@jenny_ai</strong> earned $340</div><div class="act-time">1m ago</div></div>
+    <div class="act-item"><div class="act-pip pip-join"></div><div class="act-text"><strong>@creator_bda</strong> joined NVME</div><div class="act-time">2m ago</div></div>
+    <div class="act-item"><div class="act-pip pip-earn"></div><div class="act-text"><strong>@sarah_creates</strong> earned $125</div><div class="act-time">3m ago</div></div>
+  </div>
+</section>
+
+<!-- ═══ GLOBAL STATS ═══════════════════════════════════════════ -->
+<div class="stats-bar">
+  <div class="sb-item"><span class="sb-num">50,000+</span><span class="sb-lbl">Creators Worldwide</span></div>
+  <div class="sb-item"><span class="sb-num">150+</span><span class="sb-lbl">Countries</span></div>
+  <div class="sb-item"><span class="sb-num">$12M+</span><span class="sb-lbl">Paid to Creators</span></div>
+</div>
+
+<!-- ═══ FINAL CTA ══════════════════════════════════════════════ -->
+<div class="final-cta" id="signup">
+  <span class="s-eyebrow">⏰ Don't Get Left Behind</span>
+  <div class="cta-title">START EARNING TODAY</div>
+  <p class="s-sub">The creator economy is booming. Join 50,000+ creators already earning on NVME. The longer you wait, the more you miss.</p>
+  <div class="cta-perks">
+    <div><span class="cp-val">$500+</span><span class="cp-lbl">Avg Weekly Earnings</span></div>
+    <div><span class="cp-val">14 Days</span><span class="cp-lbl">Free Trial</span></div>
+    <div><span class="cp-val">90%</span><span class="cp-lbl">Revenue Share</span></div>
+  </div>
+  <a href="/app" class="btn-cta">✨ START EARNING TODAY ✨</a>
+  <div class="spots-row">🔥 Only <strong>247 spots</strong> left this month 🔥</div>
+  <div class="spots-sub">Spots filling up fast. Don't miss your chance.</div>
+</div>
+
+<!-- ═══ FOOTER ═════════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-logo">NVME.live</div>
+  <div class="footer-links">
+    <a href="#">About</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#features">Creators</a>
+    <a href="#">Privacy</a>
+    <a href="#">Terms</a>
+  </div>
+  <div class="footer-copy">© 2026 NVME.live — Bermuda's Premier Creator Platform</div>
+</footer>
+
+<!-- ═══ AI CHAT WIDGET ═════════════════════════════════════════ -->
+<div class="chat-widget">
+  <div class="chat-panel" id="chatPanel">
+    <div class="chat-top">
+      <div class="chat-avatar">🤖</div>
+      <div>
+        <div class="chat-title">Zara – AI Guide</div>
+        <div class="chat-online"><div class="chat-online-dot"></div> Online</div>
+      </div>
+      <button class="chat-close" onclick="toggleChat()">×</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-msg bot">Hi! I'm Zara, your AI guide! 👋✨ I see you're checking out NVME. Want to see how creators like you are earning $500+/week? Ask me anything! 🚀</div>
+    </div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chatInput" placeholder="Ask Zara anything…" onkeydown="if(event.key==='Enter')sendChat()"/>
+      <button class="chat-send" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+  <button class="chat-fab" onclick="toggleChat()" title="Chat with Zara">🤖</button>
+</div>
+
 <script>
-// NUCLEAR CACHE CLEAR - runs before service worker
+// ── Countdown ──────────────────────────────────────────────
 (function(){
-  // Unregister ALL old service workers
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(regs => {
-      regs.forEach(reg => {
-        console.log('[NVME] Unregistering old SW:', reg.scope);
-        reg.unregister();
-      });
-    });
-    // Re-register fresh service worker after kill
-    window.addEventListener('load', () => {
-      setTimeout(() => {
-        navigator.serviceWorker.register('/sw.js?v=210').catch(() => {});
-      }, 500);
-    });
+  const el = document.getElementById('countdown');
+  let total = 23*3600 + 59*60 + 47;
+  setInterval(()=>{
+    if(total<=0) total=24*3600;
+    total--;
+    const h=String(Math.floor(total/3600)).padStart(2,'0');
+    const m=String(Math.floor((total%3600)/60)).padStart(2,'0');
+    const s=String(total%60).padStart(2,'0');
+    el.textContent=`${h}:${m}:${s}`;
+  },1000);
+})();
+
+// ── Live Activity Feed ─────────────────────────────────────
+const names=['@wave_rider','@bda_creator','@coral_beats','@island_vibe','@reef_content','@bermuda_alex'];
+const actions=[
+  {type:'join', cls:'pip-join', tmpl: n=>`<strong>${n}</strong> joined NVME`},
+  {type:'earn', cls:'pip-earn', tmpl: n=>`<strong>${n}</strong> earned $${(Math.random()*400+50).toFixed(0)}`},
+  {type:'video',cls:'pip-video',tmpl: n=>`<strong>${n}</strong> uploaded a video`},
+];
+setInterval(()=>{
+  const stream = document.getElementById('activityStream');
+  const act = actions[Math.floor(Math.random()*actions.length)];
+  const name = names[Math.floor(Math.random()*names.length)];
+  const item = document.createElement('div');
+  item.className='act-item';
+  item.innerHTML=`<div class="act-pip ${act.cls}"></div><div class="act-text">${act.tmpl(name)}</div><div class="act-time">just now</div>`;
+  stream.prepend(item);
+  if(stream.children.length>8) stream.lastChild.remove();
+}, 3800);
+
+// ── API Tab Filter ─────────────────────────────────────────
+function showApiTab(tab, el){
+  document.querySelectorAll('.api-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.api-endpoint-line').forEach(line=>{
+    line.style.display = (tab==='all' || line.classList.contains('data-'+tab)) ? 'flex' : 'none';
+  });
+}
+
+// ── Scroll helper ──────────────────────────────────────────
+function scrollToCTA(){document.getElementById('signup').scrollIntoView({behavior:'smooth'})}
+
+// ── Chat Widget ────────────────────────────────────────────
+let chatOpen = true;
+function toggleChat(){
+  chatOpen=!chatOpen;
+  document.getElementById('chatPanel').classList.toggle('hidden',!chatOpen);
+}
+
+const quickReplies={
+  earn:'💰 Creators earn $2–10 per 1,000 views PLUS gifts from fans! Top earners made $84,000 last week. Start your free trial above! 🚀',
+  ai:'🤖 Our AI suite includes a video generator with 29 avatars, voice cloning, lip-sync, and text-to-video. Create 5 pro videos a day in minutes!',
+  gift:'🎁 Fans send you Bermuda-themed animated gifts worth real money! $18,400 in gifts were sent today. Legendary gifts are worth $100+ each!',
+  live:'🔴 Go live and earn gifts in real-time! Top streamers make $1,000+ per stream. 847 live streams are happening on NVME right now!',
+  trial:'✨ 14 days completely free — no credit card needed. Cancel anytime. Most creators earn back the cost in their first week!',
+  price:'💎 Creator $9/mo, Pro $29/mo, Legend $79/mo. All plans include the 14-day free trial! nvme.live/pricing',
+  payment:'💳 We support 8 payment methods: PayPal, Stripe, Cash App, Apple Pay, Google Pay, Crypto, Wire, and Bermuda Bank!',
+};
+
+async function sendChat(){
+  const input=document.getElementById('chatInput');
+  const msgs=document.getElementById('chatMessages');
+  const text=input.value.trim();
+  if(!text) return;
+  input.value='';
+
+  const userMsg=document.createElement('div');
+  userMsg.className='chat-msg user';
+  userMsg.textContent=text;
+  msgs.appendChild(userMsg);
+
+  const typing=document.createElement('div');
+  typing.className='chat-msg bot typing';
+  typing.textContent='Zara is typing…';
+  msgs.appendChild(typing);
+  msgs.scrollTop=msgs.scrollHeight;
+
+  await new Promise(r=>setTimeout(r,800+Math.random()*600));
+  typing.remove();
+
+  let reply="I'd love to help! 🚀 Ask me about earning, AI tools, gifts, live streaming, payments, or how to get started on NVME!";
+  const lower=text.toLowerCase();
+  for(const [key,val] of Object.entries(quickReplies)){
+    if(lower.includes(key)){reply=val;break}
   }
-  // Clear all caches
-  if ('caches' in window) {
-    caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
-  }
+
+  // Try server AI
+  try{
+    const res=await fetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+    if(res.ok){const data=await res.json();if(data.reply) reply=data.reply;}
+  }catch(e){}
+
+  const botMsg=document.createElement('div');
+  botMsg.className='chat-msg bot';
+  botMsg.textContent=reply;
+  msgs.appendChild(botMsg);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+// ── Fetch live stats ───────────────────────────────────────
+(async()=>{
+  try{
+    const res=await fetch('/api/creators/stats');
+    if(!res.ok) return;
+    const d=await res.json();
+    document.getElementById('heroCreators').textContent=d.totalCreators.toLocaleString()+'+';
+    document.getElementById('heroEarned').textContent='$'+(d.earnedThisMonth/1000000).toFixed(1)+'M+';
+  }catch(e){}
+})();
+</script>
+
+<section id="download" style="background:linear-gradient(135deg,#0a0a15 0%,#150a25 50%,#0a1515 100%);padding:80px 20px;text-align:center;border-top:1px solid rgba(255,46,90,0.2)">
+<div style="max-width:900px;margin:0 auto">
+<div style="font-size:3rem;margin-bottom:1rem">📲</div>
+<h2 style="font-size:clamp(1.8rem,4vw,2.8rem);font-weight:900;background:linear-gradient(135deg,#ff2e5a,#ff6b35,#9b59b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:1rem">Download NVME App</h2>
+<p style="color:rgba(255,255,255,0.7);font-size:1.1rem;margin-bottom:2.5rem">Install directly on your phone — no App Store needed. Works like a native app on iPhone &amp; Android.</p>
+<div style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:2.5rem">
+<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,46,90,0.3);border-radius:20px;padding:2rem;min-width:220px;flex:1;max-width:260px">
+<div style="font-size:2.5rem;margin-bottom:0.75rem">🍎</div>
+<h3 style="color:#fff;font-size:1.1rem;font-weight:700;margin-bottom:0.5rem">iPhone</h3>
+<p style="color:rgba(255,255,255,0.5);font-size:0.83rem;line-height:1.5;margin-bottom:1.2rem">1. Open nvme.live in <strong style="color:#fff">Safari</strong><br>2. Tap <strong style="color:#fff">Share ↑</strong><br>3. Tap <strong style="color:#fff">Add to Home Screen</strong></p>
+<a href="/app" style="display:inline-block;background:linear-gradient(135deg,#ff2e5a,#9b59b6);color:#fff;padding:0.7rem 1.8rem;border-radius:50px;font-weight:700;font-size:0.9rem;text-decoration:none;letter-spacing:0.5px">Open in Safari</a>
+</div>
+<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(0,212,255,0.3);border-radius:20px;padding:2rem;min-width:220px;flex:1;max-width:260px">
+<div style="font-size:2.5rem;margin-bottom:0.75rem">🤖</div>
+<h3 style="color:#fff;font-size:1.1rem;font-weight:700;margin-bottom:0.5rem">Android</h3>
+<p style="color:rgba(255,255,255,0.5);font-size:0.83rem;line-height:1.5;margin-bottom:1.2rem">1. Open in <strong style="color:#fff">Chrome</strong><br>2. Tap the <strong style="color:#fff">Install banner</strong><br>3. Or menu → <strong style="color:#fff">Install app</strong></p>
+<a href="/app" id="androidInstallBtn" style="display:inline-block;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#000;padding:0.7rem 1.8rem;border-radius:50px;font-weight:700;font-size:0.9rem;text-decoration:none;letter-spacing:0.5px">Install App</a>
+</div>
+<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:2rem;min-width:220px;flex:1;max-width:260px">
+<div style="font-size:2.5rem;margin-bottom:0.75rem">💻</div>
+<h3 style="color:#fff;font-size:1.1rem;font-weight:700;margin-bottom:0.5rem">Desktop</h3>
+<p style="color:rgba(255,255,255,0.5);font-size:0.83rem;line-height:1.5;margin-bottom:1.2rem">1. Open in <strong style="color:#fff">Chrome / Edge</strong><br>2. Click <strong style="color:#fff">⊕ install icon</strong> in URL bar<br>3. Click Install</p>
+<a href="/app" style="display:inline-block;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:0.7rem 1.8rem;border-radius:50px;font-weight:700;font-size:0.9rem;text-decoration:none;letter-spacing:0.5px">Open Web App</a>
+</div>
+</div>
+<p style="color:rgba(255,255,255,0.35);font-size:0.8rem">✅ No App Store approval &nbsp;•&nbsp; ✅ Auto-updates &nbsp;•&nbsp; ✅ Works offline &nbsp;•&nbsp; ✅ iOS &amp; Android &amp; Desktop</p>
+</div>
+</section>
+<script>
+(function(){
+let dp;window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();dp=e;var b=document.getElementById("androidInstallBtn");if(b){b.textContent="📲 Install Now!";b.onclick=async function(ev){ev.preventDefault();if(dp){dp.prompt();var r=await dp.userChoice;dp=null;if(r.outcome==="accepted")window.location.href="/app";}else{window.location.href="/app";}};}}); 
 })();
 </script>
 </body>

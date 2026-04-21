@@ -496,6 +496,7 @@ app.post('/api/game/crown-anchor/roll', (req, res) => {
 });
 
 // ─── CATCH-ALL → SPA ─────────────────────────────────────────────────────────
+app.get('/app', (req, res) => { res.sendFile(��secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)('path').join(__dirname, 'public', 'app.html')); });
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

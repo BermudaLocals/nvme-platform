@@ -1,230 +1,83 @@
-import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const crypto = require('crypto');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ============================================
-// MIDDLEWARE
-// ============================================
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  next();
-});
-
-// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ============================================
-// HEALTH & STATUS
-// ============================================
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'NVME Live — Mothership',
-    version: '2.0',
-    timestamp: new Date(),
-    channels: {
-      payments: process.env.PAYPAL_CLIENT_ID ? 'active' : 'needs_key',
-      twilio: process.env.TWILIO_ACCOUNT_SID ? 'active' : 'needs_key',
-      ai: process.env.OPENROUTER_API_KEY ? 'active' : 'needs_key',
-      database: process.env.DATABASE_URL ? 'active' : 'needs_key'
-    }
-  });
+  res.json({ status: 'ok', service: 'NVME.live', version: '2.0', timestamp: new Date() });
 });
 
 app.get('/api/test', (req, res) => {
   res.json({ message: 'NVME Mothership Online', timestamp: new Date() });
 });
 
-// ============================================
-// PAYMENT GATEWAYS (8 providers)
-// ============================================
-app.post('/api/payments/paypal/create', async (req, res) => {
-  const { amount, currency = 'USD', description } = req.body;
-  try {
-    res.json({ provider: 'paypal', amount, currency, description, status: 'initiated' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+app.post('/api/auth/register', (req, res) => {
+  const { email, password, display_name } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const token = crypto.randomBytes(32).toString('hex');
+  res.json({ success: true, token, user: { email, display_name: display_name || email.split('@')[0], plan: 'free' } });
 });
 
-app.post('/api/payments/ton/create', async (req, res) => {
-  const { amount, wallet_address } = req.body;
-  res.json({ provider: 'ton', amount, wallet_address, status: 'initiated' });
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const token = crypto.randomBytes(32).toString('hex');
+  res.json({ success: true, token, user: { email, plan: 'free' } });
 });
 
-app.post('/api/payments/payeer/create', async (req, res) => {
-  const { amount, currency = 'USD' } = req.body;
-  res.json({ provider: 'payeer', amount, currency, status: 'initiated' });
+app.post('/api/auth/magic-link', (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  res.json({ success: true, message: 'Magic link sent — check your inbox' });
 });
 
-app.post('/api/payments/momo/create', async (req, res) => {
-  const { amount, phone } = req.body;
-  res.json({ provider: 'momo', amount, phone, status: 'initiated' });
+app.get('/api/auth/me', (req, res) => {
+  res.json({ user: { email: 'user@example.com', plan: 'free' } });
+});
+
+app.post('/api/auth/logout', (req, res) => res.json({ success: true }));
+
+app.post('/api/ai/chat', (req, res) => {
+  res.json({ reply: "Hi! I'm Zara, your NVME guide. How can I help you earn today?" });
 });
 
 app.get('/api/payments/providers', (req, res) => {
-  res.json({
-    providers: ['paypal', 'ton', 'payeer', 'momo', 'square', 'payoneer', 'crypto', 'bank_transfer'],
-    active: 8,
-    note: 'Stripe pending passport verification'
-  });
+  res.json({ providers: ['paypal', 'ton', 'momo', 'payeer'], active: 4 });
 });
 
-// ============================================
-// AI RECEPTIONIST (Twilio)
-// ============================================
-app.post('/api/receptionist/inbound', async (req, res) => {
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna">
-    Thank you for calling. You have reached an AI-powered business assistant. 
-    Please leave your name, number, and the reason for your call after the tone.
-  </Say>
-  <Record maxLength="30" transcribe="true" transcribeCallback="/api/receptionist/transcribe"/>
-</Response>`;
-  res.type('text/xml').send(twiml);
+app.post('/api/payments/checkout', (req, res) => {
+  res.json({ plan: req.body.plan, status: 'initiated' });
 });
 
-app.post('/api/receptionist/transcribe', async (req, res) => {
-  const { TranscriptionText, From, To } = req.body;
-  console.log(`[RECEPTIONIST] Call from ${From}: ${TranscriptionText}`);
-  res.sendStatus(200);
-});
-
-app.post('/api/receptionist/sms', async (req, res) => {
-  const { Body, From } = req.body;
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Message>Thanks for reaching out! Our AI team will respond shortly. Reply STOP to unsubscribe.</Message>
-</Response>`;
-  res.type('text/xml').send(twiml);
-});
-
-// ============================================
-// AI STAFFING AGENCY
-// ============================================
-app.post('/api/staffing/job', async (req, res) => {
-  const { title, description, budget, skills } = req.body;
-  res.json({
-    job_id: `JOB_${Date.now()}`,
-    title,
-    description,
-    budget,
-    skills,
-    status: 'posted',
-    matches: [],
-    posted_at: new Date()
-  });
-});
-
-app.get('/api/staffing/jobs', async (req, res) => {
-  res.json({ jobs: [], total: 0 });
-});
-
-app.post('/api/staffing/apply', async (req, res) => {
-  const { job_id, applicant_name, contact, skills } = req.body;
-  res.json({
-    application_id: `APP_${Date.now()}`,
-    job_id,
-    applicant_name,
-    status: 'received',
-    applied_at: new Date()
-  });
-});
-
-// ============================================
-// AGI SITE GENERATOR
-// ============================================
-app.get('/api/generate', async (req, res) => {
-  const { name, type = 'business' } = req.query;
-  res.json({
-    business_name: name || 'New Venture',
-    type,
-    generated_at: new Date(),
-    components: ['landing_page', 'payment_gateway', 'contact_form', 'booking_system'],
-    status: 'generated'
-  });
-});
-
-// ============================================
-// LEGAL DOCUMENTS (lexai integration)
-// ============================================
-app.post('/api/legal/document', async (req, res) => {
-  const { type, jurisdiction = 'Bermuda', parties } = req.body;
-  res.json({
-    doc_id: `DOC_${Date.now()}`,
-    type,
-    jurisdiction,
-    parties,
-    status: 'generated',
-    price: type === 'compliance' ? 350 : 200,
-    created_at: new Date()
-  });
-});
-
-app.get('/api/legal/types', (req, res) => {
-  res.json({
-    types: [
-      { id: 'compliance', name: 'Compliance Document', price: 350 },
-      { id: 'contract', name: 'Business Contract', price: 250 },
-      { id: 'immigration', name: 'Immigration Form Assist', price: 300 },
-      { id: 'incorporation', name: 'Business Registration', price: 400 }
-    ]
-  });
-});
-
-// ============================================
-// FEED (TikTok-style)
-// ============================================
-app.get('/api/feed', (req, res) => {
-  res.json({ items: [], total: 0, next_cursor: null });
-});
-
-// ============================================
-// CROWN & ANCHOR (Bermuda game)
-// ============================================
-app.post('/api/gamble', (req, res) => {
+app.post('/api/game/crown-anchor/roll', (req, res) => {
   const { bets = [] } = req.body;
   const symbols = ['crown', 'anchor', 'heart', 'diamond', 'club', 'spade'];
-  const roll = [
-    symbols[Math.floor(Math.random() * 6)],
-    symbols[Math.floor(Math.random() * 6)],
-    symbols[Math.floor(Math.random() * 6)]
-  ];
-  const results = bets.map(bet => {
-    const matches = roll.filter(s => s === bet.symbol).length;
-    return { symbol: bet.symbol, amount: bet.amount, matches, payout: bet.amount * matches };
-  });
+  const roll = [0,1,2].map(() => symbols[Math.floor(Math.random() * 6)]);
+  const results = bets.map(b => ({ ...b, matches: roll.filter(s => s === b.symbol).length, payout: b.amount * roll.filter(s => s === b.symbol).length }));
   res.json({ roll, results, total_payout: results.reduce((a, b) => a + b.payout, 0) });
 });
 
-// ============================================
-// SERVE FRONTEND
-// ============================================
+app.get('/api/feed', (req, res) => res.json({ items: [], total: 0 }));
+app.get('/api/jobs', (req, res) => res.json({ jobs: [], total: 0 }));
+
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/signup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
 app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`
-  ⚓ NVME MOTHERSHIP v2.0 ONLINE
-  🚀 PORT: ${PORT}
-  💰 REVENUE CHANNELS:
-     -> Payments (8 providers): ACTIVE
-     -> AI Receptionist: ACTIVE  
-     -> Staffing Agency: ACTIVE
-     -> Legal Documents: ACTIVE
-     -> AGI Site Generator: ACTIVE
-     -> Crown & Anchor: ACTIVE
-  `);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('⚓ NVME.live v2.0 running on port ' + PORT);
 });

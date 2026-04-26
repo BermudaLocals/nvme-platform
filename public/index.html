@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="description" content="NVME – The AI-Powered Super-Platform Where Creators Earn Real Money. Bermuda's Premier Creator Platform."/>
-<title>NVME – Create. Earn. Dominate.</title>
+<meta name="description" content="NVME.live – The AI-Powered Super-Platform Where Creators Earn Real Money. Bermuda's Premier Creator Platform."/>
+<title>NVME.live – Create. Earn. Dominate.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
 <style>
@@ -572,11 +572,11 @@ footer{
 
 <!-- ═══ NAV ════════════════════════════════════════════════════ -->
 <nav>
-  <div class="logo">NVME</div>
+  <div class="logo">NVME.live</div>
   <div class="nav-right">
-    <button class="nav-link" onclick="document.querySelector('.activity-stream').scrollIntoView({behavior:'smooth'})">PWA</button>
-    <button class="nav-link" id="loginBtn">Log In</button>
-    <button class="btn-nav" onclick="scrollToCTA()">Sign Up Free</button>
+    <button class="nav-link" onclick="document.querySelector('.activity-stream').scrollIntoView({behavior:'smooth'})">Feed</button>
+    <button class="nav-link" id="loginBtn" onclick="openSignup()">Log In</button>
+    <button class="btn-nav" onclick="openSignup()">Sign Up Free</button>
   </div>
 </nav>
 
@@ -629,7 +629,7 @@ footer{
     </div>
   </div>
 
-  <a href="#signup" class="btn-cta" id="heroCTA">🚀 UNLOCK NVME NOW 🚀</a>
+  <a href="javascript:openSignup()" class="btn-cta" id="heroCTA">🚀 UNLOCK NVME.LIVE NOW 🚀</a>
   <p class="hero-fine">
     <span>✨ No credit card required</span> &nbsp;•&nbsp;
     <span>Free 14-day trial</span> &nbsp;•&nbsp;
@@ -826,16 +826,16 @@ footer{
   <div class="cta-perks">
     <div><span class="cp-val">$500+</span><span class="cp-lbl">Avg Weekly Earnings</span></div>
     <div><span class="cp-val">14 Days</span><span class="cp-lbl">Free Trial</span></div>
-    <div><span class="cp-val">90%</span><span class="cp-lbl">Revenue Share</span></div>
+    <div><span class="cp-val">55%</span><span class="cp-lbl">Creator Revenue Share</span></div>
   </div>
-  <a href="#" class="btn-cta">✨ START EARNING TODAY ✨</a>
+  <a href="javascript:openSignup()" class="btn-cta">✨ START EARNING TODAY ✨</a>
   <div class="spots-row">🔥 Only <strong>247 spots</strong> left this month 🔥</div>
   <div class="spots-sub">Spots filling up fast. Don't miss your chance.</div>
 </div>
 
 <!-- ═══ FOOTER ═════════════════════════════════════════════════ -->
 <footer>
-  <div class="footer-logo">NVME</div>
+  <div class="footer-logo">NVME.live</div>
   <div class="footer-links">
     <a href="#">About</a>
     <a href="#">Pricing</a>
@@ -843,7 +843,7 @@ footer{
     <a href="#">Privacy</a>
     <a href="#">Terms</a>
   </div>
-  <div class="footer-copy">© 2026 NVME — Bermuda's Premier Creator Platform</div>
+  <div class="footer-copy">© 2026 NVME.live — Bermuda's Premier Creator Platform</div>
 </footer>
 
 <!-- ═══ AI CHAT WIDGET ═════════════════════════════════════════ -->
@@ -926,7 +926,7 @@ const quickReplies={
   gift:'🎁 Fans send you Bermuda-themed animated gifts worth real money! $18,400 in gifts were sent today. Legendary gifts are worth $100+ each!',
   live:'🔴 Go live and earn gifts in real-time! Top streamers make $1,000+ per stream. 847 live streams are happening on NVME right now!',
   trial:'✨ 14 days completely free — no credit card needed. Cancel anytime. Most creators earn back the cost in their first week!',
-  price:'💎 Creator $9/mo, Pro $29/mo, Legend $79/mo. All plans include the 14-day free trial! nvme/pricing',
+  price:'💎 Creator $9/mo, Pro $29/mo, Legend $79/mo. All plans include the 14-day free trial! nvme.live/pricing',
   payment:'💳 We support 8 payment methods: PayPal, Stripe, Cash App, Apple Pay, Google Pay, Crypto, Wire, and Bermuda Bank!',
 };
 
@@ -981,5 +981,88 @@ async function sendChat(){
   }catch(e){}
 })();
 </script>
+
+<!-- ═══ SIGNUP MODAL ═══════════════════════════════════════════ -->
+<style>
+.signup-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);z-index:9999;display:none;align-items:center;justify-content:center;padding:20px}
+.signup-overlay.show{display:flex;animation:sfadeIn .3s ease}
+@keyframes sfadeIn{from{opacity:0}to{opacity:1}}
+.signup-modal{background:linear-gradient(180deg,#1a0a20,#0a0a1a);border:2px solid #ff2e5a;border-radius:24px;max-width:480px;width:100%;padding:40px;box-shadow:0 24px 80px rgba(255,46,90,0.4);position:relative;animation:spop .4s ease}
+@keyframes spop{from{transform:scale(0.9);opacity:0}to{transform:scale(1);opacity:1}}
+.signup-close{position:absolute;top:16px;right:16px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.signup-close:hover{background:rgba(255,255,255,0.1)}
+.signup-h{font-family:'Bebas Neue',sans-serif;font-size:42px;color:#fff;text-align:center;margin-bottom:8px;letter-spacing:2px}
+.signup-sub{color:#aaa;text-align:center;margin-bottom:28px;font-size:15px}
+.signup-perks{display:flex;justify-content:space-between;margin-bottom:24px;padding:16px;background:rgba(255,46,90,0.08);border-radius:12px}
+.sp-item{text-align:center;flex:1}
+.sp-val{display:block;font-weight:800;color:#ff2e5a;font-size:18px}
+.sp-lbl{display:block;color:#aaa;font-size:11px;margin-top:4px}
+.signup-input{width:100%;padding:14px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:15px;margin-bottom:14px;outline:none;transition:all .2s}
+.signup-input:focus{border-color:#ff2e5a;background:rgba(255,46,90,0.05)}
+.signup-btn{width:100%;padding:16px;background:linear-gradient(90deg,#ff2e5a,#00d4ff);border:none;border-radius:12px;color:#fff;font-weight:800;font-size:16px;letter-spacing:1px;cursor:pointer;text-transform:uppercase;transition:all .2s}
+.signup-btn:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(255,46,90,0.5)}
+.signup-btn:disabled{opacity:0.6;cursor:wait}
+.signup-fine{text-align:center;color:#888;font-size:12px;margin-top:14px}
+.signup-success{text-align:center;padding:40px 20px}
+.signup-success-icon{font-size:64px;margin-bottom:16px}
+.signup-success h3{color:#00ff88;font-size:24px;margin-bottom:8px}
+.signup-success p{color:#aaa;margin-bottom:20px}
+</style>
+<div class="signup-overlay" id="signupModal">
+  <div class="signup-modal">
+    <button class="signup-close" onclick="closeSignup()">×</button>
+    <div id="signupForm">
+      <h2 class="signup-h">JOIN NVME</h2>
+      <p class="signup-sub">Start earning from day one. No credit card required.</p>
+      <div class="signup-perks">
+        <div class="sp-item"><span class="sp-val">55%</span><span class="sp-lbl">Creator Share</span></div>
+        <div class="sp-item"><span class="sp-val">14 Days</span><span class="sp-lbl">Free Trial</span></div>
+        <div class="sp-item"><span class="sp-val">$500+</span><span class="sp-lbl">Avg Weekly</span></div>
+      </div>
+      <input class="signup-input" id="suEmail" type="email" placeholder="Your email address" required/>
+      <input class="signup-input" id="suUsername" type="text" placeholder="Choose a username" required/>
+      <input class="signup-input" id="suPassword" type="password" placeholder="Create a password (8+ chars)" required/>
+      <button class="signup-btn" id="suBtn" onclick="submitSignup()">🚀 Create My Account 🚀</button>
+      <p class="signup-fine">By signing up, you agree to our Terms & Privacy Policy</p>
+    </div>
+    <div id="signupDone" class="signup-success" style="display:none">
+      <div class="signup-success-icon">🎉</div>
+      <h3>Welcome to NVME!</h3>
+      <p id="suMsg">Your account is ready. Redirecting to the app...</p>
+      <button class="signup-btn" onclick="openSignup()">Open NVME App</button>
+    </div>
+  </div>
+</div>
+<script>
+function openSignup(){document.getElementById('signupModal').classList.add('show');document.body.style.overflow='hidden'}
+function closeSignup(){document.getElementById('signupModal').classList.remove('show');document.body.style.overflow=''}
+document.addEventListener('click',function(e){if(e.target.id==='signupModal')closeSignup()});
+async function submitSignup(){
+  const email=document.getElementById('suEmail').value.trim();
+  const username=document.getElementById('suUsername').value.trim();
+  const password=document.getElementById('suPassword').value;
+  const btn=document.getElementById('suBtn');
+  if(!email||!username||!password){alert('Please fill all fields');return}
+  if(password.length<8){alert('Password must be 8+ characters');return}
+  btn.disabled=true;btn.textContent='Creating account...';
+  try{
+    const res=await fetch('/api/creators/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,username,password})});
+    const data=await res.json();
+    if(data.success){
+      try{localStorage.setItem('nvme_creator',JSON.stringify(data.creator))}catch(e){}
+      document.getElementById('signupForm').style.display='none';
+      document.getElementById('signupDone').style.display='block';
+      setTimeout(()=>window.location.href='/app',2500);
+    }else{
+      alert('Signup failed. Try again.');
+      btn.disabled=false;btn.textContent='🚀 Create My Account 🚀';
+    }
+  }catch(e){
+    alert('Network error. Try again.');
+    btn.disabled=false;btn.textContent='🚀 Create My Account 🚀';
+  }
+}
+</script>
+
 </body>
 </html>

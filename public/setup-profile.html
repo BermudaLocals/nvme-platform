@@ -83,6 +83,32 @@ input, select, textarea {
   transition: all 0.2s;
   font-family: inherit;
 }
+select {
+  background: #1a0a20;
+  color: #fff;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%23ff2e5a' d='M6 8L0 0h12z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 44px;
+}
+select option {
+  background: #1a0a20;
+  color: #fff;
+  font-size: 15px;
+  padding: 10px;
+}
+select option:hover, select option:checked {
+  background: #ff2e5a;
+  color: #fff;
+}
+/* Placeholder option (first empty value) styled slightly dimmer */
+select option[value=""] {
+  color: #888;
+}
 input:focus, select:focus, textarea:focus {
   border-color: #ff2e5a;
   background: rgba(255,46,90,0.05);

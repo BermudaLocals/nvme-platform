@@ -616,7 +616,125 @@ window.searchTag = (tag) => toast(`🔍 Searching ${tag}`);
 window.openChallenges = () => toast('🏆 Challenges page coming soon');
 window.startLive = () => { closeCreateModal(); toast('🔴 Go LIVE coming soon'); };
 window.startBattle = () => { closeCreateModal(); toast('⚔️ Battle creator coming soon'); };
-window.startVideoCreate = () => { closeCreateModal(); toast('🎬 Video creator coming soon'); };
+window.startVideoCreate = () => {
+  closeCreateModal();
+  const modal = document.createElement('div');
+  modal.className = 'video-upload-modal';
+  modal.id = 'video-upload-modal';
+  modal.innerHTML = VIDEO_UPLOAD_HTML;
+  document.body.appendChild(modal);
+  setTimeout(() => modal.classList.add('open'), 10);
+};
+
+const VIDEO_UPLOAD_HTML = `
+    <div class="vu-content">
+      <div class="vu-header">
+        <button class="vu-back" onclick="closeVideoUpload()">&larr;</button>
+        <div class="vu-title">Post Video</div>
+        <button class="vu-post" id="vu-post-btn" onclick="submitVideo()" disabled>Post</button>
+      </div>
+      <div class="vu-body">
+        <div class="vu-preview" id="vu-preview">
+          <label class="vu-picker" for="vu-file">
+            <div class="vu-picker-icon">&#128249;</div>
+            <div class="vu-picker-text">Tap to select video</div>
+            <div class="vu-picker-hint">MP4, MOV, WebM \u2022 Up to 60 seconds</div>
+          </label>
+          <input type="file" id="vu-file" accept="video/*" onchange="handleVideoSelect(event)" hidden>
+        </div>
+        <div class="vu-fields">
+          <label class="vu-field">
+            <span class="vu-label">Caption</span>
+            <textarea id="vu-caption" placeholder="Describe your video..." maxlength="200" oninput="validateVideo()"></textarea>
+            <span class="vu-counter"><span id="vu-caption-count">0</span>/200</span>
+          </label>
+          <label class="vu-field">
+            <span class="vu-label">Hashtags</span>
+            <input type="text" id="vu-hashtags" placeholder="#fyp #viral #nvme" oninput="validateVideo()">
+          </label>
+          <div class="vu-field">
+            <span class="vu-label">Privacy</span>
+            <div class="vu-privacy">
+              <label><input type="radio" name="privacy" value="public" checked> &#127757; Public</label>
+              <label><input type="radio" name="privacy" value="friends"> &#128107; Friends</label>
+              <label><input type="radio" name="privacy" value="private"> &#128274; Private</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+`;
+
+window.handleVideoSelect = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) {
+    toast('Video too big. Max 50MB.');
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  const preview = document.getElementById('vu-preview');
+  preview.innerHTML = `
+    <video src="${url}" controls autoplay muted loop playsinline></video>
+    <button class="vu-change" onclick="document.getElementById('vu-file').click()">Change</button>
+    <input type="file" id="vu-file" accept="video/*" onchange="handleVideoSelect(event)" hidden>
+  `;
+  window._vuFile = file;
+  validateVideo();
+};
+
+window.validateVideo = () => {
+  const caption = document.getElementById('vu-caption');
+  const counter = document.getElementById('vu-caption-count');
+  const btn = document.getElementById('vu-post-btn');
+  if (caption && counter) counter.textContent = caption.value.length;
+  const hasFile = !!window._vuFile;
+  const hasCaption = caption && caption.value.trim().length > 0;
+  if (btn) btn.disabled = !(hasFile && hasCaption);
+};
+
+window.submitVideo = async () => {
+  const btn = document.getElementById('vu-post-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Posting...'; }
+  try {
+    const caption = document.getElementById('vu-caption').value.trim();
+    const hashtags = (document.getElementById('vu-hashtags').value || '').split(/\s+/).filter(h => h.startsWith('#'));
+    const privacy = document.querySelector('input[name="privacy"]:checked').value;
+    const creatorId = localStorage.getItem('creatorId') || 'guest';
+    const res = await fetch('/api/videos/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        creatorId, caption, hashtags, privacy,
+        music: 'Original Sound',
+        duration: 30,
+        size: window._vuFile ? window._vuFile.size : 0,
+        filename: window._vuFile ? window._vuFile.name : 'video.mp4'
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast('Video posted! It will appear in your feed.');
+      closeVideoUpload();
+      setTimeout(() => navigate('home'), 500);
+    } else {
+      toast('Upload failed. Try again.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Post'; }
+    }
+  } catch (err) {
+    toast(err.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Post'; }
+  }
+};
+
+window.closeVideoUpload = () => {
+  const modal = document.getElementById('video-upload-modal');
+  if (modal) {
+    modal.classList.remove('open');
+    setTimeout(() => modal.remove(), 300);
+  }
+  window._vuFile = null;
+};
 window.startChallenge = () => { closeCreateModal(); toast('🏆 Challenge creator coming soon'); };
 window.openSignup = () => toast('🔐 Signup coming soon');
 window.openSettings = () => toast('⚙️ Settings coming soon');

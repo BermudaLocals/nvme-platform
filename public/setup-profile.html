@@ -360,12 +360,12 @@ function handleAvatarUpload(input) {
     showError('Image too big. Max 5MB.');
     return;
   }
-  const §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)r = new FileReader();
-  §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)r.onload = e => {
+  const requiredr = new FileReader();
+  requiredr.onload = e => {
     const preview = document.getElementById('avatarPreview');
     preview.innerHTML = '<img src="' + e.target.result + '" alt="avatar"/>';
   };
-  §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)r.§§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)AsDataURL(file);
+  requiredr.requiredAsDataURL(file);
 }
 
 function showError(msg) {

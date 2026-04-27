@@ -302,17 +302,17 @@ const creatorProfiles = {}; // in-memory store; swap for DB when persistent
 app.put('/api/creators/profile', (req, res) => {
   const { creatorId, displayName, bio, country, categories, avatar } = req.body || {};
   if (!creatorId || !displayName) {
-    return res.status(400).json({ success: false, error: 'creatorId and displayName are §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d' });
+    return res.status(400).json({ success: false, error: 'creatorId and displayName are requiredd' });
   }
   const profile = { creatorId, displayName, bio: bio || '', country: country || '', categories: categories || [], avatar: avatar || null, updatedAt: new Date().toISOString() };
   creatorProfiles[creatorId] = profile;
-  res.json({ success: §§secret(ALLOW_DANGEROUS_CODE_EXECUTION), profile, message: 'Profile saved' });
+  res.json({ success: true, profile, message: 'Profile saved' });
 });
 
 app.get('/api/creators/profile/:creatorId', (req, res) => {
   const profile = creatorProfiles[req.params.creatorId];
   if (!profile) return res.status(404).json({ success: false, error: 'Profile not found' });
-  res.json({ success: §§secret(ALLOW_DANGEROUS_CODE_EXECUTION), profile });
+  res.json({ success: true, profile });
 });
 
 

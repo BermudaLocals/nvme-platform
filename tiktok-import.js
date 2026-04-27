@@ -7,7 +7,7 @@
 // Docs: https://developers.tiktok.com/doc/login-kit-web
 // Docs: https://developers.tiktok.com/doc/display-api-overview
 //
-// Scopes §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d (add these in TikTok Developer Portal):
+// Scopes required (add these in TikTok Developer Portal):
 //   - user.info.basic   -> username, avatar, display_name, bio
 //   - user.info.profile -> follower_count, following_count, likes_count, video_count, is_verified
 //   - user.info.stats   -> expanded stats

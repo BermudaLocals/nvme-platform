@@ -1013,15 +1013,15 @@ async function sendChat(){
     <button class="signup-close" onclick="closeSignup()">×</button>
     <div id="signupForm">
       <h2 class="signup-h">JOIN NVME</h2>
-      <p class="signup-sub">Start earning from day one. No credit card §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d.</p>
+      <p class="signup-sub">Start earning from day one. No credit card requiredd.</p>
       <div class="signup-perks">
         <div class="sp-item"><span class="sp-val">55%</span><span class="sp-lbl">Creator Share</span></div>
         <div class="sp-item"><span class="sp-val">14 Days</span><span class="sp-lbl">Free Trial</span></div>
         <div class="sp-item"><span class="sp-val">$500+</span><span class="sp-lbl">Avg Weekly</span></div>
       </div>
-      <input class="signup-input" id="suEmail" type="email" placeholder="Your email address" §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d/>
-      <input class="signup-input" id="suUsername" type="text" placeholder="Choose a username" §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d/>
-      <input class="signup-input" id="suPassword" type="password" placeholder="Create a password (8+ chars)" §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d/>
+      <input class="signup-input" id="suEmail" type="email" placeholder="Your email address" requiredd/>
+      <input class="signup-input" id="suUsername" type="text" placeholder="Choose a username" requiredd/>
+      <input class="signup-input" id="suPassword" type="password" placeholder="Create a password (8+ chars)" requiredd/>
       <button class="signup-btn" id="suBtn" onclick="submitSignup()">🚀 Create My Account 🚀</button>
       <p class="signup-fine">By signing up, you agree to our Terms & Privacy Policy</p>
     </div>
@@ -1044,7 +1044,7 @@ async function submitSignup(){
   const btn=document.getElementById('suBtn');
   if(!email||!username||!password){alert('Please fill all fields');return}
   if(password.length<8){alert('Password must be 8+ characters');return}
-  btn.disabled=§§secret(ALLOW_DANGEROUS_CODE_EXECUTION);btn.textContent='Creating account...';
+  btn.disabled=true;btn.textContent='Creating account...';
   try{
     const res=await fetch('/api/creators/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,username,password})});
     const data=await res.json();

@@ -1046,9 +1046,11 @@ async function submitSignup(){
   if(password.length<8){alert('Password must be 8+ characters');return}
   btn.disabled=true;btn.textContent='Creating account...';
   try{
-    const res=await fetch('/api/creators/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,username,password})});
+    const res=await fetch('/api/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,username,password})});
     const data=await res.json();
     if(data.success){
+        if (data.accessToken) localStorage.setItem('nvme_access_token', data.accessToken);
+        if (data.creator) localStorage.setItem('nvme_creator', JSON.stringify(data.creator));
       try{localStorage.setItem('nvme_creator',JSON.stringify(data.creator))}catch(e){}
       document.getElementById('signupForm').style.display='none';
       document.getElementById('signupDone').style.display='block';

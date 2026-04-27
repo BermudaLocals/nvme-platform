@@ -431,10 +431,26 @@ async function saveProfile() {
   };
 
   try {
-    const res = await fetch('/api/creators/profile', {
+    const token = localStorage.getItem('nvme_access_token');
+    if (!token) {
+      showError('Please sign up or log in first');
+      setTimeout(() => window.location.href = '/', 1500);
+      return;
+    }
+    const res = await fetch('/api/auth/profile', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(profile)
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        displayName: profile.displayName,
+        bio: profile.bio,
+        country: profile.country,
+        categories: profile.categories,
+        avatarUrl: profile.avatarUrl || null
+      })
     });
     const data = await res.json();
 

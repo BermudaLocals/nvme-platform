@@ -6,19 +6,49 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
+const cookieParser = require('cookie-parser');
+const { pool, initDB, audit } = require('./db');
+const { signAccessToken, signRefreshToken, hashToken, deviceFingerprint, requireAuth, optionalAuth, cookieOpts, REFRESH_EXPIRY_DAYS } = require('./middleware/auth');
+const { validate } = require('./middleware/validation');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://www.paypal.com", "https://js.stripe.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      mediaSrc: ["'self'", "blob:", "data:"],
+      connectSrc: ["'self'", "https://api.paypal.com"]
+    }
+  },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
+}));
+app.use(cookieParser(process.env.SESSION_SECRET || process.env.JWT_SECRET || 'nvme-cookie-secret'));
 app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
-app.use('/api/', limiter);
+// General API rate limit
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false });
+app.use('/api/', apiLimiter);
+
+// Strict limiter for auth endpoints - 10 attempts per 15 min per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many authentication attempts. Try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // In-memory data stores
 const videos = [];
@@ -42,6 +72,179 @@ try {
   console.log('gifts-500 not loaded:', e.message);
 }
 const gifts = giftsData.ALL_GIFTS || [];
+
+
+// ============ AUTHENTICATION & SECURITY ============
+
+// Initialize database on startup (non-blocking)
+initDB().then(ok => {
+  if (ok) console.log('OK Database ready');
+  else console.log('INFO Running without persistent database');
+});
+
+// Check account lockout
+async function checkLockout(email) {
+  if (!process.env.DATABASE_URL) return { locked: false };
+  try {
+    const r = await pool.query('SELECT id, failed_login_count, locked_until FROM creators WHERE email=$1', [email]);
+    if (r.rows.length === 0) return { locked: false };
+    const row = r.rows[0];
+    if (row.locked_until && new Date(row.locked_until) > new Date()) {
+      return { locked: true, until: row.locked_until, id: row.id };
+    }
+    return { locked: false, id: row.id, fails: row.failed_login_count };
+  } catch (e) {
+    return { locked: false };
+  }
+}
+
+// POST /api/auth/signup - Create account with hashed password + JWT session
+app.post('/api/auth/signup', authLimiter, validate('signup'), async (req, res) => {
+  const { email, username, password } = req.body;
+  const ip = req.ip;
+  const ua = req.get('user-agent') || '';
+  try {
+    const hash = await bcrypt.hash(password, 12);
+    if (process.env.DATABASE_URL) {
+      // DB-backed signup
+      try {
+        const result = await pool.query(
+          'INSERT INTO creators (email, username, password_hash) VALUES ($1, $2, $3) RETURNING id, email, username, created_at',
+          [email.toLowerCase(), username, hash]
+        );
+        const creator = result.rows[0];
+        const access = signAccessToken({ sub: creator.id, username: creator.username, email: creator.email });
+        const refresh = signRefreshToken();
+        const refreshHash = hashToken(refresh);
+        const expires = new Date(Date.now() + REFRESH_EXPIRY_DAYS * 86400000);
+        await pool.query(
+          'INSERT INTO sessions (creator_id, refresh_token_hash, device_fingerprint, ip_address, user_agent, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
+          [creator.id, refreshHash, deviceFingerprint(req), ip, ua, expires]
+        );
+        await audit(creator.id, 'signup', ip, ua);
+        res.cookie('nvme_access', access, cookieOpts(15 * 60 * 1000));
+        res.cookie('nvme_refresh', refresh, cookieOpts(REFRESH_EXPIRY_DAYS * 86400000));
+        return res.json({ success: true, creator: { id: creator.id, email: creator.email, username: creator.username }, accessToken: access });
+      } catch (dbErr) {
+        if (dbErr.code === '23505') {
+          return res.status(409).json({ error: 'Email or username already registered' });
+        }
+        console.error('Signup DB error:', dbErr.message);
+        return res.status(500).json({ error: 'signup failed' });
+      }
+    }
+    // Memory fallback
+    const id = uuidv4();
+    const access = signAccessToken({ sub: id, username, email });
+    res.cookie('nvme_access', access, cookieOpts(15 * 60 * 1000));
+    res.json({ success: true, creator: { id, email, username }, accessToken: access });
+  } catch (err) {
+    console.error('Signup error:', err.message);
+    res.status(500).json({ error: 'signup failed' });
+  }
+});
+
+// POST /api/auth/login - Authenticate with bcrypt + issue JWT
+app.post('/api/auth/login', authLimiter, validate('login'), async (req, res) => {
+  const { email, password } = req.body;
+  const ip = req.ip;
+  const ua = req.get('user-agent') || '';
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'login unavailable - database not configured' });
+  }
+  try {
+    const lockout = await checkLockout(email.toLowerCase());
+    if (lockout.locked) {
+      return res.status(429).json({ error: 'Account temporarily locked. Try again later.' });
+    }
+    const r = await pool.query('SELECT id, email, username, password_hash FROM creators WHERE email=$1', [email.toLowerCase()]);
+    if (r.rows.length === 0) {
+      await audit(null, 'login_failed_no_user', ip, ua, { email });
+      return res.status(401).json({ error: 'invalid credentials' });
+    }
+    const creator = r.rows[0];
+    const valid = await bcrypt.compare(password, creator.password_hash);
+    if (!valid) {
+      // Increment failed attempts; lock after 5
+      await pool.query(
+        'UPDATE creators SET failed_login_count = failed_login_count + 1, locked_until = CASE WHEN failed_login_count + 1 >= 5 THEN NOW() + INTERVAL \'15 minutes\' ELSE NULL END WHERE id=$1',
+        [creator.id]
+      );
+      await audit(creator.id, 'login_failed', ip, ua);
+      return res.status(401).json({ error: 'invalid credentials' });
+    }
+    // Success - reset counter, issue tokens
+    await pool.query('UPDATE creators SET failed_login_count=0, locked_until=NULL, last_login_at=NOW(), last_login_ip=$1 WHERE id=$2', [ip, creator.id]);
+    const access = signAccessToken({ sub: creator.id, username: creator.username, email: creator.email });
+    const refresh = signRefreshToken();
+    const refreshHash = hashToken(refresh);
+    const expires = new Date(Date.now() + REFRESH_EXPIRY_DAYS * 86400000);
+    await pool.query(
+      'INSERT INTO sessions (creator_id, refresh_token_hash, device_fingerprint, ip_address, user_agent, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
+      [creator.id, refreshHash, deviceFingerprint(req), ip, ua, expires]
+    );
+    await audit(creator.id, 'login', ip, ua);
+    res.cookie('nvme_access', access, cookieOpts(15 * 60 * 1000));
+    res.cookie('nvme_refresh', refresh, cookieOpts(REFRESH_EXPIRY_DAYS * 86400000));
+    res.json({ success: true, creator: { id: creator.id, email: creator.email, username: creator.username }, accessToken: access });
+  } catch (err) {
+    console.error('Login error:', err.message);
+    res.status(500).json({ error: 'login failed' });
+  }
+});
+
+// POST /api/auth/logout - Revoke session
+app.post('/api/auth/logout', optionalAuth, async (req, res) => {
+  const refresh = req.cookies && req.cookies.nvme_refresh;
+  if (refresh && process.env.DATABASE_URL) {
+    try {
+      await pool.query('UPDATE sessions SET revoked=true WHERE refresh_token_hash=$1', [hashToken(refresh)]);
+      if (req.user) await audit(req.user.sub, 'logout', req.ip, req.get('user-agent') || '');
+    } catch (e) { /* continue */ }
+  }
+  res.clearCookie('nvme_access');
+  res.clearCookie('nvme_refresh');
+  res.json({ success: true });
+});
+
+// GET /api/auth/me - Get current authenticated user
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.json({ user: { id: req.user.sub, username: req.user.username, email: req.user.email } });
+  }
+  try {
+    const r = await pool.query(
+      'SELECT id, email, username, display_name, bio, country, categories, avatar_url, followers, following, verified, email_verified, phone_verified, two_fa_enabled FROM creators WHERE id=$1',
+      [req.user.sub]
+    );
+    if (r.rows.length === 0) return res.status(404).json({ error: 'user not found' });
+    res.json({ user: r.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'fetch failed' });
+  }
+});
+
+// PUT /api/auth/profile - Update authenticated user's profile (PERSISTENT to DB)
+app.put('/api/auth/profile', requireAuth, validate('profile'), async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'profile update §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)s database' });
+  }
+  const { displayName, bio, country, categories, avatarUrl } = req.body;
+  try {
+    const r = await pool.query(
+      `UPDATE creators SET display_name=$1, bio=$2, country=$3, categories=$4, avatar_url=COALESCE($5, avatar_url), updated_at=NOW() WHERE id=$6 RETURNING id, display_name, bio, country, categories, avatar_url`,
+      [displayName, bio, country, categories, avatarUrl || null, req.user.sub]
+    );
+    if (r.rows.length === 0) return res.status(404).json({ error: 'user not found' });
+    await audit(req.user.sub, 'profile_update', req.ip, req.get('user-agent') || '');
+    res.json({ success: true, profile: r.rows[0] });
+  } catch (err) {
+    console.error('Profile update error:', err.message);
+    res.status(500).json({ error: 'update failed' });
+  }
+});
+
+// ============ END AUTH ============
 
 // Health
 app.get('/api/health', (req, res) => {

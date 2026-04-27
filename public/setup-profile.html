@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Set Up Your Profile — NVME</title>
+<link rel="icon" href="/icons/icon-192.png"/>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #0a0a1a 0%, #1a0a20 50%, #0a0a1a 100%);
+  color: #fff;
+  min-height: 100vh;
+  padding: 20px;
+}
+.wrap {
+  max-width: 640px;
+  margin: 40px auto;
+}
+.brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.brand-logo {
+  font-size: 28px;
+  font-weight: 900;
+  background: linear-gradient(90deg,#ff2e5a,#00d4ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 2px;
+}
+.progress {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+.step {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.step.done { background: linear-gradient(90deg,#ff2e5a,#00d4ff); }
+.card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 32px;
+  backdrop-filter: blur(10px);
+}
+h1 {
+  font-size: 32px;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg,#fff,#ff2e5a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.sub {
+  color: #aaa;
+  margin-bottom: 28px;
+  font-size: 15px;
+}
+label {
+  display: block;
+  color: #ddd;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 16px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+input, select, textarea {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 15px;
+  outline: none;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: #ff2e5a;
+  background: rgba(255,46,90,0.05);
+}
+textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.avatar-section {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+.avatar-preview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,#ff2e5a,#00d4ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  font-weight: 900;
+  color: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar-upload {
+  flex: 1;
+}
+.btn-upload {
+  background: rgba(255,46,90,0.15);
+  border: 1px solid rgba(255,46,90,0.4);
+  color: #ff2e5a;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-upload:hover { background: rgba(255,46,90,0.25); }
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.cat-chip {
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.05);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 13px;
+  transition: all 0.2s;
+  user-select: none;
+}
+.cat-chip:hover { background: rgba(255,255,255,0.08); }
+.cat-chip.active {
+  border-color: #ff2e5a;
+  background: rgba(255,46,90,0.15);
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 28px;
+}
+.btn {
+  flex: 1;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-family: inherit;
+}
+.btn-skip {
+  background: rgba(255,255,255,0.05);
+  color: #aaa;
+}
+.btn-skip:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.btn-primary {
+  flex: 2;
+  background: linear-gradient(90deg,#ff2e5a,#00d4ff);
+  color: #fff;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(255,46,90,0.5);
+}
+.btn-primary:disabled { opacity: 0.5; cursor: wait; }
+.hint {
+  color: #888;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.error {
+  background: rgba(255,50,50,0.1);
+  border: 1px solid rgba(255,50,50,0.3);
+  color: #ff7070;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  display: none;
+}
+.error.show { display: block; }
+.welcome-banner {
+  background: linear-gradient(90deg, rgba(255,46,90,0.15), rgba(0,212,255,0.15));
+  border: 1px solid rgba(255,46,90,0.3);
+  padding: 14px 18px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #ffd;
+  display: none;
+}
+.welcome-banner.show { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="brand-logo">NVME.LIVE</div>
+  </div>
+
+  <div class="progress">
+    <div class="step done"></div>
+    <div class="step done"></div>
+    <div class="step"></div>
+  </div>
+
+  <div class="card">
+    <div id="welcomeBanner" class="welcome-banner">
+      🎉 Welcome <strong id="welcomeName"></strong>! Let's set up your creator profile so fans can find you.
+    </div>
+
+    <h1>Set Up Your Profile</h1>
+    <p class="sub">This helps fans discover and support you. You can change everything later.</p>
+
+    <div id="errorBox" class="error"></div>
+
+    <div class="avatar-section">
+      <div class="avatar-preview" id="avatarPreview">
+        <span id="avatarInitials">?</span>
+      </div>
+      <div class="avatar-upload">
+        <label style="margin-top:0">Profile Photo</label>
+        <input type="file" id="avatarFile" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)"/>
+        <button class="btn-upload" onclick="document.getElementById('avatarFile').click()">📷 Upload Photo</button>
+        <div class="hint">PNG, JPG or GIF. Max 5MB.</div>
+      </div>
+    </div>
+
+    <label for="displayName">Display Name</label>
+    <input type="text" id="displayName" placeholder="What should fans call you?" maxlength="50"/>
+    <div class="hint">Your public name (not your username). Example: "Maya Rodriguez"</div>
+
+    <label for="bio">Bio</label>
+    <textarea id="bio" placeholder="Tell fans what you create — lifestyle, gaming, music, comedy?" maxlength="200"></textarea>
+    <div class="hint"><span id="bioCount">0</span>/200 characters</div>
+
+    <label for="country">Country</label>
+    <select id="country">
+      <option value="">Choose your country...</option>
+      <option value="BM">🇧🇲 Bermuda</option>
+      <option value="US">🇺🇸 United States</option>
+      <option value="CA">🇨🇦 Canada</option>
+      <option value="GB">🇬🇧 United Kingdom</option>
+      <option value="JM">🇯🇲 Jamaica</option>
+      <option value="TT">🇹🇹 Trinidad and Tobago</option>
+      <option value="BB">🇧🇧 Barbados</option>
+      <option value="AU">🇦🇺 Australia</option>
+      <option value="NZ">🇳🇿 New Zealand</option>
+      <option value="ZA">🇿🇦 South Africa</option>
+      <option value="NG">🇳🇬 Nigeria</option>
+      <option value="KE">🇰🇪 Kenya</option>
+      <option value="IN">🇮🇳 India</option>
+      <option value="BR">🇧🇷 Brazil</option>
+      <option value="MX">🇲🇽 Mexico</option>
+      <option value="OTHER">🌍 Other</option>
+    </select>
+
+    <label>What do you create?</label>
+    <div class="category-grid" id="catGrid">
+      <div class="cat-chip" data-cat="lifestyle">🌊 Lifestyle</div>
+      <div class="cat-chip" data-cat="music">🎵 Music</div>
+      <div class="cat-chip" data-cat="gaming">🎮 Gaming</div>
+      <div class="cat-chip" data-cat="comedy">😂 Comedy</div>
+      <div class="cat-chip" data-cat="dance">💃 Dance</div>
+      <div class="cat-chip" data-cat="beauty">💄 Beauty</div>
+      <div class="cat-chip" data-cat="fitness">💪 Fitness</div>
+      <div class="cat-chip" data-cat="food">🍔 Food</div>
+      <div class="cat-chip" data-cat="fashion">👗 Fashion</div>
+      <div class="cat-chip" data-cat="education">📚 Education</div>
+      <div class="cat-chip" data-cat="art">🎨 Art</div>
+      <div class="cat-chip" data-cat="tech">💻 Tech</div>
+    </div>
+    <div class="hint">Pick 1-3 that describe your content.</div>
+
+    <div class="actions">
+      <button class="btn btn-skip" onclick="skipSetup()">Skip for now</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveProfile()">Continue to App →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Get the signed-in creator from localStorage
+let creator = null;
+try {
+  const stored = localStorage.getItem('nvme_creator');
+  if (stored) creator = JSON.parse(stored);
+} catch (e) {}
+
+// First-time signup banner
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('first') === '1' && creator) {
+  document.getElementById('welcomeBanner').classList.add('show');
+  document.getElementById('welcomeName').textContent = '@' + (creator.username || 'creator');
+}
+
+// Redirect back to landing if no creator
+if (!creator) {
+  window.location.href = '/';
+}
+
+// Pre-fill display name from username
+if (creator && creator.username) {
+  document.getElementById('displayName').value = creator.username.replace(/^@/, '');
+  document.getElementById('avatarInitials').textContent = creator.username.charAt(0).toUpperCase();
+}
+
+// Bio character counter
+document.getElementById('bio').addEventListener('input', function(e) {
+  document.getElementById('bioCount').textContent = e.target.value.length;
+});
+
+// Category selection (max 3)
+const selectedCats = new Set();
+document.querySelectorAll('.cat-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const cat = chip.dataset.cat;
+    if (selectedCats.has(cat)) {
+      selectedCats.delete(cat);
+      chip.classList.remove('active');
+    } else if (selectedCats.size < 3) {
+      selectedCats.add(cat);
+      chip.classList.add('active');
+    } else {
+      showError('Pick up to 3 categories.');
+    }
+  });
+});
+
+// Avatar preview
+function handleAvatarUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    showError('Image too big. Max 5MB.');
+    return;
+  }
+  const §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)r = new FileReader();
+  §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)r.onload = e => {
+    const preview = document.getElementById('avatarPreview');
+    preview.innerHTML = '<img src="' + e.target.result + '" alt="avatar"/>';
+  };
+  §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)r.§§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)AsDataURL(file);
+}
+
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.classList.add('show');
+  setTimeout(() => box.classList.remove('show'), 4000);
+}
+
+function skipSetup() {
+  window.location.href = '/app';
+}
+
+async function saveProfile() {
+  const displayName = document.getElementById('displayName').value.trim();
+  const bio = document.getElementById('bio').value.trim();
+  const country = document.getElementById('country').value;
+  const categories = Array.from(selectedCats);
+  const avatarData = document.querySelector('#avatarPreview img') ? document.querySelector('#avatarPreview img').src : null;
+
+  if (!displayName) {
+    showError('Please enter a display name.');
+    return;
+  }
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const profile = {
+    creatorId: creator && creator.id,
+    displayName,
+    bio,
+    country,
+    categories,
+    avatar: avatarData
+  };
+
+  try {
+    const res = await fetch('/api/creators/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile)
+    });
+    const data = await res.json();
+
+    if (data.success || res.ok) {
+      // Save to localStorage
+      try {
+        const updated = Object.assign({}, creator, profile, { profileComplete: true });
+        localStorage.setItem('nvme_creator', JSON.stringify(updated));
+      } catch (e) {}
+      btn.textContent = '✓ Saved! Opening app...';
+      setTimeout(() => window.location.href = '/app', 1000);
+    } else {
+      showError(data.error || 'Could not save profile. Try again.');
+      btn.disabled = false;
+      btn.textContent = 'Continue to App →';
+    }
+  } catch (e) {
+    // Server might not have endpoint yet — save locally and continue
+    try {
+      const updated = Object.assign({}, creator, profile, { profileComplete: true });
+      localStorage.setItem('nvme_creator', JSON.stringify(updated));
+    } catch (err) {}
+    btn.textContent = '✓ Saved locally, opening app...';
+    setTimeout(() => window.location.href = '/app', 1200);
+  }
+}
+</script>
+</body>
+</html>

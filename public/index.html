@@ -575,8 +575,8 @@ footer{
   <div class="logo">NVME.live</div>
   <div class="nav-right">
     <button class="nav-link" onclick="document.querySelector('.activity-stream').scrollIntoView({behavior:'smooth'})">Feed</button>
-    <button class="nav-link" id="loginBtn">Log In</button>
-    <button class="btn-nav" onclick="window.location.href='/app'">Sign Up Free</button>
+    <button class="nav-link" id="loginBtn" onclick="openSignup()">Log In</button>
+    <button class="btn-nav" onclick="openSignup()">Sign Up Free</button>
   </div>
 </nav>
 
@@ -629,7 +629,7 @@ footer{
     </div>
   </div>
 
-  <a href="/app" class="btn-cta" id="heroCTA">🚀 UNLOCK NVME.LIVE NOW 🚀</a>
+  <a href="javascript:openSignup()" class="btn-cta" id="heroCTA">🚀 UNLOCK NVME.LIVE NOW 🚀</a>
   <p class="hero-fine">
     <span>✨ No credit card required</span> &nbsp;•&nbsp;
     <span>Free 14-day trial</span> &nbsp;•&nbsp;
@@ -730,7 +730,7 @@ footer{
       <div class="api-endpoint-line data-all data-legal"><span class="method get">GET</span><span class="api-url">/api/legal/templates</span><span class="api-desc">— List available legal templates</span></div>
       <div class="api-endpoint-line data-all data-game"><span class="method get">GET</span><span class="api-url">/api/game/crown-anchor</span><span class="api-desc">— Crown &amp; Anchor game info</span></div>
       <div class="api-endpoint-line data-all data-game"><span class="method post">POST</span><span class="api-url">/api/game/crown-anchor/roll</span><span class="api-desc">— Place bet &amp; roll the dice</span></div>
-      <div class="api-endpoint-line data-all"><span class="method post">POST</span><span class="api-url">/api/ai/chat</span><span class="api-desc">— Zara AI chat (OpenRouter)</span></div>
+      <div class="api-endpoint-line data-all"><span class="method post">POST</span><span class="api-url">/api/ai/chat</span><span class="api-desc">— Sara AI chat (OpenRouter)</span></div>
       <div class="api-endpoint-line data-all"><span class="method get">GET</span><span class="api-url">/api/health</span><span class="api-desc">— Service health &amp; key status</span></div>
     </div>
     <div class="api-status" id="apiStatus">
@@ -826,9 +826,9 @@ footer{
   <div class="cta-perks">
     <div><span class="cp-val">$500+</span><span class="cp-lbl">Avg Weekly Earnings</span></div>
     <div><span class="cp-val">14 Days</span><span class="cp-lbl">Free Trial</span></div>
-    <div><span class="cp-val">90%</span><span class="cp-lbl">Revenue Share</span></div>
+    <div><span class="cp-val">55%</span><span class="cp-lbl">Creator Revenue Share</span></div>
   </div>
-  <a href="/app" class="btn-cta">✨ START EARNING TODAY ✨</a>
+  <a href="javascript:openSignup()" class="btn-cta">✨ START EARNING TODAY ✨</a>
   <div class="spots-row">🔥 Only <strong>247 spots</strong> left this month 🔥</div>
   <div class="spots-sub">Spots filling up fast. Don't miss your chance.</div>
 </div>
@@ -838,8 +838,8 @@ footer{
   <div class="footer-logo">NVME.live</div>
   <div class="footer-links">
     <a href="#">About</a>
-    <a href="#pricing">Pricing</a>
-    <a href="#features">Creators</a>
+    <a href="#">Pricing</a>
+    <a href="#">Creators</a>
     <a href="#">Privacy</a>
     <a href="#">Terms</a>
   </div>
@@ -852,20 +852,20 @@ footer{
     <div class="chat-top">
       <div class="chat-avatar">🤖</div>
       <div>
-        <div class="chat-title">Zara – AI Guide</div>
+        <div class="chat-title">Sara – AI Guide</div>
         <div class="chat-online"><div class="chat-online-dot"></div> Online</div>
       </div>
       <button class="chat-close" onclick="toggleChat()">×</button>
     </div>
     <div class="chat-messages" id="chatMessages">
-      <div class="chat-msg bot">Hi! I'm Zara, your AI guide! 👋✨ I see you're checking out NVME. Want to see how creators like you are earning $500+/week? Ask me anything! 🚀</div>
+      <div class="chat-msg bot">Hi! I'm Sara, your AI guide! 👋✨ I see you're checking out NVME. Want to see how creators like you are earning $500+/week? Ask me anything! 🚀</div>
     </div>
     <div class="chat-input-row">
-      <input class="chat-input" id="chatInput" placeholder="Ask Zara anything…" onkeydown="if(event.key==='Enter')sendChat()"/>
+      <input class="chat-input" id="chatInput" placeholder="Ask Sara anything…" onkeydown="if(event.key==='Enter')sendChat()"/>
       <button class="chat-send" onclick="sendChat()">Send</button>
     </div>
   </div>
-  <button class="chat-fab" onclick="toggleChat()" title="Chat with Zara">🤖</button>
+  <button class="chat-fab" onclick="toggleChat()" title="Chat with Sara">🤖</button>
 </div>
 
 <script>
@@ -914,7 +914,7 @@ function showApiTab(tab, el){
 function scrollToCTA(){document.getElementById('signup').scrollIntoView({behavior:'smooth'})}
 
 // ── Chat Widget ────────────────────────────────────────────
-let chatOpen = true;
+let chatOpen = false;
 function toggleChat(){
   chatOpen=!chatOpen;
   document.getElementById('chatPanel').classList.toggle('hidden',!chatOpen);
@@ -944,7 +944,7 @@ async function sendChat(){
 
   const typing=document.createElement('div');
   typing.className='chat-msg bot typing';
-  typing.textContent='Zara is typing…';
+  typing.textContent='Sara is typing…';
   msgs.appendChild(typing);
   msgs.scrollTop=msgs.scrollHeight;
 
@@ -982,38 +982,87 @@ async function sendChat(){
 })();
 </script>
 
-<section id="download" style="background:linear-gradient(135deg,#0a0a15 0%,#150a25 50%,#0a1515 100%);padding:80px 20px;text-align:center;border-top:1px solid rgba(255,46,90,0.2)">
-<div style="max-width:900px;margin:0 auto">
-<div style="font-size:3rem;margin-bottom:1rem">📲</div>
-<h2 style="font-size:clamp(1.8rem,4vw,2.8rem);font-weight:900;background:linear-gradient(135deg,#ff2e5a,#ff6b35,#9b59b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:1rem">Download NVME App</h2>
-<p style="color:rgba(255,255,255,0.7);font-size:1.1rem;margin-bottom:2.5rem">Install directly on your phone — no App Store needed. Works like a native app on iPhone &amp; Android.</p>
-<div style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:2.5rem">
-<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,46,90,0.3);border-radius:20px;padding:2rem;min-width:220px;flex:1;max-width:260px">
-<div style="font-size:2.5rem;margin-bottom:0.75rem">🍎</div>
-<h3 style="color:#fff;font-size:1.1rem;font-weight:700;margin-bottom:0.5rem">iPhone</h3>
-<p style="color:rgba(255,255,255,0.5);font-size:0.83rem;line-height:1.5;margin-bottom:1.2rem">1. Open nvme.live in <strong style="color:#fff">Safari</strong><br>2. Tap <strong style="color:#fff">Share ↑</strong><br>3. Tap <strong style="color:#fff">Add to Home Screen</strong></p>
-<a href="/app" style="display:inline-block;background:linear-gradient(135deg,#ff2e5a,#9b59b6);color:#fff;padding:0.7rem 1.8rem;border-radius:50px;font-weight:700;font-size:0.9rem;text-decoration:none;letter-spacing:0.5px">Open in Safari</a>
+<!-- ═══ SIGNUP MODAL ═══════════════════════════════════════════ -->
+<style>
+.signup-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);z-index:9999;display:none;align-items:center;justify-content:center;padding:20px}
+.signup-overlay.show{display:flex;animation:sfadeIn .3s ease}
+@keyframes sfadeIn{from{opacity:0}to{opacity:1}}
+.signup-modal{background:linear-gradient(180deg,#1a0a20,#0a0a1a);border:2px solid #ff2e5a;border-radius:24px;max-width:480px;width:100%;padding:40px;box-shadow:0 24px 80px rgba(255,46,90,0.4);position:relative;animation:spop .4s ease}
+@keyframes spop{from{transform:scale(0.9);opacity:0}to{transform:scale(1);opacity:1}}
+.signup-close{position:absolute;top:16px;right:16px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.signup-close:hover{background:rgba(255,255,255,0.1)}
+.signup-h{font-family:'Bebas Neue',sans-serif;font-size:42px;color:#fff;text-align:center;margin-bottom:8px;letter-spacing:2px}
+.signup-sub{color:#aaa;text-align:center;margin-bottom:28px;font-size:15px}
+.signup-perks{display:flex;justify-content:space-between;margin-bottom:24px;padding:16px;background:rgba(255,46,90,0.08);border-radius:12px}
+.sp-item{text-align:center;flex:1}
+.sp-val{display:block;font-weight:800;color:#ff2e5a;font-size:18px}
+.sp-lbl{display:block;color:#aaa;font-size:11px;margin-top:4px}
+.signup-input{width:100%;padding:14px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:15px;margin-bottom:14px;outline:none;transition:all .2s}
+.signup-input:focus{border-color:#ff2e5a;background:rgba(255,46,90,0.05)}
+.signup-btn{width:100%;padding:16px;background:linear-gradient(90deg,#ff2e5a,#00d4ff);border:none;border-radius:12px;color:#fff;font-weight:800;font-size:16px;letter-spacing:1px;cursor:pointer;text-transform:uppercase;transition:all .2s}
+.signup-btn:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(255,46,90,0.5)}
+.signup-btn:disabled{opacity:0.6;cursor:wait}
+.signup-fine{text-align:center;color:#888;font-size:12px;margin-top:14px}
+.signup-success{text-align:center;padding:40px 20px}
+.signup-success-icon{font-size:64px;margin-bottom:16px}
+.signup-success h3{color:#00ff88;font-size:24px;margin-bottom:8px}
+.signup-success p{color:#aaa;margin-bottom:20px}
+</style>
+<div class="signup-overlay" id="signupModal">
+  <div class="signup-modal">
+    <button class="signup-close" onclick="closeSignup()">×</button>
+    <div id="signupForm">
+      <h2 class="signup-h">JOIN NVME</h2>
+      <p class="signup-sub">Start earning from day one. No credit card §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d.</p>
+      <div class="signup-perks">
+        <div class="sp-item"><span class="sp-val">55%</span><span class="sp-lbl">Creator Share</span></div>
+        <div class="sp-item"><span class="sp-val">14 Days</span><span class="sp-lbl">Free Trial</span></div>
+        <div class="sp-item"><span class="sp-val">$500+</span><span class="sp-lbl">Avg Weekly</span></div>
+      </div>
+      <input class="signup-input" id="suEmail" type="email" placeholder="Your email address" §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d/>
+      <input class="signup-input" id="suUsername" type="text" placeholder="Choose a username" §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d/>
+      <input class="signup-input" id="suPassword" type="password" placeholder="Create a password (8+ chars)" §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d/>
+      <button class="signup-btn" id="suBtn" onclick="submitSignup()">🚀 Create My Account 🚀</button>
+      <p class="signup-fine">By signing up, you agree to our Terms & Privacy Policy</p>
+    </div>
+    <div id="signupDone" class="signup-success" style="display:none">
+      <div class="signup-success-icon">🎉</div>
+      <h3>Welcome to NVME!</h3>
+      <p id="suMsg">Your account is ready. Redirecting to the app...</p>
+      <button class="signup-btn" onclick="openSignup()">Open NVME App</button>
+    </div>
+  </div>
 </div>
-<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(0,212,255,0.3);border-radius:20px;padding:2rem;min-width:220px;flex:1;max-width:260px">
-<div style="font-size:2.5rem;margin-bottom:0.75rem">🤖</div>
-<h3 style="color:#fff;font-size:1.1rem;font-weight:700;margin-bottom:0.5rem">Android</h3>
-<p style="color:rgba(255,255,255,0.5);font-size:0.83rem;line-height:1.5;margin-bottom:1.2rem">1. Open in <strong style="color:#fff">Chrome</strong><br>2. Tap the <strong style="color:#fff">Install banner</strong><br>3. Or menu → <strong style="color:#fff">Install app</strong></p>
-<a href="/app" id="androidInstallBtn" style="display:inline-block;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#000;padding:0.7rem 1.8rem;border-radius:50px;font-weight:700;font-size:0.9rem;text-decoration:none;letter-spacing:0.5px">Install App</a>
-</div>
-<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:2rem;min-width:220px;flex:1;max-width:260px">
-<div style="font-size:2.5rem;margin-bottom:0.75rem">💻</div>
-<h3 style="color:#fff;font-size:1.1rem;font-weight:700;margin-bottom:0.5rem">Desktop</h3>
-<p style="color:rgba(255,255,255,0.5);font-size:0.83rem;line-height:1.5;margin-bottom:1.2rem">1. Open in <strong style="color:#fff">Chrome / Edge</strong><br>2. Click <strong style="color:#fff">⊕ install icon</strong> in URL bar<br>3. Click Install</p>
-<a href="/app" style="display:inline-block;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:0.7rem 1.8rem;border-radius:50px;font-weight:700;font-size:0.9rem;text-decoration:none;letter-spacing:0.5px">Open Web App</a>
-</div>
-</div>
-<p style="color:rgba(255,255,255,0.35);font-size:0.8rem">✅ No App Store approval &nbsp;•&nbsp; ✅ Auto-updates &nbsp;•&nbsp; ✅ Works offline &nbsp;•&nbsp; ✅ iOS &amp; Android &amp; Desktop</p>
-</div>
-</section>
 <script>
-(function(){
-let dp;window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();dp=e;var b=document.getElementById("androidInstallBtn");if(b){b.textContent="📲 Install Now!";b.onclick=async function(ev){ev.preventDefault();if(dp){dp.prompt();var r=await dp.userChoice;dp=null;if(r.outcome==="accepted")window.location.href="/app";}else{window.location.href="/app";}};}}); 
-})();
+function openSignup(){document.getElementById('signupModal').classList.add('show');document.body.style.overflow='hidden'}
+function closeSignup(){document.getElementById('signupModal').classList.remove('show');document.body.style.overflow=''}
+document.addEventListener('click',function(e){if(e.target.id==='signupModal')closeSignup()});
+async function submitSignup(){
+  const email=document.getElementById('suEmail').value.trim();
+  const username=document.getElementById('suUsername').value.trim();
+  const password=document.getElementById('suPassword').value;
+  const btn=document.getElementById('suBtn');
+  if(!email||!username||!password){alert('Please fill all fields');return}
+  if(password.length<8){alert('Password must be 8+ characters');return}
+  btn.disabled=§§secret(ALLOW_DANGEROUS_CODE_EXECUTION);btn.textContent='Creating account...';
+  try{
+    const res=await fetch('/api/creators/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,username,password})});
+    const data=await res.json();
+    if(data.success){
+      try{localStorage.setItem('nvme_creator',JSON.stringify(data.creator))}catch(e){}
+      document.getElementById('signupForm').style.display='none';
+      document.getElementById('signupDone').style.display='block';
+      setTimeout(()=>window.location.href='/setup-profile?first=1',2500);
+    }else{
+      alert('Signup failed. Try again.');
+      btn.disabled=false;btn.textContent='🚀 Create My Account 🚀';
+    }
+  }catch(e){
+    alert('Network error. Try again.');
+    btn.disabled=false;btn.textContent='🚀 Create My Account 🚀';
+  }
+}
 </script>
+
 </body>
 </html>

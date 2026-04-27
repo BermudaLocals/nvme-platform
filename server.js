@@ -6,518 +6,411 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const tiktokFeatures = require('./tiktok-features');
-const tiktokImport = require('./tiktok-import');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500 });
-app.use('/api/', limiter);
-
-// ─── STATIC FILES ─────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── IN-MEMORY STORES (replace with Neon/Postgres via DATABASE_URL) ───────────
-const creators = new Map();
-const jobs = new Map();
-const legalDocs = new Map();
-const gameRooms = new Map();
-const activityFeed = [];
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
+app.use('/api/', limiter);
 
-// Seed activity feed
-const seedActivity = [
-  { type: 'join',   user: '@mike_viral',     msg: 'joined NVME',       time: 'just now' },
-  { type: 'earn',   user: '@emma_content',   msg: 'earned $89',        time: '5m ago' },
-  { type: 'video',  user: '@alex_studio',    msg: 'uploaded a video',  time: 'just now' },
-  { type: 'earn',   user: '@jenny_ai',       msg: 'earned $340',       time: '1m ago' },
-  { type: 'join',   user: '@creator_bda',    msg: 'joined NVME',       time: '2m ago' },
-  { type: 'earn',   user: '@sarah_creates',  msg: 'earned $125',       time: '3m ago' },
-];
-seedActivity.forEach(a => activityFeed.push({ ...a, id: uuidv4() }));
+// In-memory data stores
+const videos = [];
+const posts = [];
+const stories = [];
+const reels = [];
+const tweets = [];
+const channels = [];
+const chats = [];
+const messages = [];
+const snaps = [];
+const profiles = [];
+const matches = [];
+const friends = [];
+const groups = [];
 
-// Seed job board
-const seedJobs = [
-  { id: uuidv4(), title: 'Social Media Manager',    type: 'Full-time',   pay: '$55,000/yr',  location: 'Hamilton, BDA', company: 'Island Digital Co',    category: 'marketing',  posted: '2h ago' },
-  { id: uuidv4(), title: 'Video Editor',            type: 'Contract',    pay: '$35/hr',      location: 'Remote',        company: 'NVME Studios',          category: 'creative',   posted: '4h ago' },
-  { id: uuidv4(), title: 'AI Content Specialist',   type: 'Full-time',   pay: '$70,000/yr',  location: 'Remote',        company: 'CreatorHub',            category: 'tech',       posted: '6h ago' },
-  { id: uuidv4(), title: 'Brand Partnerships Mgr',  type: 'Full-time',   pay: '$80,000/yr',  location: 'Hamilton, BDA', company: 'Bermuda Media Group',   category: 'marketing',  posted: '1d ago' },
-  { id: uuidv4(), title: 'UX Designer',             type: 'Contract',    pay: '$50/hr',      location: 'Remote',        company: 'NVME.live',             category: 'creative',   posted: '1d ago' },
-  { id: uuidv4(), title: 'Backend Engineer (Node)', type: 'Full-time',   pay: '$95,000/yr',  location: 'Remote',        company: 'NVME.live',             category: 'tech',       posted: '2d ago' },
-];
-seedJobs.forEach(j => jobs.set(j.id, j));
+let giftsData = {};
+try {
+  giftsData = require('./gifts-500');
+} catch (e) {
+  console.log('gifts-500 not loaded:', e.message);
+}
+const gifts = giftsData.ALL_GIFTS || [];
 
-// ─── HEALTH CHECK ─────────────────────────────────────────────────────────────
+// Health
 app.get('/api/health', (req, res) => {
-  const checks = {
+  res.json({
     status: 'online',
     version: '2.0.0',
-    timestamp: new Date().toISOString(),
-    platform: 'NVME Mothership v2.0',
-    services: {
-      server:       { status: 'green', msg: 'Express running' },
-      database:     { status: process.env.DATABASE_URL   ? 'green' : 'yellow', msg: process.env.DATABASE_URL   ? 'Neon connected'   : 'Using in-memory (add DATABASE_URL)' },
-      twilio:       { status: process.env.TWILIO_ACCOUNT_SID ? 'green' : 'yellow', msg: process.env.TWILIO_ACCOUNT_SID ? 'AI Receptionist live' : 'Add TWILIO_ACCOUNT_SID' },
-      openrouter:   { status: process.env.OPENROUTER_API_KEY ? 'green' : 'yellow', msg: process.env.OPENROUTER_API_KEY ? 'AI connected'    : 'Add OPENROUTER_API_KEY' },
-      paypal:       { status: process.env.PAYPAL_CLIENT_ID   ? 'green' : 'yellow', msg: process.env.PAYPAL_CLIENT_ID   ? 'PayPal live'      : 'Add PAYPAL_CLIENT_ID' },
-      stripe:       { status: process.env.STRIPE_SECRET_KEY  ? 'green' : 'yellow', msg: process.env.STRIPE_SECRET_KEY  ? 'Stripe live'      : 'Add STRIPE_SECRET_KEY' },
-      cashapp:      { status: process.env.CASHAPP_CLIENT_ID  ? 'green' : 'yellow', msg: process.env.CASHAPP_CLIENT_ID  ? 'Cash App live'    : 'Add CASHAPP_CLIENT_ID' },
-      crypto:       { status: process.env.COINBASE_API_KEY   ? 'green' : 'yellow', msg: process.env.COINBASE_API_KEY   ? 'Crypto live'      : 'Add COINBASE_API_KEY' },
-    },
-    endpoints: {
-      landing:       'GET  /',
-      health:        'GET  /api/health',
-      payments:      'POST /api/payments/checkout',
-      receptionist:  'POST /api/receptionist/voice',
-      jobs:          'GET  /api/jobs',
-      legal:         'POST /api/legal/generate',
-      game:          'GET  /api/game/crown-anchor',
-      creators:      'GET  /api/creators/stats',
-      activity:      'GET  /api/activity',
-    }
-  };
-  res.json(checks);
+    platform: 'NVME Creator Platform',
+    emulates: ['TikTok', 'Instagram', 'YouTube', 'WhatsApp', 'Snapchat', 'X', 'Facebook', 'Dating'],
+    timestamp: new Date().toISOString()
+  });
 });
 
-// ─── TIKTOK-STYLE FEATURES (VS Battles, FYP, Duet, Stitch, Challenges, Analytics, Live Rooms, Shop, Sounds, Payouts) ─
-tiktokFeatures.setupRoutes(app);
-tiktokImport.setupRoutes(app);
-
-// ─── CREATORS ────────────────────────────────────────────────────────────────
 app.get('/api/creators/stats', (req, res) => {
   res.json({
-    totalCreators: 50000 + Math.floor(Math.random() * 500),
-    earnedThisMonth: 4280000 + Math.floor(Math.random() * 10000),
-    activeStreams: 847 + Math.floor(Math.random() * 50),
-    videosToday: 12847 + Math.floor(Math.random() * 100),
-    giftsToday: 18400 + Math.floor(Math.random() * 500),
+    totalCreators: 12847,
+    activeNow: 3241,
+    avgWeeklyEarnings: 500,
+    revenueSplit: '55% creator / 45% platform',
+    totalVideos: videos.length,
+    totalPosts: posts.length
   });
 });
 
-// ─── 500+ GIFTS API ──────────────────────────────────────────────────────────
-const { getAvailableGifts } = require('./gifts-500');
-
-app.get('/api/gifts', (req, res) => {
-  const giftData = getAvailableGifts();
-  res.json({
-    status: 'success',
-    ...giftData,
-    message: `Showing ${giftData.totalCount} total gifts including ${giftData.evergreenCount} evergreen and ${giftData.holidayCount} holiday specials`
-  });
+// TikTok
+app.get('/api/feed/fyp', (req, res) => {
+  const feed = videos.slice(0, 20).map(v => ({ ...v, isFyp: true }));
+  res.json({ feed, algorithm: 'engagement-based', count: feed.length });
 });
+
+app.post('/api/videos/upload', (req, res) => {
+  const video = {
+    id: uuidv4(), type: 'vertical', creatorId: req.body.creatorId,
+    caption: req.body.caption, hashtags: req.body.hashtags || [],
+    music: req.body.music, duration: req.body.duration || 60,
+    views: 0, likes: 0, shares: 0, comments: 0,
+    createdAt: new Date().toISOString()
+  };
+  videos.push(video);
+  res.json({ success: true, video });
+});
+
+app.post('/api/videos/:id/like', (req, res) => {
+  const video = videos.find(v => v.id === req.params.id);
+  if (!video) return res.status(404).json({ error: 'not found' });
+  video.likes++;
+  res.json({ success: true, likes: video.likes });
+});
+
+app.get('/api/trending/hashtags', (req, res) => {
+  res.json({ trending: ['#fyp', '#viral', '#nvme', '#creator', '#dance', '#comedy', '#lifestyle', '#fitness'] });
+});
+
+// Instagram
+app.post('/api/posts', (req, res) => {
+  const post = {
+    id: uuidv4(), creatorId: req.body.creatorId,
+    images: req.body.images || [], caption: req.body.caption,
+    location: req.body.location, likes: 0, comments: [],
+    createdAt: new Date().toISOString()
+  };
+  posts.push(post);
+  res.json({ success: true, post });
+});
+
+app.get('/api/posts', (req, res) => { res.json({ posts: posts.slice(0, 50), count: posts.length }); });
+
+app.post('/api/stories', (req, res) => {
+  const story = { id: uuidv4(), creatorId: req.body.creatorId, media: req.body.media,
+    expiresAt: new Date(Date.now() + 24*60*60*1000).toISOString(), views: 0,
+    createdAt: new Date().toISOString() };
+  stories.push(story);
+  res.json({ success: true, story });
+});
+
+app.get('/api/stories', (req, res) => {
+  const active = stories.filter(s => new Date(s.expiresAt) > new Date());
+  res.json({ stories: active });
+});
+
+app.post('/api/reels', (req, res) => {
+  const reel = { id: uuidv4(), creatorId: req.body.creatorId, videoUrl: req.body.videoUrl,
+    caption: req.body.caption, music: req.body.music, likes: 0,
+    createdAt: new Date().toISOString() };
+  reels.push(reel);
+  res.json({ success: true, reel });
+});
+
+// YouTube
+app.post('/api/channels', (req, res) => {
+  const channel = { id: uuidv4(), name: req.body.name, ownerId: req.body.ownerId,
+    subscribers: 0, totalViews: 0, videos: [], createdAt: new Date().toISOString() };
+  channels.push(channel);
+  res.json({ success: true, channel });
+});
+
+app.get('/api/channels', (req, res) => { res.json({ channels }); });
+
+app.post('/api/channels/:id/subscribe', (req, res) => {
+  const channel = channels.find(c => c.id === req.params.id);
+  if (!channel) return res.status(404).json({ error: 'not found' });
+  channel.subscribers++;
+  res.json({ success: true, subscribers: channel.subscribers });
+});
+
+app.get('/api/videos/longform', (req, res) => {
+  const longform = videos.filter(v => v.duration > 60);
+  res.json({ videos: longform });
+});
+
+// WhatsApp
+app.post('/api/chats', (req, res) => {
+  const chat = { id: uuidv4(), participants: req.body.participants,
+    type: req.body.type || 'direct', name: req.body.name,
+    createdAt: new Date().toISOString() };
+  chats.push(chat);
+  res.json({ success: true, chat });
+});
+
+app.post('/api/messages', (req, res) => {
+  const message = { id: uuidv4(), chatId: req.body.chatId, senderId: req.body.senderId,
+    text: req.body.text, media: req.body.media, read: false,
+    createdAt: new Date().toISOString() };
+  messages.push(message);
+  res.json({ success: true, message });
+});
+
+app.get('/api/chats/:id/messages', (req, res) => {
+  const chatMessages = messages.filter(m => m.chatId === req.params.id);
+  res.json({ messages: chatMessages });
+});
+
+app.post('/api/calls/initiate', (req, res) => {
+  res.json({ success: true, callId: uuidv4(), type: req.body.type || 'video',
+    participants: req.body.participants, startedAt: new Date().toISOString() });
+});
+
+// Snapchat
+app.post('/api/snaps', (req, res) => {
+  const snap = { id: uuidv4(), senderId: req.body.senderId, recipientId: req.body.recipientId,
+    media: req.body.media, filter: req.body.filter, viewDuration: req.body.viewDuration || 10,
+    expiresAt: new Date(Date.now() + 24*60*60*1000).toISOString() };
+  snaps.push(snap);
+  res.json({ success: true, snap });
+});
+
+app.get('/api/filters', (req, res) => {
+  res.json({ filters: [
+    { id: 'dog', name: 'Dog Face' },
+    { id: 'flower-crown', name: 'Flower Crown' },
+    { id: 'glasses', name: 'Retro Glasses' },
+    { id: 'stars', name: 'Sparkling Stars' },
+    { id: 'rainbow', name: 'Rainbow Puke' }
+  ] });
+});
+
+app.get('/api/streaks/:userId', (req, res) => {
+  res.json({ userId: req.params.userId, streaks: [], count: 0 });
+});
+
+// X / Twitter
+app.post('/api/tweets', (req, res) => {
+  const tweet = { id: uuidv4(), creatorId: req.body.creatorId, text: req.body.text,
+    media: req.body.media, likes: 0, retweets: 0, replies: 0,
+    createdAt: new Date().toISOString() };
+  tweets.push(tweet);
+  res.json({ success: true, tweet });
+});
+
+app.get('/api/tweets', (req, res) => { res.json({ tweets: tweets.slice(0, 50) }); });
+
+app.post('/api/tweets/:id/retweet', (req, res) => {
+  const tweet = tweets.find(tw => tw.id === req.params.id);
+  if (!tweet) return res.status(404).json({ error: 'not found' });
+  tweet.retweets++;
+  res.json({ success: true, retweets: tweet.retweets });
+});
+
+app.get('/api/trends', (req, res) => {
+  res.json({ trends: [
+    { topic: '#NVME', posts: 52310 },
+    { topic: '#CreatorEconomy', posts: 18452 },
+    { topic: '#Viral', posts: 94821 },
+    { topic: '#Bermuda', posts: 3214 }
+  ] });
+});
+
+// Facebook
+app.post('/api/friends/request', (req, res) => {
+  const request = { id: uuidv4(), fromId: req.body.fromId, toId: req.body.toId,
+    status: 'pending', createdAt: new Date().toISOString() };
+  friends.push(request);
+  res.json({ success: true, request });
+});
+
+app.get('/api/friends/:userId', (req, res) => {
+  const userFriends = friends.filter(f => (f.fromId === req.params.userId || f.toId === req.params.userId) && f.status === 'accepted');
+  res.json({ friends: userFriends });
+});
+
+app.post('/api/groups', (req, res) => {
+  const group = { id: uuidv4(), name: req.body.name, description: req.body.description,
+    ownerId: req.body.ownerId, members: [req.body.ownerId], privacy: req.body.privacy || 'public',
+    createdAt: new Date().toISOString() };
+  groups.push(group);
+  res.json({ success: true, group });
+});
+
+app.get('/api/groups', (req, res) => { res.json({ groups }); });
+
+app.post('/api/events', (req, res) => {
+  res.json({ success: true, event: { id: uuidv4(), ...req.body, createdAt: new Date().toISOString() } });
+});
+
+// Dating (menus.ai style)
+app.post('/api/dating/profile', (req, res) => {
+  const profile = { id: uuidv4(), userId: req.body.userId, name: req.body.name,
+    age: req.body.age, bio: req.body.bio, photos: req.body.photos || [],
+    interests: req.body.interests || [], location: req.body.location,
+    preferences: req.body.preferences, createdAt: new Date().toISOString() };
+  profiles.push(profile);
+  res.json({ success: true, profile });
+});
+
+app.get('/api/dating/discover/:userId', (req, res) => {
+  const candidates = profiles.filter(p => p.userId !== req.params.userId).slice(0, 10);
+  res.json({ candidates });
+});
+
+app.post('/api/dating/swipe', (req, res) => {
+  const swipe = { id: uuidv4(), swiperId: req.body.swiperId, swipedId: req.body.swipedId,
+    direction: req.body.direction, createdAt: new Date().toISOString() };
+  if (swipe.direction === 'right') {
+    const mutual = matches.find(m => m.swiperId === swipe.swipedId && m.swipedId === swipe.swiperId && m.direction === 'right');
+    if (mutual) return res.json({ success: true, match: true, message: 'Its a match!' });
+  }
+  matches.push(swipe);
+  res.json({ success: true, match: false });
+});
+
+app.get('/api/dating/matches/:userId', (req, res) => {
+  const userMatches = matches.filter(m => (m.swiperId === req.params.userId || m.swipedId === req.params.userId) && m.direction === 'right');
+  res.json({ matches: userMatches });
+});
+
+app.post('/api/dating/video-date', (req, res) => {
+  res.json({ success: true, session: { id: uuidv4(), participants: req.body.participants,
+    startedAt: new Date().toISOString(), duration: 300 } });
+});
+
+// Creator
+app.post('/api/creators/signup', (req, res) => {
+  res.json({ success: true, creator: { id: uuidv4(), email: req.body.email,
+    username: req.body.username, createdAt: new Date().toISOString() }, trialDays: 14 });
+});
+
+// Creator profile setup / update — declared BEFORE /:id so 'profile' isn't treated as an id
+const creatorProfiles = {}; // in-memory store; swap for DB when persistent
+app.put('/api/creators/profile', (req, res) => {
+  const { creatorId, displayName, bio, country, categories, avatar } = req.body || {};
+  if (!creatorId || !displayName) {
+    return res.status(400).json({ success: false, error: 'creatorId and displayName are §§secret(POSTGRESQL://NEONDB_OWNER:NPG_NX6JVZR2QMYG@EP-FALLING-PAPER-A62FLHPD.US-WEST-2.AWS.NEON.TECH/NEONDB?SSLMODE)d' });
+  }
+  const profile = { creatorId, displayName, bio: bio || '', country: country || '', categories: categories || [], avatar: avatar || null, updatedAt: new Date().toISOString() };
+  creatorProfiles[creatorId] = profile;
+  res.json({ success: §§secret(ALLOW_DANGEROUS_CODE_EXECUTION), profile, message: 'Profile saved' });
+});
+
+app.get('/api/creators/profile/:creatorId', (req, res) => {
+  const profile = creatorProfiles[req.params.creatorId];
+  if (!profile) return res.status(404).json({ success: false, error: 'Profile not found' });
+  res.json({ success: §§secret(ALLOW_DANGEROUS_CODE_EXECUTION), profile });
+});
+
+
+app.get('/api/creators/:id', (req, res) => {
+  res.json({ id: req.params.id, username: 'creator_' + req.params.id.slice(0, 8),
+    followers: Math.floor(Math.random() * 100000),
+    following: Math.floor(Math.random() * 1000),
+    verified: Math.random() > 0.5 });
+});
+
+// Gifts
+app.get('/api/gifts', (req, res) => { res.json({ gifts, count: gifts.length }); });
 
 app.get('/api/gifts/random', (req, res) => {
-  const giftData = getAvailableGifts();
-  const randomGift = giftData.gifts[Math.floor(Math.random() * giftData.gifts.length)];
-  res.json({
-    status: 'success',
-    gift: randomGift
-  });
+  if (gifts.length === 0) return res.json({ gift: null });
+  const gift = gifts[Math.floor(Math.random() * gifts.length)];
+  res.json({ gift });
 });
 
-// ─── HUGE AI AVATAR ───────────────────────────────────────────────────────────
-app.get('/huge-ai', (req, res) => {
-  res.sendFile(__dirname + '/public/huge-ai.html');
+app.post('/api/gifts/send', (req, res) => {
+  res.json({ success: true, transaction: { id: uuidv4(), giftId: req.body.giftId,
+    fromId: req.body.fromId, toId: req.body.toId, amount: req.body.amount,
+    creatorShare: req.body.amount * 0.55, platformShare: req.body.amount * 0.45,
+    createdAt: new Date().toISOString() } });
 });
 
-// ─── CREATORS ────────────────────────────────────────────────────────────────
-
-app.post('/api/creators/signup', (req, res) => {
-  const { username, email, referral } = req.body;
-  if (!username || !email) return res.status(400).json({ error: 'username and email required' });
-  const id = uuidv4();
-  const creator = { id, username, email, referral, joinedAt: new Date().toISOString(), plan: 'trial' };
-  creators.set(id, creator);
-  activityFeed.unshift({ id: uuidv4(), type: 'join', user: `@${username}`, msg: 'joined NVME', time: 'just now' });
-  if (activityFeed.length > 50) activityFeed.pop();
-  res.json({ success: true, creatorId: id, message: 'Welcome to NVME! Your 14-day free trial starts now.', trialEnds: new Date(Date.now() + 14 * 86400000).toISOString() });
-});
-
-// ─── ACTIVITY FEED ────────────────────────────────────────────────────────────
-app.get('/api/activity', (req, res) => {
-  res.json(activityFeed.slice(0, 20));
-});
-
-// ─── 8 PAYMENT PROVIDERS ─────────────────────────────────────────────────────
-const PAYMENT_PROVIDERS = ['paypal', 'stripe', 'cashapp', 'applepay', 'googlepay', 'crypto', 'wire', 'bermuda_bank'];
-
+// Payments
 app.get('/api/payments/providers', (req, res) => {
-  res.json({
-    providers: [
-      { id: 'paypal',       name: 'PayPal',          icon: '🅿️',  minPayout: 5,    fee: '2.9%',  active: !!process.env.PAYPAL_CLIENT_ID },
-      { id: 'stripe',       name: 'Stripe',          icon: '💳',  minPayout: 10,   fee: '2.9%',  active: !!process.env.STRIPE_SECRET_KEY },
-      { id: 'cashapp',      name: 'Cash App',        icon: '💵',  minPayout: 1,    fee: '0%',    active: !!process.env.CASHAPP_CLIENT_ID },
-      { id: 'applepay',     name: 'Apple Pay',       icon: '🍎',  minPayout: 5,    fee: '0%',    active: true },
-      { id: 'googlepay',    name: 'Google Pay',      icon: '🟦',  minPayout: 5,    fee: '0%',    active: true },
-      { id: 'crypto',       name: 'Crypto (USDC)',   icon: '🪙',  minPayout: 10,   fee: '1%',    active: !!process.env.COINBASE_API_KEY },
-      { id: 'wire',         name: 'Bank Wire',       icon: '🏦',  minPayout: 100,  fee: '$15',   active: true },
-      { id: 'bermuda_bank', name: 'Bermuda Bank',    icon: '🌊',  minPayout: 25,   fee: '0%',    active: true },
-    ]
-  });
-});
-
-app.post('/api/payments/checkout', async (req, res) => {
-  const { provider, amount, currency = 'USD', creatorId, plan } = req.body;
-  if (!provider || !amount) return res.status(400).json({ error: 'provider and amount required' });
-  if (!PAYMENT_PROVIDERS.includes(provider)) return res.status(400).json({ error: `Unknown provider. Choose: ${PAYMENT_PROVIDERS.join(', ')}` });
-
-  // PayPal
-  if (provider === 'paypal') {
-    if (!process.env.PAYPAL_CLIENT_ID) return res.json({ status: 'mock', provider, amount, currency, redirectUrl: 'https://paypal.com/checkout?mock=true', orderId: uuidv4() });
-    try {
-      const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_SECRET}`).toString('base64');
-      const tokenRes = await require('axios').post('https://api-m.sandbox.paypal.com/v1/oauth2/token', 'grant_type=client_credentials', { headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' } });
-      const token = tokenRes.data.access_token;
-      const orderRes = await require('axios').post('https://api-m.sandbox.paypal.com/v2/checkout/orders', { intent: 'CAPTURE', purchase_units: [{ amount: { currency_code: currency, value: amount.toString() } }] }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-      const approveUrl = orderRes.data.links.find(l => l.rel === 'approve')?.href;
-      return res.json({ status: 'created', provider, orderId: orderRes.data.id, redirectUrl: approveUrl });
-    } catch (e) { return res.status(500).json({ error: 'PayPal error', detail: e.message }); }
-  }
-
-  // Stripe
-  if (provider === 'stripe') {
-    if (!process.env.STRIPE_SECRET_KEY) return res.json({ status: 'mock', provider, amount, currency, checkoutUrl: 'https://checkout.stripe.com/mock', sessionId: uuidv4() });
-    try {
-      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-      const session = await stripe.checkout.sessions.create({ payment_method_types: ['card'], line_items: [{ price_data: { currency, product_data: { name: `NVME ${plan || 'Pro'} Plan` }, unit_amount: Math.round(amount * 100) }, quantity: 1 }], mode: 'payment', success_url: `${process.env.BASE_URL || 'https://nvme.live'}/success`, cancel_url: `${process.env.BASE_URL || 'https://nvme.live'}/cancel` });
-      return res.json({ status: 'created', provider, sessionId: session.id, checkoutUrl: session.url });
-    } catch (e) { return res.status(500).json({ error: 'Stripe error', detail: e.message }); }
-  }
-
-  // All other providers — structured mock ready for real integration
-  const mockResponses = {
-    cashapp:      { status: 'mock', provider, redirectUrl: `https://cash.app/pay/nvme/$${amount}`, note: 'Add CASHAPP_CLIENT_ID to go live' },
-    applepay:     { status: 'mock', provider, token: uuidv4(), note: 'Apple Pay — client-side JS required' },
-    googlepay:    { status: 'mock', provider, token: uuidv4(), note: 'Google Pay — client-side JS required' },
-    crypto:       { status: 'mock', provider, address: '0xNVME_USDC_ADDRESS', amount, note: 'Add COINBASE_API_KEY to go live' },
-    wire:         { status: 'pending', provider, instructions: { bank: 'Bermuda Commercial Bank', routing: '021000021', account: 'NVME-ESCROW-001', ref: uuidv4().slice(0,8).toUpperCase() } },
-    bermuda_bank: { status: 'pending', provider, instructions: { bank: 'Clarien Bank Bermuda', sortCode: 'BDA-001', account: 'NVME-2026', ref: uuidv4().slice(0,8).toUpperCase() } },
-  };
-  res.json({ ...mockResponses[provider], amount, currency, creatorId });
+  res.json({ providers: [
+    { id: 'stripe', name: 'Stripe', active: true },
+    { id: 'paypal', name: 'PayPal', active: true },
+    { id: 'applepay', name: 'Apple Pay', active: true },
+    { id: 'googlepay', name: 'Google Pay', active: true },
+    { id: 'crypto', name: 'Crypto', active: true },
+    { id: 'wire', name: 'Bank Wire', active: true }
+  ] });
 });
 
 app.post('/api/payments/payout', (req, res) => {
-  const { creatorId, amount, provider } = req.body;
-  if (!creatorId || !amount || !provider) return res.status(400).json({ error: 'creatorId, amount, and provider required' });
-  const payoutId = uuidv4();
-  activityFeed.unshift({ id: uuidv4(), type: 'earn', user: `@creator_${creatorId.slice(0,6)}`, msg: `earned $${amount}`, time: 'just now' });
-  res.json({ success: true, payoutId, creatorId, amount, provider, status: 'processing', eta: '24-48 hours', message: `$${amount} payout initiated via ${provider}` });
+  res.json({ success: true, payout: { id: uuidv4(), creatorId: req.body.creatorId,
+    amount: req.body.amount, method: req.body.method, status: 'pending',
+    estimatedArrival: new Date(Date.now() + 3*24*60*60*1000).toISOString() } });
 });
 
-// ─── AI RECEPTIONIST (TWILIO) ─────────────────────────────────────────────────
-app.post('/api/receptionist/voice', (req, res) => {
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna" language="en-US">
-    Welcome to N V M E dot live, Bermuda's premier creator platform.
-    For creator support, press 1.
-    For payment inquiries, press 2.
-    For partnerships and advertising, press 3.
-    To hear about our AI tools and features, press 4.
-    To speak with a team member, press 0.
-  </Say>
-  <Gather numDigits="1" action="/api/receptionist/menu" method="POST" timeout="10">
-    <Say voice="Polly.Joanna">Please make your selection now.</Say>
-  </Gather>
-  <Say voice="Polly.Joanna">We didn't receive your input. Please call back and try again. Goodbye!</Say>
-</Response>`;
-  res.set('Content-Type', 'text/xml');
-  res.send(twiml);
+// Live
+app.post('/api/live/start', (req, res) => {
+  res.json({ success: true, stream: { id: uuidv4(), creatorId: req.body.creatorId,
+    title: req.body.title, viewers: 0, startedAt: new Date().toISOString() } });
 });
 
-app.post('/api/receptionist/menu', (req, res) => {
-  const digit = req.body.Digits;
-  const responses = {
-    '1': `<Say voice="Polly.Joanna">Connecting you to creator support. Our team is available Monday to Friday, 9 A M to 6 P M Bermuda time. You can also email support at nvme dot live for 24 hour assistance.</Say>`,
-    '2': `<Say voice="Polly.Joanna">For payment questions, our average payout is 340 dollars per week. We support 8 payment providers including PayPal, Stripe, Cash App, Apple Pay, Google Pay, crypto, and bank wire. Visit nvme dot live slash wallet for details.</Say>`,
-    '3': `<Say voice="Polly.Joanna">For partnerships and brand deals, email partnerships at nvme dot live. We connect brands with over 50,000 creators across 150 countries.</Say>`,
-    '4': `<Say voice="Polly.Joanna">Our A I suite includes a video generator with 29 avatars, voice cloning, lip sync, and text to video. Creators make up to 10 dollars per 1000 views. Start your free 14 day trial at nvme dot live.</Say>`,
-    '0': `<Say voice="Polly.Joanna">Transferring you to a team member now. Please hold.</Say><Dial timeout="30"><Number>${process.env.TEAM_PHONE || '+14412000000'}</Number></Dial>`,
-  };
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  ${responses[digit] || `<Say voice="Polly.Joanna">Invalid selection. Please call back and try again.</Say>`}
-</Response>`;
-  res.set('Content-Type', 'text/xml');
-  res.send(twiml);
+app.get('/api/live/active', (req, res) => { res.json({ streams: [], count: 0 }); });
+
+app.get('/api/activity', (req, res) => {
+  res.json({ activities: [
+    { type: 'signup', count: 47, period: 'last_hour' },
+    { type: 'videos_uploaded', count: 283, period: 'last_hour' },
+    { type: 'gifts_sent', count: 1528, period: 'last_hour' }
+  ] });
 });
 
-app.post('/api/receptionist/sms', async (req, res) => {
-  const { From, Body } = req.body;
-  const msg = Body?.toLowerCase() || '';
-  let reply = 'Welcome to NVME.live! 🚀 Reply with: EARN (how to earn), TOOLS (AI tools), PRICING (plans), or HELP (support).';
-  if (msg.includes('earn'))    reply = '💰 Creators earn $2-10 per 1,000 views + gifts from fans. Top earners make $84,000/week! Start free at nvme.live';
-  if (msg.includes('tools'))   reply = '🤖 AI Video Generator, 29 avatars, voice cloning, lip-sync, text-to-video. All included in your plan! nvme.live';
-  if (msg.includes('pricing')) reply = '💎 14-day FREE trial, no card needed. After trial: Creator $9/mo, Pro $29/mo, Legend $79/mo. nvme.live/pricing';
-  if (msg.includes('help'))    reply = '👋 NVME Support: support@nvme.live | Live chat at nvme.live | Call +1 441 200 0000';
-
-  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-    try {
-      const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-      await twilio.messages.create({ body: reply, from: process.env.TWILIO_PHONE_NUMBER, to: From });
-    } catch (e) { console.error('Twilio SMS error:', e.message); }
-  }
-
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${reply}</Message></Response>`;
-  res.set('Content-Type', 'text/xml');
-  res.send(twiml);
+// HUGE AI Avatar for big animated gifts
+app.get('/huge-ai', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'huge-ai.html'));
 });
 
-// ─── AI CHAT (OpenRouter) ─────────────────────────────────────────────────────
-app.post('/api/ai/chat', async (req, res) => {
-  const { message, history = [] } = req.body;
-  if (!message) return res.status(400).json({ error: 'message required' });
-
-  if (!process.env.OPENROUTER_API_KEY) {
-    const autoReplies = {
-      earn: "💰 Creators on NVME earn $2-10 per 1,000 views plus gifts from fans! Top earners make $84,000/week. Start your free trial at the button above! 🚀",
-      ai: "🤖 Our AI suite includes a video generator with 29 avatars, voice cloning, lip-sync, and text-to-video. Create 5 pro videos a day in minutes!",
-      trial: "✨ 14 days completely free — no credit card needed. You can cancel anytime. Most creators earn back the subscription cost in their first week!",
-      gift: "🎁 Fans send you Bermuda-themed animated gifts worth real money! $18,400 in gifts were sent today alone. Legendary gifts are worth $100+!",
-      live: "🔴 Go live and earn gifts in real-time! Top streamers make $1,000+ per stream. 847 live streams are happening on NVME right now!",
-    };
-    const key = Object.keys(autoReplies).find(k => message.toLowerCase().includes(k));
-    return res.json({ reply: key ? autoReplies[key] : "Hi! I'm Zara, your NVME AI guide! 👋 Ask me about earning money, AI tools, gifts, live streaming, or how to get started! 🚀" });
-  }
-
-  try {
-    const response = await require('axios').post('https://openrouter.ai/api/v1/chat/completions', {
-      model: 'mistralai/mistral-7b-instruct',
-      messages: [
-        { role: 'system', content: `You are Zara, the friendly AI guide for NVME.live — Bermuda's premier creator platform. You help creators earn money through content creation. Key facts: creators earn $2-10 per 1,000 views, 500+ animated gifts, AI video generator with 29 avatars, HD video calling, instant payouts via 8 providers. 14-day free trial, no card needed. Keep replies under 80 words, use emojis, be enthusiastic but honest.` },
-        ...history.map(h => ({ role: h.role, content: h.content })),
-        { role: 'user', content: message }
-      ]
-    }, { headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' } });
-    res.json({ reply: response.data.choices[0].message.content });
-  } catch (e) {
-    res.json({ reply: "I'm having a moment! 😅 Ask me about earning, AI tools, or gifts — I'm here to help! 🚀" });
-  }
-});
-
-// ─── STAFFING AGENCY JOB BOARD ────────────────────────────────────────────────
-app.get('/api/jobs', (req, res) => {
-  const { category, type, search } = req.query;
-  let result = Array.from(jobs.values());
-  if (category) result = result.filter(j => j.category === category);
-  if (type)     result = result.filter(j => j.type.toLowerCase().includes(type.toLowerCase()));
-  if (search)   result = result.filter(j => j.title.toLowerCase().includes(search.toLowerCase()) || j.company.toLowerCase().includes(search.toLowerCase()));
-  res.json({ total: result.length, jobs: result });
-});
-
-app.post('/api/jobs', (req, res) => {
-  const { title, type, pay, location, company, category, description } = req.body;
-  if (!title || !company) return res.status(400).json({ error: 'title and company required' });
-  const id = uuidv4();
-  const job = { id, title, type: type || 'Full-time', pay: pay || 'Competitive', location: location || 'Remote', company, category: category || 'general', description, posted: 'just now', createdAt: new Date().toISOString() };
-  jobs.set(id, job);
-  res.status(201).json({ success: true, job });
-});
-
-app.post('/api/jobs/:id/apply', (req, res) => {
-  const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: 'Job not found' });
-  const { name, email, portfolio } = req.body;
-  if (!name || !email) return res.status(400).json({ error: 'name and email required' });
-  const applicationId = uuidv4();
-  res.json({ success: true, applicationId, job: job.title, company: job.company, message: `Application submitted for ${job.title} at ${job.company}. We'll be in touch within 48 hours!` });
-});
-
-app.get('/api/jobs/categories', (req, res) => {
-  res.json({ categories: ['marketing', 'creative', 'tech', 'sales', 'operations', 'legal', 'finance', 'general'] });
-});
-
-// ─── LEGAL DOCUMENT GENERATOR ─────────────────────────────────────────────────
-const legalTemplates = {
-  creator_contract: (data) => `CREATOR SERVICES AGREEMENT
-
-This Creator Services Agreement ("Agreement") is entered into as of ${new Date().toLocaleDateString()} between:
-
-CLIENT: ${data.clientName || '[CLIENT NAME]'} ("Client")
-CREATOR: ${data.creatorName || '[CREATOR NAME]'} ("Creator")
-
-1. SERVICES
-Creator agrees to produce ${data.deliverables || '[DELIVERABLE DESCRIPTION]'} for Client.
-
-2. COMPENSATION
-Client shall pay Creator ${data.rate || '[RATE]'} upon delivery and approval of content.
-
-3. TIMELINE
-Project commencement: ${data.startDate || '[START DATE]'}
-Project completion: ${data.endDate || '[END DATE]'}
-
-4. INTELLECTUAL PROPERTY
-Creator retains ownership of all creative work until full payment is received. Upon payment, Client receives a non-exclusive license to use the content for ${data.usageRights || 'digital marketing purposes'}.
-
-5. REVISIONS
-This agreement includes ${data.revisions || '2'} rounds of revisions.
-
-6. CONFIDENTIALITY
-Both parties agree to keep the terms of this agreement confidential.
-
-7. GOVERNING LAW
-This agreement shall be governed by the laws of Bermuda.
-
-Signed: _______________________     Date: ___________
-${data.clientName || 'Client'}
-
-Signed: _______________________     Date: ___________
-${data.creatorName || 'Creator'}
-
-Generated by NVME.live Legal Suite — nvme.live/legal`,
-
-  nda: (data) => `NON-DISCLOSURE AGREEMENT
-
-This NDA is entered into on ${new Date().toLocaleDateString()} between:
-${data.party1 || '[PARTY 1]'} and ${data.party2 || '[PARTY 2]'}
-
-1. CONFIDENTIAL INFORMATION includes all business, technical, financial, and creative information shared between the parties.
-
-2. OBLIGATIONS: Each party shall maintain strict confidentiality and not disclose information to third parties without written consent.
-
-3. TERM: This agreement is effective for ${data.term || '2 years'} from the date above.
-
-4. EXCLUSIONS: Information already in the public domain or independently developed is excluded.
-
-5. GOVERNING LAW: Bermuda
-
-_________________________     _________________________
-${data.party1 || 'Party 1'}              ${data.party2 || 'Party 2'}
-
-Generated by NVME.live Legal Suite`,
-
-  dmca: (data) => `DMCA TAKEDOWN NOTICE
-
-Date: ${new Date().toLocaleDateString()}
-To: ${data.platform || '[PLATFORM/HOST]'}
-
-I, ${data.senderName || '[YOUR NAME]'}, certify under penalty of perjury that I am the owner (or authorized agent) of the copyrighted work described below.
-
-ORIGINAL WORK: ${data.workDescription || '[DESCRIBE YOUR ORIGINAL CONTENT]'}
-INFRINGING URL: ${data.infringingUrl || '[URL OF INFRINGING CONTENT]'}
-MY CONTACT: ${data.email || '[YOUR EMAIL]'}
-
-I have a good faith belief that use of the described material in the manner complained of is not authorized by the copyright owner, its agent, or the law.
-
-Signature: _______________________
-${data.senderName || '[YOUR NAME]'}
-
-Generated by NVME.live Legal Suite`,
-
-  brand_deal: (data) => `BRAND PARTNERSHIP AGREEMENT
-
-Between ${data.brand || '[BRAND NAME]'} ("Brand") and ${data.creator || '[CREATOR NAME]'} ("Creator")
-Date: ${new Date().toLocaleDateString()}
-
-CAMPAIGN: ${data.campaign || '[CAMPAIGN NAME]'}
-DELIVERABLES: ${data.deliverables || '[LIST OF POSTS/VIDEOS]'}
-COMPENSATION: ${data.fee || '[FEE]'} + ${data.commission || '0'}% commission on tracked sales
-EXCLUSIVITY: ${data.exclusivity || 'Non-exclusive'}
-USAGE RIGHTS: ${data.usageRights || '6 months digital use'}
-FTC DISCLOSURE: Creator must include #ad or #sponsored in all posts.
-
-Payment Terms: 50% upfront, 50% on completion.
-
-_________________________     _________________________
-${data.brand || 'Brand'}                ${data.creator || 'Creator'}
-
-Generated by NVME.live Legal Suite`,
-};
-
-app.get('/api/legal/templates', (req, res) => {
-  res.json({ templates: ['creator_contract', 'nda', 'dmca', 'brand_deal'], count: 4 });
-});
-
-app.post('/api/legal/generate', (req, res) => {
-  const { template, data = {} } = req.body;
-  if (!template) return res.status(400).json({ error: 'template required. Options: creator_contract, nda, dmca, brand_deal' });
-  if (!legalTemplates[template]) return res.status(400).json({ error: `Unknown template. Choose: ${Object.keys(legalTemplates).join(', ')}` });
-
-  const docText = legalTemplates[template](data);
-  const docId = uuidv4();
-  const doc = { id: docId, template, data, content: docText, createdAt: new Date().toISOString() };
-  legalDocs.set(docId, doc);
-  res.json({ success: true, docId, template, content: docText, message: 'Document generated. Download as PDF via /api/legal/' + docId + '/pdf' });
-});
-
-app.get('/api/legal/:id', (req, res) => {
-  const doc = legalDocs.get(req.params.id);
-  if (!doc) return res.status(404).json({ error: 'Document not found' });
-  res.json(doc);
-});
-
-// ─── CROWN & ANCHOR GAME ─────────────────────────────────────────────────────
-const CROWN_ANCHOR_SYMBOLS = ['crown', 'anchor', 'heart', 'diamond', 'club', 'spade'];
-const SYMBOL_EMOJI = { crown: '👑', anchor: '⚓', heart: '❤️', diamond: '💎', club: '♣️', spade: '♠️' };
-
+// Crown & Anchor Game
 app.get('/api/game/crown-anchor', (req, res) => {
-  res.json({
-    game: 'Crown & Anchor',
-    description: 'Traditional Bermuda dice game. Place bets on symbols, roll 3 dice, win if your symbol appears!',
-    symbols: CROWN_ANCHOR_SYMBOLS.map(s => ({ id: s, emoji: SYMBOL_EMOJI[s], name: s.charAt(0).toUpperCase() + s.slice(1) })),
-    payouts: { '1 match': '1:1', '2 matches': '2:1', '3 matches': '3:1' },
-    minBet: 1,
-    maxBet: 1000,
-    endpoint: 'POST /api/game/crown-anchor/roll'
-  });
+  res.json({ game: 'Crown & Anchor',
+    symbols: ['crown', 'anchor', 'heart', 'diamond', 'club', 'spade'],
+    payouts: { single: 1, double: 2, triple: 3 },
+    active: true });
 });
 
 app.post('/api/game/crown-anchor/roll', (req, res) => {
-  const { bet = 10, symbol, playerId } = req.body;
-  if (!symbol || !CROWN_ANCHOR_SYMBOLS.includes(symbol)) return res.status(400).json({ error: `Invalid symbol. Choose: ${CROWN_ANCHOR_SYMBOLS.join(', ')}` });
-  if (bet < 1 || bet > 1000) return res.status(400).json({ error: 'Bet must be between 1 and 1000' });
-
-  const dice = [
-    CROWN_ANCHOR_SYMBOLS[Math.floor(Math.random() * 6)],
-    CROWN_ANCHOR_SYMBOLS[Math.floor(Math.random() * 6)],
-    CROWN_ANCHOR_SYMBOLS[Math.floor(Math.random() * 6)],
-  ];
-  const matches = dice.filter(d => d === symbol).length;
-  const won = matches > 0;
-  const payout = won ? bet * matches : 0;
-  const net = won ? payout : -bet;
-
-  res.json({
-    dice: dice.map(d => ({ symbol: d, emoji: SYMBOL_EMOJI[d] })),
-    yourBet: { symbol, emoji: SYMBOL_EMOJI[symbol], amount: bet },
-    matches,
-    result: won ? `🎉 WIN! ${matches} match${matches > 1 ? 'es' : ''}` : '😔 No match — try again!',
-    payout: won ? `+$${payout}` : `-$${bet}`,
-    net,
-    nextGame: 'POST /api/game/crown-anchor/roll'
-  });
+  const symbols = ['crown', 'anchor', 'heart', 'diamond', 'club', 'spade'];
+  const roll = [symbols[Math.floor(Math.random()*6)], symbols[Math.floor(Math.random()*6)], symbols[Math.floor(Math.random()*6)]];
+  const bet = req.body.bet || { symbol: 'crown', amount: 10 };
+  const matchCount = roll.filter(s => s === bet.symbol).length;
+  const winnings = matchCount * bet.amount;
+  res.json({ roll, bet, matches: matchCount, winnings, result: matchCount > 0 ? 'win' : 'loss' });
 });
 
-// ─── CATCH-ALL → SPA ─────────────────────────────────────────────────────────
-
-// PWA App route
+// App serving
 app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app.html'));
 });
+
+// Profile setup page (new user onboarding after signup)
+app.get('/setup-profile', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'setup-profile.html'));
+});
+
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ─── START ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`\n🚀 NVME Mothership v2.0 running on port ${PORT}`);
-  console.log(`📊 Health: http://localhost:${PORT}/api/health`);
-  console.log(`🌐 Landing: http://localhost:${PORT}/`);
-  console.log(`\n🔧 Active Services:`);
-  console.log(`  ${process.env.TWILIO_ACCOUNT_SID ? '✅' : '⚠️ '} AI Receptionist (Twilio)`);
-  console.log(`  ${process.env.PAYPAL_CLIENT_ID   ? '✅' : '⚠️ '} PayPal Payments`);
-  console.log(`  ${process.env.STRIPE_SECRET_KEY  ? '✅' : '⚠️ '} Stripe Payments`);
-  console.log(`  ${process.env.OPENROUTER_API_KEY ? '✅' : '⚠️ '} AI Chat (OpenRouter)`);
-  console.log(`  ${process.env.DATABASE_URL       ? '✅' : '⚠️ '} Neon Database`);
-  console.log(`  ✅ Staffing Agency Job Board`);
-  console.log(`  ✅ Legal Document Generator`);
-  console.log(`  ✅ Crown & Anchor Game`);
-  console.log(`\nAdd missing keys in Railway → Variables to go fully green.\n`);
+  console.log('NVME Creator Platform v2.0.0 running on port ' + PORT);
+  console.log('Emulating: TikTok + Instagram + YouTube + WhatsApp + Snapchat + X + Facebook + Dating');
 });

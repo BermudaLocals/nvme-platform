@@ -386,12 +386,12 @@ function handleAvatarUpload(input) {
     showError('Image too big. Max 5MB.');
     return;
   }
-  const requiredr = new FileReader();
-  requiredr.onload = e => {
+  const reader = new FileReader();
+  reader.onload = e => {
     const preview = document.getElementById('avatarPreview');
     preview.innerHTML = '<img src="' + e.target.result + '" alt="avatar"/>';
   };
-  requiredr.requiredAsDataURL(file);
+  reader.readAsDataURL(file);
 }
 
 function showError(msg) {

@@ -20,6 +20,7 @@ async function initDB() {
     return false;
   }
   try {
+    // Run each statement separately to guarantee creation order (fixes FK constraints)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS creators (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -44,8 +45,10 @@ async function initDB() {
         last_login_ip VARCHAR(45),
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
-      );
+      )
+    `);
 
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS videos (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         creator_id UUID REFERENCES creators(id) ON DELETE CASCADE,
@@ -61,8 +64,10 @@ async function initDB() {
         shares INT DEFAULT 0,
         comments INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT NOW()
-      );
+      )
+    `);
 
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS sessions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         creator_id UUID REFERENCES creators(id) ON DELETE CASCADE,
@@ -73,8 +78,10 @@ async function initDB() {
         expires_at TIMESTAMP NOT NULL,
         revoked BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT NOW()
-      );
+      )
+    `);
 
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS audit_log (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         creator_id UUID,
@@ -83,17 +90,19 @@ async function initDB() {
         user_agent TEXT,
         metadata JSONB,
         created_at TIMESTAMP DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_creators_email ON creators(email);
-      CREATE INDEX IF NOT EXISTS idx_creators_username ON creators(username);
-      CREATE INDEX IF NOT EXISTS idx_videos_creator ON videos(creator_id);
-      CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_sessions_creator ON sessions(creator_id);
-      CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
-      CREATE INDEX IF NOT EXISTS idx_audit_creator ON audit_log(creator_id);
-      CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
+      )
     `);
+
+    // Indexes
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_creators_email ON creators(email)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_creators_username ON creators(username)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_videos_creator ON videos(creator_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_creator ON sessions(creator_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_creator ON audit_log(creator_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC)`);
+
     console.log('OK Database schema initialized');
     return true;
   } catch (err) {

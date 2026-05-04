@@ -847,25 +847,29 @@ footer{
 </footer>
 
 <!-- ═══ AI CHAT WIDGET ═════════════════════════════════════════ -->
-<div class="chat-widget">
-  <div class="chat-panel" id="chatPanel">
+<!-- Sara Floating AI Guide -->
+<div class="chat-widget" id="chatWidget">
+  <div class="chat-panel hidden" id="chatPanel">
     <div class="chat-top">
       <div class="chat-avatar">🤖</div>
       <div>
         <div class="chat-title">Sara – AI Guide</div>
-        <div class="chat-online"><div class="chat-online-dot"></div> Online</div>
+        <div class="chat-online"><div class="chat-online-dot"></div> Always Online</div>
       </div>
-      <button class="chat-close" onclick="toggleChat()">×</button>
+      <button class="chat-close" onclick="toggleChat()" title="Close Sara (click robot to reopen)">⌄</button>
     </div>
     <div class="chat-messages" id="chatMessages">
-      <div class="chat-msg bot">Hi! I'm Sara, your AI guide! 👋✨ I see you're checking out NVME. Want to see how creators like you are earning $500+/week? Ask me anything! 🚀</div>
+      <div class="chat-msg bot">Hi! I'm Sara 👋 Your AI guide for NVME!<br><br>I can help you with:<br>📱 <b>Sign Up</b> – Create your creator account<br>🎬 <b>Post Videos</b> – Share TikTok-style content<br>🎁 <b>Send Gifts</b> – 606+ animated gifts<br>💰 <b>Earn Money</b> – 55% revenue share<br>🎮 <b>Crown &amp; Anchor</b> – Bermuda game<br>📡 <b>Go Live</b> – Stream &amp; battle creators<br>❤️ <b>Dating</b> – Match &amp; connect<br><br>What do you want to know? 🚀</div>
     </div>
     <div class="chat-input-row">
       <input class="chat-input" id="chatInput" placeholder="Ask Sara anything…" onkeydown="if(event.key==='Enter')sendChat()"/>
-      <button class="chat-send" onclick="sendChat()">Send</button>
+      <button class="chat-send" onclick="sendChat()">➤</button>
     </div>
   </div>
-  <button class="chat-fab" onclick="toggleChat()" title="Chat with Sara">🤖</button>
+  <button class="chat-fab" id="saraFab" onclick="toggleChat()" title="Chat with Sara – tap to open/close">
+    <span class="fab-icon">🤖</span>
+    <div class="sara-badge"></div>
+  </button>
 </div>
 
 <script>

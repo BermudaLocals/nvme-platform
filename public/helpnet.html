@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NVME HelpNet — Community Aid Network</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050510;color:#fff;font-family:'Inter',sans-serif;min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+/* NAV */
+nav{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:100;background:rgba(5,5,16,0.95);backdrop-filter:blur(20px)}
+.nav-logo{font-family:'Bebas Neue',sans-serif;font-size:28px;background:linear-gradient(90deg,#ff2e5a,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-sub{font-size:11px;color:#ff2e5a;font-weight:700;letter-spacing:2px;margin-top:-4px}
+.nav-right{display:flex;gap:12px}
+.btn-sm{padding:8px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none}
+.btn-outline{background:transparent;border:1px solid rgba(255,255,255,0.2);color:#fff}
+.btn-red{background:linear-gradient(90deg,#ff2e5a,#ff6b35);color:#fff}
+
+/* HERO */
+.hero{text-align:center;padding:60px 24px 40px;max-width:800px;margin:0 auto}
+.hero-badge{display:inline-block;background:rgba(255,46,90,0.15);border:1px solid rgba(255,46,90,0.3);color:#ff2e5a;font-size:12px;font-weight:700;letter-spacing:2px;padding:6px 16px;border-radius:20px;margin-bottom:24px}
+.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(48px,8vw,80px);line-height:1;margin-bottom:16px}
+.hero h1 span{background:linear-gradient(90deg,#ff2e5a,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{color:#aaa;font-size:18px;line-height:1.6;margin-bottom:32px}
+.sms-box{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;margin-bottom:40px;display:inline-block;text-align:left;width:100%}
+.sms-box h3{font-size:13px;font-weight:700;letter-spacing:2px;color:#00d4ff;margin-bottom:16px}
+.sms-numbers{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.sms-number{background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.15);border-radius:10px;padding:12px 16px}
+.sms-number .flag{font-size:20px;margin-bottom:4px}
+.sms-number .region{font-size:13px;font-weight:700;color:#fff}
+.sms-number .num{font-size:12px;color:#00d4ff;font-family:monospace}
+.sms-keywords{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+.kw{background:rgba(255,46,90,0.1);border:1px solid rgba(255,46,90,0.2);color:#ff2e5a;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px}
+
+/* STATS */
+.stats-bar{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;max-width:900px;margin:0 auto 48px;padding:0 24px}
+.stat-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px;text-align:center}
+.stat-card .num{font-family:'Bebas Neue',sans-serif;font-size:40px;background:linear-gradient(90deg,#ff2e5a,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-card .lbl{font-size:12px;color:#666;margin-top:4px}
+
+/* REQUEST FORM */
+.section{max-width:900px;margin:0 auto 48px;padding:0 24px}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:32px;margin-bottom:24px;display:flex;align-items:center;gap:12px}
+.form-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:32px}
+.type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:24px}
+.type-btn{background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px 8px;text-align:center;cursor:pointer;transition:all .2s}
+.type-btn:hover,.type-btn.active{border-color:var(--c);background:rgba(var(--rgb),0.1)}
+.type-btn .t-emoji{font-size:28px;margin-bottom:6px}
+.type-btn .t-label{font-size:12px;font-weight:700;color:#aaa}
+.type-btn.active .t-label{color:#fff}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.form-input{width:100%;padding:14px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:15px;outline:none;transition:all .2s;font-family:'Inter',sans-serif}
+.form-input:focus{border-color:#ff2e5a}
+textarea.form-input{resize:vertical;min-height:100px;margin-bottom:16px}
+.btn-submit{width:100%;padding:16px;background:linear-gradient(90deg,#ff2e5a,#00d4ff);border:none;border-radius:12px;color:#fff;font-weight:800;font-size:16px;letter-spacing:1px;cursor:pointer;transition:all .2s;text-transform:uppercase}
+.btn-submit:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(255,46,90,0.4)}
+.btn-submit:disabled{opacity:0.6;cursor:wait}
+.geo-btn{background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);color:#00d4ff;font-size:13px;font-weight:700;padding:10px 16px;border-radius:10px;cursor:pointer;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+
+/* LIVE FEED */
+.feed-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.filter-btn{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#aaa;font-size:13px;font-weight:600;padding:8px 16px;border-radius:20px;cursor:pointer;transition:all .2s}
+.filter-btn.active{background:rgba(255,46,90,0.15);border-color:#ff2e5a;color:#ff2e5a}
+.help-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:12px;display:flex;gap:16px;align-items:flex-start;transition:all .2s}
+.help-card:hover{border-color:rgba(255,255,255,0.15)}
+.help-emoji{font-size:36px;flex-shrink:0}
+.help-body{flex:1}
+.help-meta{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+.help-type{font-size:12px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:20px}
+.help-location{font-size:12px;color:#666;display:flex;align-items:center;gap:4px}
+.help-time{font-size:12px;color:#444}
+.help-message{color:#ccc;font-size:15px;line-height:1.5;margin-bottom:12px}
+.help-actions{display:flex;gap:10px}
+.respond-btn{background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);color:#00d4ff;font-size:13px;font-weight:700;padding:8px 16px;border-radius:8px;cursor:pointer;transition:all .2s}
+.respond-btn:hover{background:rgba(0,212,255,0.2)}
+.responder-count{font-size:13px;color:#666;display:flex;align-items:center;gap:4px}
+.empty-feed{text-align:center;padding:60px;color:#444}
+.empty-feed .e-icon{font-size:48px;margin-bottom:16px}
+
+/* SUCCESS TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(0,255,136,0.15);border:1px solid #00ff88;color:#00ff88;padding:14px 24px;border-radius:12px;font-weight:700;z-index:9999;display:none;animation:fadeUp .3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}
+
+/* OFFLINE BANNER */
+.offline-banner{background:rgba(255,46,90,0.1);border-top:1px solid rgba(255,46,90,0.3);border-bottom:1px solid rgba(255,46,90,0.3);padding:16px 24px;text-align:center;display:none

@@ -613,6 +613,11 @@ app.post('/api/game/crown-anchor/roll', (req, res) => {
   res.json({ roll, bet, matches: matchCount, winnings, result: matchCount > 0 ? 'win' : 'loss' });
 });
 
+// NVME HelpNet — Offline Emergency & Community Aid
+const helpNetRouter = require('./routes-helpnet');
+app.use('/api/helpnet', helpNetRouter);
+app.get('/helpnet', (req, res) => res.sendFile(path.join(__dirname, 'public', 'helpnet.html')));
+
 // App serving
 app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app.html'));
@@ -631,4 +636,51 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log('NVME Creator Platform v2.0.0 running on port ' + PORT);
   console.log('Emulating: TikTok + Instagram + YouTube + WhatsApp + Snapchat + X + Facebook + Dating');
+});
+
+// ── SARA AI CHAT — Real Claude-powered responses ─────────────
+app.post('/api/ai/chat', async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'message required' });
+
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) {
+    return res.json({ reply: "Hey! I'm Sara 👋 I'm warming up my AI brain. Ask me about earning, live streaming, gifts, or getting started on NVME!" });
+  }
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        system: `You are Sara, the friendly AI assistant for NVME.live — a creator monetization platform that combines TikTok, Instagram, YouTube, WhatsApp, Snapchat, X, Facebook, and Dating all in one. Your job is to help creators sign up, understand how to earn money, and get excited about the platform.
+
+Key facts about NVME:
+- Creators earn $2–10 per 1,000 views PLUS fan gifts
+- Top creators earned $84,000 last week
+- 8 payment methods: PayPal, Stripe, Cash App, Apple Pay, Google Pay, Crypto, Wire, Bermuda Bank
+- Plans: Creator $9/mo, Pro $29/mo, Legend $79/mo — all with 14-day free trial
+- AI tools: video generator, 29 avatars, voice cloning, lip-sync, text-to-video
+- HelpNet: offline emergency SMS network for communities
+- Based in Bermuda, open to creators worldwide
+- No credit card needed to start
+
+Keep responses short (2-4 sentences), enthusiastic, and always end with an action (sign up, try free, ask more). Use 1-2 emojis max. Never make up specific numbers unless listed above.`,
+        messages: [{ role: 'user', content: message }]
+      })
+    });
+
+    const data = await response.json();
+    const reply = data.content?.[0]?.text || "Great question! Sign up free and explore everything NVME has to offer 🚀";
+    res.json({ reply });
+  } catch (err) {
+    console.error('Sara AI error:', err.message);
+    res.json({ reply: "I'm having a quick brain moment! 😅 Try asking me again, or just hit Sign Up Free to get started!" });
+  }
 });

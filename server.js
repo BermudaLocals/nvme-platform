@@ -51,6 +51,7 @@ const authLimiter = rateLimit({
 });
 
 // In-memory data stores
+const memCreators = {}; // email -> creator (fallback when no DATABASE_URL)
 const videos = [];
 const posts = [];
 const stories = [];
@@ -133,11 +134,14 @@ app.post('/api/auth/signup', authLimiter, validate('signup'), async (req, res) =
         return res.status(500).json({ error: 'signup failed' });
       }
     }
-    // Memory fallback
+    // Memory fallback (no DATABASE_URL set)
     const id = uuidv4();
-    const access = signAccessToken({ sub: id, username, email });
+    memCreators[email.toLowerCase()] = { id, email: email.toLowerCase(), username, passwordHash: hash, createdAt: new Date() };
+    const access = signAccessToken({ sub: id, username, email: email.toLowerCase() });
+    const refresh = signRefreshToken();
     res.cookie('nvme_access', access, cookieOpts(15 * 60 * 1000));
-    res.json({ success: true, creator: { id, email, username }, accessToken: access });
+    res.cookie('nvme_refresh', refresh, cookieOpts(30 * 86400000));
+    res.json({ success: true, creator: { id, email: email.toLowerCase(), username }, accessToken: access });
   } catch (err) {
     console.error('Signup error:', err.message);
     res.status(500).json({ error: 'signup failed' });
@@ -150,7 +154,16 @@ app.post('/api/auth/login', authLimiter, validate('login'), async (req, res) => 
   const ip = req.ip;
   const ua = req.get('user-agent') || '';
   if (!process.env.DATABASE_URL) {
-    return res.status(503).json({ error: 'login unavailable - database not configured' });
+    // Memory mode login
+    const memUser = memCreators[email.toLowerCase()];
+    if (!memUser) return res.status(401).json({ error: 'invalid credentials' });
+    const valid = await bcrypt.compare(password, memUser.passwordHash);
+    if (!valid) return res.status(401).json({ error: 'invalid credentials' });
+    const access = signAccessToken({ sub: memUser.id, username: memUser.username, email: memUser.email });
+    const refresh = signRefreshToken();
+    res.cookie('nvme_access', access, cookieOpts(15 * 60 * 1000));
+    res.cookie('nvme_refresh', refresh, cookieOpts(30 * 86400000));
+    return res.json({ success: true, creator: { id: memUser.id, email: memUser.email, username: memUser.username }, accessToken: access });
   }
   try {
     const lockout = await checkLockout(email.toLowerCase());
@@ -210,7 +223,9 @@ app.post('/api/auth/logout', optionalAuth, async (req, res) => {
 // GET /api/auth/me - Get current authenticated user
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   if (!process.env.DATABASE_URL) {
-    return res.json({ user: { id: req.user.sub, username: req.user.username, email: req.user.email } });
+    const memUser = Object.values(memCreators).find(u => u.id === req.user.sub);
+    const user = memUser ? { id: memUser.id, email: memUser.email, username: memUser.username } : { id: req.user.sub, username: req.user.username, email: req.user.email };
+    return res.json({ user });
   }
   try {
     const r = await pool.query(

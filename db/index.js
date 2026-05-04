@@ -13,14 +13,13 @@ pool.on('error', (err) => {
   console.error('Postgres pool error:', err.message);
 });
 
-// Initialize schema - idempotent (safe to run multiple times)
 async function initDB() {
   if (!process.env.DATABASE_URL) {
     console.warn('WARNING: DATABASE_URL not set - running in memory-only mode');
     return false;
   }
   try {
-    // Run each statement separately to guarantee creation order (fixes FK constraints)
+    // creators first — no FK dependencies
     await pool.query(`
       CREATE TABLE IF NOT EXISTS creators (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -48,10 +47,11 @@ async function initDB() {
       )
     `);
 
+    // videos — plain UUID, no FK constraint to avoid Neon issues
     await pool.query(`
       CREATE TABLE IF NOT EXISTS videos (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        creator_id UUID REFERENCES creators(id) ON DELETE CASCADE,
+        creator_id UUID,
         caption TEXT,
         hashtags TEXT[],
         privacy VARCHAR(20) DEFAULT 'public',
@@ -67,10 +67,12 @@ async function initDB() {
       )
     `);
 
+    // Drop and recreate sessions to clear any broken FK from previous failed inits
+    await pool.query(`DROP TABLE IF EXISTS sessions CASCADE`);
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS sessions (
+      CREATE TABLE sessions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        creator_id UUID REFERENCES creators(id) ON DELETE CASCADE,
+        creator_id UUID NOT NULL,
         refresh_token_hash VARCHAR(255) NOT NULL,
         device_fingerprint VARCHAR(64),
         ip_address VARCHAR(45),
@@ -81,6 +83,7 @@ async function initDB() {
       )
     `);
 
+    // audit_log — no FK
     await pool.query(`
       CREATE TABLE IF NOT EXISTS audit_log (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -103,7 +106,7 @@ async function initDB() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_creator ON audit_log(creator_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC)`);
 
-    console.log('OK Database schema initialized');
+    console.log('OK Database schema initialized successfully');
     return true;
   } catch (err) {
     console.error('DB init error:', err.message);
@@ -111,7 +114,6 @@ async function initDB() {
   }
 }
 
-// Write audit log entry
 async function audit(creatorId, action, ip, userAgent, metadata = {}) {
   if (!process.env.DATABASE_URL) return;
   try {

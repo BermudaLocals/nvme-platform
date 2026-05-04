@@ -484,14 +484,28 @@ footer{
 }
 .chat-send:hover{opacity:.85}
 .chat-fab{
-  width:52px;height:52px;border-radius:50%;
+  width:58px;height:58px;border-radius:50%;
   background:linear-gradient(135deg,var(--accent),var(--accent2));
-  border:none;color:#fff;font-size:22px;cursor:pointer;
-  box-shadow:0 4px 24px rgba(255,46,90,0.5);
+  border:2px solid rgba(255,255,255,0.2);
+  color:#fff;font-size:26px;cursor:pointer;
+  box-shadow:0 6px 32px rgba(255,46,90,0.6);
   display:flex;align-items:center;justify-content:center;
-  transition:.3s;
+  transition:all .3s cubic-bezier(0.34,1.56,0.64,1);
+  position:relative;flex-shrink:0;
+  animation:sara-pulse 3s ease-in-out infinite;
 }
-.chat-fab:hover{transform:scale(1.08)}
+@keyframes sara-pulse{
+  0%,100%{box-shadow:0 6px 32px rgba(255,46,90,0.6),0 0 0 4px rgba(255,46,90,0.15)}
+  50%{box-shadow:0 6px 40px rgba(255,46,90,0.9),0 0 0 10px rgba(255,46,90,0.06)}
+}
+.chat-fab:hover{transform:scale(1.12)}
+.chat-fab.open{transform:rotate(45deg);background:linear-gradient(135deg,#ff2e5a,#ff6b35)}
+.chat-fab.open:hover{transform:rotate(45deg) scale(1.12)}
+.sara-badge{
+  position:absolute;top:-1px;right:-1px;width:14px;height:14px;
+  background:#00ff88;border-radius:50%;border:2px solid #07070f;
+}
+.chat-panel.hidden{transform:scale(0.85) translateY(20px);opacity:0;pointer-events:none;max-height:0;overflow:hidden;margin:0;border:none}
 
 /* ── API CONSOLE ──────────────────────────────────────────────── */
 .api-console{
@@ -919,10 +933,24 @@ function scrollToCTA(){document.getElementById('signup').scrollIntoView({behavio
 
 // ── Chat Widget ────────────────────────────────────────────
 let chatOpen = false;
+
 function toggleChat(){
-  chatOpen=!chatOpen;
-  document.getElementById('chatPanel').classList.toggle('hidden',!chatOpen);
+  chatOpen = !chatOpen;
+  const panel = document.getElementById('chatPanel');
+  const fab = document.getElementById('saraFab');
+  if(chatOpen){
+    panel.classList.remove('hidden');
+    if(fab) fab.classList.add('open');
+  } else {
+    panel.classList.add('hidden');
+    if(fab) fab.classList.remove('open');
+  }
 }
+
+// Sara auto-opens after 4 seconds if not already open
+setTimeout(function(){
+  if(!chatOpen){ toggleChat(); }
+}, 4000);
 
 const quickReplies={
   earn:'💰 Creators earn $2–10 per 1,000 views PLUS gifts from fans! Top earners made $84,000 last week. Start your free trial above! 🚀',

@@ -589,7 +589,7 @@ footer{
   <div class="logo">NVME.live</div>
   <div class="nav-right">
     <button class="nav-link" onclick="document.querySelector('.activity-stream').scrollIntoView({behavior:'smooth'})">Feed</button>
-    <button class="nav-link" id="loginBtn" onclick="openSignup()">Log In</button>
+    <button class="nav-link" id="loginBtn" onclick="openLogin()">Log In</button>
     <button class="btn-nav" onclick="openSignup()">Sign Up Free</button>
   </div>
 </nav>
@@ -1061,14 +1061,38 @@ async function sendChat(){
       <div class="signup-success-icon">🎉</div>
       <h3>Welcome to NVME!</h3>
       <p id="suMsg">Your account is ready. Redirecting to the app...</p>
-      <button class="signup-btn" onclick="openSignup()">Open NVME App</button>
+      <button class="signup-btn" onclick="window.location.href='/app'">🚀 Open NVME App 🚀</button>
     </div>
   </div>
 </div>
 <script>
 function openSignup(){document.getElementById('signupModal').classList.add('show');document.body.style.overflow='hidden'}
 function closeSignup(){document.getElementById('signupModal').classList.remove('show');document.body.style.overflow=''}
-document.addEventListener('click',function(e){if(e.target.id==='signupModal')closeSignup()});
+function openLogin(){document.getElementById('loginModal').classList.add('show');document.body.style.overflow='hidden'}
+function closeLogin(){document.getElementById('loginModal').classList.remove('show');document.body.style.overflow=''}
+document.addEventListener('click',function(e){if(e.target.id==='loginModal')closeLogin()});
+async function submitLogin(){
+  const email=document.getElementById('liEmail').value.trim();
+  const password=document.getElementById('liPassword').value;
+  const btn=document.getElementById('liBtn');
+  if(!email||!password){alert('Please fill all fields');return}
+  btn.disabled=true;btn.textContent='Logging in...';
+  try{
+    const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+    const data=await res.json();
+    if(data.success){
+      if(data.accessToken)localStorage.setItem('nvme_access_token',data.accessToken);
+      if(data.creator)localStorage.setItem('nvme_creator',JSON.stringify(data.creator));
+      window.location.href='/app';
+    }else{
+      alert(data.error||'Login failed. Check your credentials.');
+      btn.disabled=false;btn.textContent='🔑 Log In';
+    }
+  }catch(e){
+    alert('Network error. Try again.');
+    btn.disabled=false;btn.textContent='🔑 Log In';
+  }
+}
 async function submitSignup(){
   const email=document.getElementById('suEmail').value.trim();
   const username=document.getElementById('suUsername').value.trim();
@@ -1098,5 +1122,17 @@ async function submitSignup(){
 }
 </script>
 
+<!-- LOGIN MODAL -->
+<div class="signup-overlay" id="loginModal">
+  <div class="signup-modal">
+    <button class="signup-close" onclick="closeLogin()">×</button>
+    <h2 class="signup-h">WELCOME BACK</h2>
+    <p class="signup-sub">Log in to your NVME account</p>
+    <input class="signup-input" id="liEmail" type="email" placeholder="Your email address" required>
+    <input class="signup-input" id="liPassword" type="password" placeholder="Your password" required>
+    <button class="signup-btn" id="liBtn" onclick="submitLogin()">🔑 Log In</button>
+    <p class="signup-fine" style="margin-top:16px">Don't have an account? <a href="#" onclick="closeLogin();openSignup()" style="color:#ff2e5a">Sign up free →</a></p>
+  </div>
+</div>
 </body>
 </html>

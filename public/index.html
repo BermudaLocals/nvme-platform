@@ -1045,15 +1045,15 @@ async function sendChat(){
     <button class="signup-close" onclick="closeSignup()">×</button>
     <div id="signupForm">
       <h2 class="signup-h">JOIN NVME</h2>
-      <p class="signup-sub">Start earning from day one. No credit card requiredd.</p>
+      <p class="signup-sub">Start earning from day one. No credit card required.</p>
       <div class="signup-perks">
         <div class="sp-item"><span class="sp-val">55%</span><span class="sp-lbl">Creator Share</span></div>
         <div class="sp-item"><span class="sp-val">14 Days</span><span class="sp-lbl">Free Trial</span></div>
         <div class="sp-item"><span class="sp-val">$500+</span><span class="sp-lbl">Avg Weekly</span></div>
       </div>
-      <input class="signup-input" id="suEmail" type="email" placeholder="Your email address" requiredd/>
-      <input class="signup-input" id="suUsername" type="text" placeholder="Choose a username" requiredd/>
-      <input class="signup-input" id="suPassword" type="password" placeholder="Create a password (8+ chars)" requiredd/>
+      <input class="signup-input" id="suEmail" type="email" placeholder="Your email address" required/>
+      <input class="signup-input" id="suUsername" type="text" placeholder="Choose a username" required/>
+      <input class="signup-input" id="suPassword" type="password" placeholder="Create a password (8+ chars)" required/>
       <button class="signup-btn" id="suBtn" onclick="submitSignup()">🚀 Create My Account 🚀</button>
       <p class="signup-fine">By signing up, you agree to our Terms & Privacy Policy</p>
     </div>
@@ -1088,7 +1088,7 @@ async function submitSignup(){
       document.getElementById('signupDone').style.display='block';
       setTimeout(()=>window.location.href='/setup-profile?first=1',2500);
     }else{
-      alert('Signup failed. Try again.');
+      alert(data.error || 'Signup failed. Try again.');
       btn.disabled=false;btn.textContent='🚀 Create My Account 🚀';
     }
   }catch(e){

@@ -5,7 +5,7 @@ const schemas = {
   signup: Joi.object({
     email: Joi.string().email().required().max(255),
     username: Joi.string().alphanum().min(3).max(30).required(),
-    password: Joi.string().min(12).max(128).required()
+    password: Joi.string().min(8).max(128).required()
       .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/)
       .message("Password must be 12+ chars with uppercase, lowercase, and number")
   }),

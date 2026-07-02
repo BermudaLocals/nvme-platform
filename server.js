@@ -9,10 +9,56 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { Pool } = require('pg');
+const passport = require('passport');
+const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
+const session = require('express-session');
 
 const app = express();
 const PORT = process.env.PORT || 3090;
 const IS_PROD = process.env.NODE_ENV === 'production';
+
+// ── SESSION (required for passport) ──────────────────────────────────────────
+app.use(session({
+  secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'nvme-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: IS_PROD, maxAge: 7 * 24 * 60 * 60 * 1000 }
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((user, done) => done(null, user));
+
+// ── GOOGLE OAUTH STRATEGY ────────────────────────────────────────────────────
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback'
+  }, async (accessToken, refreshToken, profile, done) => {
+    try {
+      const email = profile.emails?.[0]?.value;
+      const username = profile.displayName?.replace(/\s+/g,'_').toLowerCase() || 'user_' + profile.id;
+      const avatar = profile.photos?.[0]?.value || null;
+      let result = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
+      let user;
+      if (result.rows.length === 0) {
+        const r = await pool.query(
+          'INSERT INTO users (id,email,username,password_hash,avatar_url,created_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING *',
+          [uuidv4(), email, username, 'GOOGLE_OAUTH', avatar]
+        );
+        user = r.rows[0];
+      } else {
+        user = result.rows[0];
+        if (avatar && !user.avatar_url) {
+          await pool.query('UPDATE users SET avatar_url=$1 WHERE id=$2',[avatar,user.id]);
+          user.avatar_url = avatar;
+        }
+      }
+      return done(null, { id: user.id, email: user.email, username: user.username });
+    } catch(e) { return done(e); }
+  }));
+}
 
 // ── Production env guardrails (resilient) ────────────────────
 if (IS_PROD) {
@@ -143,6 +189,18 @@ async function initDB() {
 }
 
 // ── Routes: Health ───────────────────────────────────────────
+
+// ── GOOGLE OAUTH ROUTES ──────────────────────────────────────────────────────
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/?auth=failed' }),
+  (req, res) => {
+    const token = signToken({ id: req.user.id, email: req.user.email });
+    // Redirect to frontend with token in query param; frontend stores it
+    res.redirect(`/?token=${token}&user=${encodeURIComponent(JSON.stringify({ id:req.user.id, email:req.user.email, username:req.user.username }))}`);
+  }
+);
+
 app.get('/health', (req, res) => res.json({
   app: 'nvme.live',
   status: 'ONLINE',
@@ -641,6 +699,8 @@ app.get('/', (req, res) => {
       <div class="form-group"><label>Email</label><input type="email" id="loginEmail" placeholder="you@email.com"></div>
       <div class="form-group"><label>Password</label><input type="password" id="loginPass" placeholder="Password"></div>
       <button class="btn btn-primary" style="width:100%;margin-top:.5rem" onclick="doLogin()">Log In</button>
+      <div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;"><hr style="flex:1;border:none;border-top:1px solid #ddd;"><span style="font-size:12px;color:#888;">or</span><hr style="flex:1;border:none;border-top:1px solid #ddd;"></div>
+      <a href="/auth/google" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px;border:1.5px solid #ddd;border-radius:8px;background:white;color:#333;font-weight:600;font-size:14px;text-decoration:none;cursor:pointer;"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.6 2.5 30.2 0 24 0 14.7 0 6.8 5.4 2.9 13.3l7.8 6.1C12.5 13.1 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/><path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.8-6.1A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.5 10.7l8.2-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.7 2.2-6.2 0-11.5-4.2-13.3-9.8l-8.2 6.1C6.8 42.6 14.7 48 24 48z"/></svg> Continue with Google</a>
     </div>
     <div id="registerForm" style="display:none">
       <h2>Join nvme.live</h2>
@@ -649,12 +709,29 @@ app.get('/', (req, res) => {
       <div class="form-group"><label>Email</label><input type="email" id="regEmail" placeholder="you@email.com"></div>
       <div class="form-group"><label>Password</label><input type="password" id="regPass" placeholder="Min 8 characters"></div>
       <button class="btn btn-primary" style="width:100%;margin-top:.5rem" onclick="doRegister()">Create Account</button>
+      <div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px;"><hr style="flex:1;border:none;border-top:1px solid #ddd;"><span style="font-size:12px;color:#888;">or</span><hr style="flex:1;border:none;border-top:1px solid #ddd;"></div>
+      <a href="/auth/google" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px;border:1.5px solid #ddd;border-radius:8px;background:white;color:#333;font-weight:600;font-size:14px;text-decoration:none;cursor:pointer;"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.6 2.5 30.2 0 24 0 14.7 0 6.8 5.4 2.9 13.3l7.8 6.1C12.5 13.1 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/><path fill="#FBBC05" d="M10.7 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.8-6.1A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.5 10.7l8.2-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.7 2.2-6.2 0-11.5-4.2-13.3-9.8l-8.2 6.1C6.8 42.6 14.7 48 24 48z"/></svg> Sign up with Google</a>
     </div>
   </div>
 </div>
 
 <script>
 const API = '';
+
+// ── GOOGLE OAUTH CALLBACK TOKEN HANDLER ──────────────────────────────────────
+(function(){
+  const p = new URLSearchParams(window.location.search);
+  const tok = p.get('token');
+  const usr = p.get('user');
+  if(tok){
+    localStorage.setItem('nvme_token', tok);
+    if(usr){ try{ localStorage.setItem('nvme_user', decodeURIComponent(usr)); }catch(e){} }
+    window.history.replaceState({}, '', '/');
+    setTimeout(()=>{ if(typeof checkAuth === 'function') checkAuth(); else location.reload(); }, 100);
+  }
+  const authFailed = p.get('auth');
+  if(authFailed==='failed') { setTimeout(()=>alert('Google sign-in failed. Please try again.'),200); }
+})();
 function openModal(tab) { document.getElementById('authModal').classList.add('active'); switchTab(tab); }
 function closeModal() { document.getElementById('authModal').classList.remove('active'); }
 function closeModalOutside(e) { if (e.target.id === 'authModal') closeModal(); }

@@ -12,6 +12,17 @@ const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3090;
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+// ── Production env guardrails (fail-fast) ────────────────────
+if (IS_PROD) {
+  const required = ['DATABASE_URL', 'JWT_SECRET'];
+  const missing = required.filter((k) => !process.env[k]);
+  if (missing.length) {
+    console.error(`[nvme.live] FATAL: missing required env in production: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+}
 
 // ── DB ──────────────────────────────────────────────────────
 const db = new Pool({
@@ -35,6 +46,13 @@ function authMiddleware(req, res, next) {
   if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ error: 'unauthorized' });
   try { req.user = jwt.verify(h.slice(7), JWT_SECRET); next(); }
   catch (e) { res.status(401).json({ error: 'invalid token' }); }
+}
+function optionalAuth(req, res, next) {
+  const h = req.headers.authorization;
+  if (h && h.startsWith('Bearer ')) {
+    try { req.user = jwt.verify(h.slice(7), JWT_SECRET); } catch (e) { /* anonymous */ }
+  }
+  next();
 }
 
 // ── DB Init ──────────────────────────────────────────────────
@@ -68,6 +86,35 @@ async function initDB() {
       starts_at TIMESTAMPTZ DEFAULT NOW(),
       ends_at TIMESTAMPTZ
     );
+    CREATE TABLE IF NOT EXISTS comments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      video_id UUID REFERENCES videos(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS follows (
+      follower_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      followee_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (follower_id, followee_id)
+    );
+    CREATE TABLE IF NOT EXISTS video_likes (
+      video_id UUID REFERENCES videos(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (video_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS gifts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      receiver_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      video_id UUID REFERENCES videos(id) ON DELETE SET NULL,
+      credits NUMERIC NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_credits NUMERIC DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
   `).catch(e => console.warn('DB init warning:', e.message));
 }
 
@@ -141,11 +188,169 @@ app.post('/api/videos', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Routes: Feed (ranked) ────────────────────────────────────
+app.get('/api/feed', optionalAuth, async (req, res) => {
+  try {
+    const viewerId = req.user ? req.user.id : null;
+    const { rows } = await db.query(`
+      SELECT v.id, v.title, v.description, v.url, v.thumbnail, v.views, v.created_at,
+             u.username, u.avatar_url, u.id AS author_id,
+             COALESCE(l.like_count, 0)::int AS like_count,
+             COALESCE(c.comment_count, 0)::int AS comment_count,
+             CASE WHEN $1::uuid IS NOT NULL AND vl.user_id IS NOT NULL THEN true ELSE false END AS viewer_liked,
+             (COALESCE(l.like_count, 0) * 3 + COALESCE(c.comment_count, 0) * 2 + v.views
+              + GREATEST(0, 48 - EXTRACT(EPOCH FROM (NOW() - v.created_at)) / 3600)) AS score
+      FROM videos v
+      JOIN users u ON u.id = v.user_id
+      LEFT JOIN (SELECT video_id, COUNT(*) AS like_count FROM video_likes GROUP BY video_id) l ON l.video_id = v.id
+      LEFT JOIN (SELECT video_id, COUNT(*) AS comment_count FROM comments GROUP BY video_id) c ON c.video_id = v.id
+      LEFT JOIN video_likes vl ON vl.video_id = v.id AND vl.user_id = $1::uuid
+      ORDER BY score DESC, v.created_at DESC
+      LIMIT 20
+    `, [viewerId]);
+    res.json({ ok: true, feed: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/videos/:id/like', authMiddleware, async (req, res) => {
   try {
-    const { rows } = await db.query('UPDATE videos SET likes=likes+1 WHERE id=$1 RETURNING id, likes', [req.params.id]);
-    res.json({ ok: true, likes: rows[0]?.likes });
+    const videoId = req.params.id;
+    const { rows: vrows } = await db.query('SELECT id FROM videos WHERE id=$1', [videoId]);
+    if (!vrows.length) return res.status(404).json({ error: 'video not found' });
+    const { rowCount } = await db.query('DELETE FROM video_likes WHERE video_id=$1 AND user_id=$2', [videoId, req.user.id]);
+    let liked = false;
+    if (rowCount === 0) {
+      await db.query('INSERT INTO video_likes (video_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [videoId, req.user.id]);
+      liked = true;
+    }
+    const { rows } = await db.query('SELECT COUNT(*)::int AS count FROM video_likes WHERE video_id=$1', [videoId]);
+    res.json({ ok: true, liked, count: rows[0].count });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/videos/:id/view', async (req, res) => {
+  try {
+    const { rows } = await db.query('UPDATE videos SET views=views+1 WHERE id=$1 RETURNING id, views', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'video not found' });
+    res.json({ ok: true, views: rows[0].views });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Routes: Comments ─────────────────────────────────────────
+app.get('/api/videos/:id/comments', async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT c.id, c.text, c.created_at, u.username, u.avatar_url
+      FROM comments c JOIN users u ON u.id = c.user_id
+      WHERE c.video_id = $1 ORDER BY c.created_at DESC LIMIT 100
+    `, [req.params.id]);
+    res.json({ ok: true, comments: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/videos/:id/comments', authMiddleware, async (req, res) => {
+  try {
+    const text = (req.body.text || '').trim();
+    if (!text || text.length > 500) return res.status(400).json({ error: 'text required, 1-500 chars' });
+    const { rows: vrows } = await db.query('SELECT id FROM videos WHERE id=$1', [req.params.id]);
+    if (!vrows.length) return res.status(404).json({ error: 'video not found' });
+    const { rows } = await db.query(
+      'INSERT INTO comments (video_id, user_id, text) VALUES ($1,$2,$3) RETURNING id, text, created_at',
+      [req.params.id, req.user.id, text]
+    );
+    res.status(201).json({ ok: true, comment: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Routes: Follows & Profiles ───────────────────────────────
+app.post('/api/users/:id/follow', authMiddleware, async (req, res) => {
+  try {
+    const followeeId = req.params.id;
+    if (followeeId === req.user.id) return res.status(400).json({ error: 'cannot follow yourself' });
+    const { rows: urows } = await db.query('SELECT id FROM users WHERE id=$1', [followeeId]);
+    if (!urows.length) return res.status(404).json({ error: 'user not found' });
+    const { rowCount } = await db.query('DELETE FROM follows WHERE follower_id=$1 AND followee_id=$2', [req.user.id, followeeId]);
+    let following = false;
+    if (rowCount === 0) {
+      await db.query('INSERT INTO follows (follower_id, followee_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, followeeId]);
+      following = true;
+    }
+    const { rows } = await db.query('SELECT COUNT(*)::int AS count FROM follows WHERE followee_id=$1', [followeeId]);
+    res.json({ ok: true, following, followers: rows[0].count });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/users/:username', async (req, res) => {
+  try {
+    const { rows: urows } = await db.query(
+      'SELECT id, username, avatar_url, created_at FROM users WHERE username=$1', [req.params.username]
+    );
+    if (!urows.length) return res.status(404).json({ error: 'user not found' });
+    const user = urows[0];
+    const [followers, following, videos] = await Promise.all([
+      db.query('SELECT COUNT(*)::int AS count FROM follows WHERE followee_id=$1', [user.id]),
+      db.query('SELECT COUNT(*)::int AS count FROM follows WHERE follower_id=$1', [user.id]),
+      db.query(`
+        SELECT v.id, v.title, v.url, v.thumbnail, v.views, v.created_at,
+               COALESCE(l.like_count, 0)::int AS like_count
+        FROM videos v
+        LEFT JOIN (SELECT video_id, COUNT(*) AS like_count FROM video_likes GROUP BY video_id) l ON l.video_id = v.id
+        WHERE v.user_id = $1 ORDER BY v.created_at DESC LIMIT 50
+      `, [user.id])
+    ]);
+    res.json({
+      ok: true,
+      user: { id: user.id, username: user.username, avatar_url: user.avatar_url, created_at: user.created_at },
+      stats: {
+        followers: followers.rows[0].count,
+        following: following.rows[0].count,
+        videos: videos.rows.length,
+        total_views: videos.rows.reduce((s, v) => s + v.views, 0)
+      },
+      videos: videos.rows
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Routes: Gifts ────────────────────────────────────────────
+app.post('/api/gifts', authMiddleware, async (req, res) => {
+  const client = await db.connect();
+  try {
+    const { receiver_id, video_id, credits } = req.body;
+    const amount = Number(credits);
+    if (!receiver_id || !Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'receiver_id and positive credits required' });
+    }
+    if (receiver_id === req.user.id) return res.status(400).json({ error: 'cannot gift yourself' });
+    await client.query('BEGIN');
+    const { rows: srows } = await client.query(
+      'SELECT balance_credits FROM users WHERE id=$1 FOR UPDATE', [req.user.id]
+    );
+    if (!srows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'sender not found' }); }
+    if (Number(srows[0].balance_credits) < amount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'insufficient balance' });
+    }
+    const { rows: rrows } = await client.query('SELECT id FROM users WHERE id=$1', [receiver_id]);
+    if (!rrows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'receiver not found' }); }
+    const receiverShare = Math.round(amount * 0.7 * 100) / 100;
+    await client.query('UPDATE users SET balance_credits = balance_credits - $1 WHERE id=$2', [amount, req.user.id]);
+    await client.query('UPDATE users SET balance_credits = balance_credits + $1 WHERE id=$2', [receiverShare, receiver_id]);
+    const { rows } = await client.query(
+      'INSERT INTO gifts (sender_id, receiver_id, video_id, credits) VALUES ($1,$2,$3,$4) RETURNING *',
+      [req.user.id, receiver_id, video_id || null, amount]
+    );
+    await client.query('COMMIT');
+    res.status(201).json({ ok: true, gift: rows[0], receiver_credited: receiverShare });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
+// ── Routes: Upload (phase 2 stub) ────────────────────────────
+app.get('/api/videos/upload-url', authMiddleware, (req, res) => {
+  res.status(501).json({ error: 'direct upload coming — use url field' });
 });
 
 // ── Routes: Payments (PayPal ONLY) ──────────────────────────
@@ -239,20 +444,64 @@ app.get('/', (req, res) => {
   footer{text-align:center;padding:3rem 2rem;color:var(--muted);border-top:1px solid var(--border)}
   footer a{color:var(--muted);text-decoration:none}
   footer a:hover{color:var(--text)}
+  .feed-view{display:none;height:calc(100vh - 65px);overflow-y:scroll;scroll-snap-type:y mandatory;background:var(--bg)}
+  .feed-view.active{display:block}
+  .feed-card{height:calc(100vh - 65px);scroll-snap-align:start;scroll-snap-stop:always;position:relative;display:flex;align-items:center;justify-content:center;background:#000}
+  .feed-card video{max-height:100%;max-width:100%;width:auto;height:100%;object-fit:contain}
+  .feed-info{position:absolute;left:1rem;bottom:1.5rem;right:5rem;z-index:5}
+  .feed-info .feed-user{font-weight:700;font-size:1rem;margin-bottom:.35rem}
+  .feed-info .feed-title{color:var(--text);font-size:.95rem;opacity:.9}
+  .feed-actions{position:absolute;right:.75rem;bottom:1.5rem;display:flex;flex-direction:column;gap:1.1rem;z-index:5;align-items:center}
+  .feed-btn{background:rgba(19,19,26,.7);border:1px solid var(--border);color:var(--text);border-radius:50%;width:48px;height:48px;font-size:1.3rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+  .feed-btn:hover{border-color:var(--accent)}
+  .feed-btn.liked{color:#f87171;border-color:#f87171}
+  .feed-btn-label{font-size:.75rem;color:var(--muted);text-align:center;margin-top:.25rem}
+  .feed-empty{text-align:center;padding:4rem 2rem;color:var(--muted)}
+  .comment-panel{position:fixed;left:0;right:0;bottom:-100%;height:55vh;background:var(--card);border-top:1px solid var(--border);border-radius:20px 20px 0 0;z-index:900;transition:bottom .3s ease;display:flex;flex-direction:column}
+  .comment-panel.open{bottom:0}
+  .comment-panel-head{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid var(--border)}
+  .comment-list{flex:1;overflow-y:auto;padding:1rem 1.25rem}
+  .comment-item{margin-bottom:1rem}
+  .comment-item .c-user{font-weight:600;font-size:.85rem;color:var(--accent2)}
+  .comment-item .c-text{color:var(--text);font-size:.95rem;margin-top:.15rem}
+  .comment-input-row{display:flex;gap:.5rem;padding:1rem 1.25rem;border-top:1px solid var(--border)}
+  .comment-input-row input{flex:1;padding:.65rem 1rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);outline:none}
+  .comment-input-row input:focus{border-color:var(--accent)}
   @media(max-width:640px){.hero{padding:4rem 1.5rem 3rem}.hero-cta{flex-direction:column;align-items:center}nav{padding:1rem}}
 </style>
 </head>
 <body>
 <nav>
   <div class="logo">nvme.live</div>
-  <div class="nav-links">
+  <div class="nav-links" id="navLoggedOut">
     <a href="#features">Features</a>
     <a href="#pricing">Pricing</a>
     <a class="btn btn-outline" href="#" onclick="openModal('login')">Log In</a>
     <a class="btn btn-primary" href="#" onclick="openModal('register')">Get Started</a>
   </div>
+  <div class="nav-links" id="navLoggedIn" style="display:none">
+    <span id="navUsername" style="color:var(--text);font-weight:600"></span>
+    <a class="btn btn-outline" href="#" onclick="doLogout()">Logout</a>
+  </div>
 </nav>
 
+<!-- Feed View (logged-in) -->
+<div class="feed-view" id="feedView"></div>
+
+<!-- Comment Panel -->
+<div class="comment-panel" id="commentPanel">
+  <div class="comment-panel-head">
+    <strong>Comments</strong>
+    <button class="modal-close" style="position:static" onclick="closeComments()">&times;</button>
+  </div>
+  <div class="comment-list" id="commentList"></div>
+  <div class="comment-input-row">
+    <input type="text" id="commentInput" maxlength="500" placeholder="Add a comment...">
+    <button class="btn btn-primary" onclick="postComment()">Post</button>
+  </div>
+</div>
+
+<div id="landingView">
 <section class="hero">
   <h1>The Future of<br><span>Short Video</span><br>Entertainment</h1>
   <p>AI-powered creator platform. Upload, share, and monetize your short videos. Built for the next generation of content creators.</p>
@@ -351,6 +600,7 @@ app.get('/', (req, res) => {
   <p style="margin-bottom:.75rem"><strong>nvme.live</strong> &mdash; Dollar Double Empire | Founder: John B. Jefferis .Esq</p>
   <p><a href="/health">System Status</a> &bull; <a href="/donate">Support Us</a> &bull; &copy; 2026 nvme.live</p>
 </footer>
+</div><!-- /landingView -->
 
 <!-- Auth Modal -->
 <div class="modal-overlay" id="authModal" onclick="closeModalOutside(event)">
@@ -403,8 +653,8 @@ async function doLogin() {
     const d = await r.json();
     if (!r.ok) return showMsg(d.error || 'Login failed', 'error');
     localStorage.setItem('nvme_token', d.token);
-    showMsg('Welcome back, ' + d.user.username + '! Redirecting...', 'success');
-    setTimeout(() => closeModal(), 1500);
+    showMsg('Welcome back, ' + d.user.username + '! Loading your feed...', 'success');
+    setTimeout(() => { closeModal(); enterLoggedInState(d.user); }, 800);
   } catch(e) { showMsg('Network error. Try again.', 'error'); }
 }
 async function doRegister() {
@@ -417,9 +667,268 @@ async function doRegister() {
     if (!r.ok) return showMsg(d.error || 'Registration failed', 'error');
     localStorage.setItem('nvme_token', d.token);
     showMsg('Account created! Welcome to nvme.live!', 'success');
-    setTimeout(() => closeModal(), 1500);
+    setTimeout(() => { closeModal(); enterLoggedInState(d.user); }, 800);
   } catch(e) { showMsg('Network error. Try again.', 'error'); }
 }
+
+// ── Logged-in state & feed engine ──────────────────────────
+let currentUser = null;
+let activeCommentVideoId = null;
+const viewedVideos = {};
+
+function authHeaders() {
+  const t = localStorage.getItem('nvme_token');
+  const h = { 'Content-Type': 'application/json' };
+  if (t) h['Authorization'] = 'Bearer ' + t;
+  return h;
+}
+
+function enterLoggedInState(user) {
+  currentUser = user;
+  document.getElementById('navLoggedOut').style.display = 'none';
+  document.getElementById('navLoggedIn').style.display = 'flex';
+  document.getElementById('navUsername').textContent = '@' + user.username;
+  document.getElementById('landingView').style.display = 'none';
+  document.getElementById('feedView').classList.add('active');
+  loadFeed();
+}
+
+function enterLoggedOutState() {
+  currentUser = null;
+  document.getElementById('navLoggedOut').style.display = 'flex';
+  document.getElementById('navLoggedIn').style.display = 'none';
+  document.getElementById('landingView').style.display = 'block';
+  document.getElementById('feedView').classList.remove('active');
+  closeComments();
+}
+
+function doLogout() {
+  localStorage.removeItem('nvme_token');
+  enterLoggedOutState();
+}
+
+async function checkAuth() {
+  const t = localStorage.getItem('nvme_token');
+  if (!t) return;
+  try {
+    const r = await fetch(API + '/api/auth/me', { headers: authHeaders() });
+    if (!r.ok) { localStorage.removeItem('nvme_token'); return; }
+    const d = await r.json();
+    enterLoggedInState(d.user);
+  } catch(e) { /* stay logged out on network error */ }
+}
+
+const videoObserver = ('IntersectionObserver' in window) ? new IntersectionObserver((entries) => {
+  entries.forEach((entry) => {
+    const vid = entry.target;
+    if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+      vid.play().catch(() => {});
+      const id = vid.dataset.videoId;
+      if (id && !viewedVideos[id]) {
+        viewedVideos[id] = true;
+        fetch(API + '/api/videos/' + id + '/view', { method: 'POST' }).catch(() => {});
+      }
+    } else {
+      vid.pause();
+    }
+  });
+}, { threshold: [0.6] }) : null;
+
+async function loadFeed() {
+  const feedEl = document.getElementById('feedView');
+  try {
+    const r = await fetch(API + '/api/feed', { headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'feed failed');
+    feedEl.innerHTML = '';
+    if (!d.feed.length) {
+      feedEl.innerHTML = '<div class="feed-empty"><h2>No videos yet</h2><p>Be the first creator to post on nvme.live!</p></div>';
+      return;
+    }
+    d.feed.forEach((v) => feedEl.appendChild(buildFeedCard(v)));
+  } catch(e) {
+    feedEl.innerHTML = '<div class="feed-empty"><h2>Feed unavailable</h2><p>' + e.message + '</p></div>';
+  }
+}
+
+function buildFeedCard(v) {
+  const card = document.createElement('div');
+  card.className = 'feed-card';
+
+  const video = document.createElement('video');
+  video.src = v.url;
+  video.muted = true;
+  video.loop = true;
+  video.playsInline = true;
+  video.preload = 'metadata';
+  video.dataset.videoId = v.id;
+  video.addEventListener('click', () => { video.paused ? video.play() : video.pause(); });
+  card.appendChild(video);
+  if (videoObserver) videoObserver.observe(video);
+
+  const info = document.createElement('div');
+  info.className = 'feed-info';
+  const userEl = document.createElement('div');
+  userEl.className = 'feed-user';
+  userEl.textContent = '@' + v.username;
+  const titleEl = document.createElement('div');
+  titleEl.className = 'feed-title';
+  titleEl.textContent = v.title;
+  info.appendChild(userEl);
+  info.appendChild(titleEl);
+  card.appendChild(info);
+
+  const actions = document.createElement('div');
+  actions.className = 'feed-actions';
+
+  const likeWrap = document.createElement('div');
+  const likeBtn = document.createElement('button');
+  likeBtn.className = 'feed-btn' + (v.viewer_liked ? ' liked' : '');
+  likeBtn.textContent = '❤';
+  const likeLabel = document.createElement('div');
+  likeLabel.className = 'feed-btn-label';
+  likeLabel.textContent = v.like_count;
+  likeBtn.addEventListener('click', async () => {
+    try {
+      const r = await fetch(API + '/api/videos/' + v.id + '/like', { method: 'POST', headers: authHeaders() });
+      const d = await r.json();
+      if (!r.ok) return alert(d.error || 'like failed');
+      likeBtn.classList.toggle('liked', d.liked);
+      likeLabel.textContent = d.count;
+    } catch(e) { alert('Network error'); }
+  });
+  likeWrap.appendChild(likeBtn);
+  likeWrap.appendChild(likeLabel);
+  actions.appendChild(likeWrap);
+
+  const cmtWrap = document.createElement('div');
+  const cmtBtn = document.createElement('button');
+  cmtBtn.className = 'feed-btn';
+  cmtBtn.textContent = '💬';
+  const cmtLabel = document.createElement('div');
+  cmtLabel.className = 'feed-btn-label';
+  cmtLabel.textContent = v.comment_count;
+  cmtBtn.addEventListener('click', () => openComments(v.id, cmtLabel));
+  cmtWrap.appendChild(cmtBtn);
+  cmtWrap.appendChild(cmtLabel);
+  actions.appendChild(cmtWrap);
+
+  if (!currentUser || currentUser.id !== v.author_id) {
+    const followWrap = document.createElement('div');
+    const followBtn = document.createElement('button');
+    followBtn.className = 'feed-btn';
+    followBtn.textContent = '➕';
+    const followLabel = document.createElement('div');
+    followLabel.className = 'feed-btn-label';
+    followLabel.textContent = 'Follow';
+    followBtn.addEventListener('click', async () => {
+      try {
+        const r = await fetch(API + '/api/users/' + v.author_id + '/follow', { method: 'POST', headers: authHeaders() });
+        const d = await r.json();
+        if (!r.ok) return alert(d.error || 'follow failed');
+        followBtn.textContent = d.following ? '✓' : '➕';
+        followLabel.textContent = d.following ? 'Following' : 'Follow';
+      } catch(e) { alert('Network error'); }
+    });
+    followWrap.appendChild(followBtn);
+    followWrap.appendChild(followLabel);
+    actions.appendChild(followWrap);
+
+    const giftWrap = document.createElement('div');
+    const giftBtn = document.createElement('button');
+    giftBtn.className = 'feed-btn';
+    giftBtn.textContent = '🎁';
+    const giftLabel = document.createElement('div');
+    giftLabel.className = 'feed-btn-label';
+    giftLabel.textContent = 'Gift';
+    giftBtn.addEventListener('click', async () => {
+      const amt = prompt('Send credits to @' + v.username + ':');
+      if (!amt) return;
+      try {
+        const r = await fetch(API + '/api/gifts', {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ receiver_id: v.author_id, video_id: v.id, credits: Number(amt) })
+        });
+        const d = await r.json();
+        if (!r.ok) return alert(d.error || 'gift failed');
+        alert('Gift sent! @' + v.username + ' received ' + d.receiver_credited + ' credits 🎉');
+      } catch(e) { alert('Network error'); }
+    });
+    giftWrap.appendChild(giftBtn);
+    giftWrap.appendChild(giftLabel);
+    actions.appendChild(giftWrap);
+  }
+
+  card.appendChild(actions);
+  return card;
+}
+
+// ── Comments panel ──────────────────────────────────────────
+let activeCommentCountEl = null;
+async function openComments(videoId, countEl) {
+  activeCommentVideoId = videoId;
+  activeCommentCountEl = countEl || null;
+  document.getElementById('commentPanel').classList.add('open');
+  const list = document.getElementById('commentList');
+  list.innerHTML = '<p style="color:var(--muted)">Loading...</p>';
+  try {
+    const r = await fetch(API + '/api/videos/' + videoId + '/comments');
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'failed');
+    renderComments(d.comments);
+  } catch(e) { list.innerHTML = '<p style="color:var(--muted)">Could not load comments.</p>'; }
+}
+
+function renderComments(comments) {
+  const list = document.getElementById('commentList');
+  list.innerHTML = '';
+  if (!comments.length) {
+    list.innerHTML = '<p style="color:var(--muted)">No comments yet. Say something!</p>';
+    return;
+  }
+  comments.forEach((c) => {
+    const item = document.createElement('div');
+    item.className = 'comment-item';
+    const u = document.createElement('div');
+    u.className = 'c-user';
+    u.textContent = '@' + c.username;
+    const t = document.createElement('div');
+    t.className = 'c-text';
+    t.textContent = c.text;
+    item.appendChild(u);
+    item.appendChild(t);
+    list.appendChild(item);
+  });
+}
+
+function closeComments() {
+  document.getElementById('commentPanel').classList.remove('open');
+  activeCommentVideoId = null;
+  activeCommentCountEl = null;
+}
+
+async function postComment() {
+  const input = document.getElementById('commentInput');
+  const text = input.value.trim();
+  if (!text || !activeCommentVideoId) return;
+  try {
+    const r = await fetch(API + '/api/videos/' + activeCommentVideoId + '/comments', {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify({ text })
+    });
+    const d = await r.json();
+    if (!r.ok) return alert(d.error || 'comment failed');
+    input.value = '';
+    if (activeCommentCountEl) activeCommentCountEl.textContent = Number(activeCommentCountEl.textContent || 0) + 1;
+    openComments(activeCommentVideoId, activeCommentCountEl);
+  } catch(e) { alert('Network error'); }
+}
+
+document.getElementById('commentInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') postComment();
+});
+
+// Fix login loop: restore session on page load
+checkAuth();
 </script>
 </body>
 </html>`);

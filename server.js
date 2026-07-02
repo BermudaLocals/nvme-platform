@@ -119,6 +119,26 @@ async function initDB() {
     );
     ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_credits NUMERIC DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'free';
+    ALTER TABLE videos ADD COLUMN IF NOT EXISTS url TEXT;
+    ALTER TABLE videos ADD COLUMN IF NOT EXISTS thumbnail TEXT;
+    ALTER TABLE videos ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0;
+    ALTER TABLE videos ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0;
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS plan TEXT;
+    -- migrate legacy schema.sql-era columns (video_url/thumbnail_url/view_count/like_count) if present
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='videos' AND column_name='video_url') THEN
+        UPDATE videos SET url = COALESCE(url, video_url);
+        ALTER TABLE videos ALTER COLUMN video_url DROP NOT NULL;
+      END IF;
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='videos' AND column_name='thumbnail_url') THEN
+        UPDATE videos SET thumbnail = COALESCE(thumbnail, thumbnail_url);
+      END IF;
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='videos' AND column_name='view_count') THEN
+        UPDATE videos SET views = COALESCE(views, view_count), likes = COALESCE(likes, like_count);
+      END IF;
+    END $$;
   `).catch(e => console.warn('DB init warning:', e.message));
 }
 

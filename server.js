@@ -14,13 +14,17 @@ const app = express();
 const PORT = process.env.PORT || 3090;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-// ── Production env guardrails (fail-fast) ────────────────────
+// ── Production env guardrails (resilient) ────────────────────
 if (IS_PROD) {
   const required = ['DATABASE_URL', 'JWT_SECRET'];
   const missing = required.filter((k) => !process.env[k]);
   if (missing.length) {
-    console.error(`[nvme.live] FATAL: missing required env in production: ${missing.join(', ')}`);
-    process.exit(1);
+    console.error(`[nvme.live] WARNING: missing env in production: ${missing.join(', ')} — set these in Railway variables!`);
+  }
+  if (!process.env.JWT_SECRET) {
+    // never ship a weak hardcoded secret: generate strong ephemeral one (sessions reset on redeploy)
+    process.env.JWT_SECRET = require('crypto').randomBytes(48).toString('hex');
+    console.error('[nvme.live] WARNING: JWT_SECRET missing — using ephemeral random secret until env var is set');
   }
 }
 

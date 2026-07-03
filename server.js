@@ -1332,6 +1332,140 @@ io.on('connection', (socket) => {
   });
 });
 
+// ── Credit Packages ─────────────────────────────────────────────────────────
+const CREDIT_PACKAGES = [
+  { id: 'credits_100',   credits: 100,   usd: 0.99,  label: 'Starter Pack' },
+  { id: 'credits_500',   credits: 500,   usd: 3.99,  label: 'Captain Pack' },
+  { id: 'credits_1200',  credits: 1200,  usd: 7.99,  label: 'Commander Pack' },
+  { id: 'credits_3000',  credits: 3000,  usd: 17.99, label: 'Elite Pack' },
+  { id: 'credits_7000',  credits: 7000,  usd: 34.99, label: 'CxO Pack' },
+  { id: 'credits_20000', credits: 20000, usd: 89.99, label: 'DIGITAL KING Pack' },
+];
+
+app.get('/api/credits/packages', (req, res) => res.json({ ok: true, packages: CREDIT_PACKAGES }));
+
+app.get('/api/credits/balance', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT balance_credits FROM users WHERE id=$1', [req.user.id]);
+    res.json({ ok: true, balance: rows[0]?.balance_credits || 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PayPal order create for credits
+app.post('/api/credits/create-order', authMiddleware, async (req, res) => {
+  const { packageId } = req.body;
+  const pkg = CREDIT_PACKAGES.find(p => p.id === packageId);
+  if (!pkg) return res.status(400).json({ error: 'invalid package' });
+  try {
+    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+    const tokenRes = await fetch('https://api-m.paypal.com/v1/oauth2/token', {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'grant_type=client_credentials'
+    });
+    const { access_token } = await tokenRes.json();
+    const orderRes = await fetch('https://api-m.paypal.com/v2/checkout/orders', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        intent: 'CAPTURE',
+        purchase_units: [{ amount: { currency_code: 'USD', value: pkg.usd.toFixed(2) }, description: `nvme.live — ${pkg.label} (${pkg.credits} credits)` }],
+        application_context: { brand_name: 'nvme.live', user_action: 'PAY_NOW' }
+      })
+    });
+    const order = await orderRes.json();
+    res.json({ ok: true, orderId: order.id, package: pkg });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PayPal capture + credit top-up
+app.post('/api/credits/capture-order', authMiddleware, async (req, res) => {
+  const { orderId, packageId } = req.body;
+  const pkg = CREDIT_PACKAGES.find(p => p.id === packageId);
+  if (!pkg) return res.status(400).json({ error: 'invalid package' });
+  try {
+    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+    const tokenRes = await fetch('https://api-m.paypal.com/v1/oauth2/token', {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'grant_type=client_credentials'
+    });
+    const { access_token } = await tokenRes.json();
+    const captureRes = await fetch(`https://api-m.paypal.com/v2/checkout/orders/${orderId}/capture`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' }
+    });
+    const capture = await captureRes.json();
+    if (capture.status === 'COMPLETED') {
+      await db.query('UPDATE users SET balance_credits=balance_credits+$1 WHERE id=$2', [pkg.credits, req.user.id]);
+      await db.query(
+        'INSERT INTO transactions (user_id,type,amount_usd,credits_delta,description) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',
+        [req.user.id, 'credit_purchase', pkg.usd, pkg.credits, pkg.label]
+      ).catch(() => {});
+      const { rows: bal } = await db.query('SELECT balance_credits FROM users WHERE id=$1', [req.user.id]);
+      res.json({ ok: true, credits_added: pkg.credits, new_balance: bal[0]?.balance_credits || null });
+    } else {
+      res.status(402).json({ error: 'payment not completed', status: capture.status });
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── User profile ──────────────────────────────────────────────────────────────
+app.get('/api/profile/:username', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id,username,display_name,avatar_url,bio,is_creator,is_verified,follower_count,following_count,created_at FROM users WHERE username=$1',
+      [req.params.username]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'user not found' });
+    res.json({ ok: true, profile: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/profile/:username/gifts-sent', async (req, res) => {
+  try {
+    const { rows: user } = await db.query('SELECT id FROM users WHERE username=$1', [req.params.username]);
+    if (!user[0]) return res.status(404).json({ error: 'user not found' });
+    const { rows } = await db.query(
+      `SELECT gc.name, gc.emoji, gc.tier_level, COUNT(*)::int as times_sent, SUM(gc.usd_value) as total_usd
+       FROM livestream_chat lc
+       JOIN gift_catalog gc ON gc.name = lc.message
+       WHERE lc.user_id=$1
+       GROUP BY gc.name, gc.emoji, gc.tier_level
+       ORDER BY gc.tier_level DESC`,
+      [user[0].id]
+    );
+    res.json({ ok: true, gifts: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/streams/:id/gift-leaderboard', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.username, u.avatar_url, SUM(gc.usd_value) as total_gifted, COUNT(*)::int as gift_count
+       FROM livestream_chat lc
+       JOIN users u ON u.id=lc.user_id
+       JOIN gift_catalog gc ON gc.name=lc.message
+       WHERE lc.stream_id=$1
+       GROUP BY u.username, u.avatar_url
+       ORDER BY total_gifted DESC LIMIT 10`,
+      [req.params.id]
+    );
+    res.json({ ok: true, leaderboard: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Creator stream dashboard ──────────────────────────────────────────────────
+app.get('/api/creator/streams', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT * FROM livestreams WHERE user_id=$1 ORDER BY created_at DESC LIMIT 20',
+      [req.user.id]
+    );
+    res.json({ ok: true, streams: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Start ─────────────────────────────────────────────────────
 initDB().then(() => {
   server.listen(PORT, '0.0.0.0', () => {

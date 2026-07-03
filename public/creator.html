@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NVME.LIVE — Creator Dashboard</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #07070d;
+      --bg2:       #0d0d1a;
+      --bg3:       #12121f;
+      --card:      #14141f;
+      --border:    #1e1e30;
+      --magenta:   #e91e8c;
+      --cyan:      #00d4ff;
+      --green:     #00e676;
+      --yellow:    #ffd600;
+      --red:       #ff1744;
+      --text:      #f0f0f8;
+      --muted:     #6b6b90;
+      --radius:    12px;
+      --shadow:    0 4px 32px rgba(0,0,0,.55);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      font-size: 15px;
+    }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 6px; background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── TOP NAV ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 60px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .topbar-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 800; font-size: 1.3rem; letter-spacing: .04em;
+    }
+    .topbar-brand span.n { color: var(--magenta); }
+    .topbar-brand span.v { color: var(--cyan); }
+    .topbar-brand span.dot { color: var(--muted); font-weight: 400; }
+    .live-badge {
+      display: none;
+      align-items: center; gap: 6px;
+      background: var(--red);
+      color: #fff;
+      font-weight: 700;
+      font-size: .78rem;
+      letter-spacing: .1em;
+      padding: 4px 12px;
+      border-radius: 20px;
+      animation: pulse-badge 1.6s infinite;
+    }
+    .live-badge.visible { display: flex; }
+    @keyframes pulse-badge {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,23,68,.5); }
+      50%      { box-shadow: 0 0 0 8px rgba(255,23,68,0); }
+    }
+    .live-badge .dot-blink {
+      width: 8px; height: 8px; border-radius: 50%; background: #fff;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    .topbar-user {
+      display: flex; align-items: center; gap: 10px;
+      font-size: .85rem; color: var(--muted);
+    }
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--magenta), var(--cyan));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: .8rem; color: #fff;
+    }
+
+    /* ── AUTH GATE ── */
+    #auth-gate {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 80vh;
+      gap: 16px;
+      text-align: center;
+      padding: 24px;
+    }
+    #auth-gate h2 { font-size: 1.5rem; color: var(--text); }
+    #auth-gate p  { color: var(--muted); max-width: 360px; line-height: 1.6; }
+    #auth-gate a  { color: var(--magenta); text-decoration: none; font-weight: 600; }
+
+    /* ── MAIN LAYOUT ── */
+    #app {
+      display: none;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px 60px;
+      gap: 24px;
+    }
+    #app.visible { display: block; }
+
+    /* ── GRID ── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 900px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .grid-3 { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 560px) {
+      .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+    .card-title {
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title .icon { font-size: 1rem; }
+
+    /* ── STAT CARDS ── */
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    }
+    .stat-card.magenta::before { background: var(--magenta); }
+    .stat-card.cyan::before    { background: var(--cyan); }
+    .stat-card.green::before   { background: var(--green); }
+    .stat-label {
+      font-size: .7rem; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 2rem; font-weight: 800; line-height: 1;
+    }
+    .stat-value.magenta { color: var(--magenta); }
+    .stat-value.cyan    { color: var(--cyan); }
+    .stat-value.green   { color: var(--green); }
+    .stat-sub { font-size: .75rem; color: var(--muted); margin-top: 6px; }
+
+    /* ── FORM ── */
+    .form-group { margin-bottom: 16px; }
+    label {
+      display: block;
+      font-size: .78rem; font-weight: 600; color: var(--muted);
+      margin-bottom: 6px; letter-spacing: .04em;
+    }
+    input[type=text], textarea, select {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: .9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input[type=text]:focus, textarea:focus {
+      border-color: var(--magenta);
+      box-shadow: 0 0 0 3px rgba(233,30,140,.15);
+    }
+    textarea { resize: vertical; min-height: 80px; }
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0;
+    }
+    .toggle-label { font-size: .88rem; color: var(--text); }
+    .toggle-label small { display: block; font-size: .75rem; color: var(--muted); margin-top: 2px; }
+    .toggle {
+      position: relative; width: 44px; height: 24px;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .toggle input { display: none; }
+    .toggle-track {
+      width: 44px; height: 24px; border-radius: 12px;
+      background: var(--border); transition: background .2s;
+    }
+    .toggle input:checked + .toggle-track { background: var(--magenta); }
+    .toggle-thumb {
+      position: absolute; top: 3px; left: 3px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; transition: left .2s;
+    }
+    .toggle input:checked ~ .toggle-thumb { left: 23px; }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 11px 22px;
+      border-radius: 8px;
+      font-weight: 700; font-size: .88rem; letter-spacing: .03em;
+      border: none; cursor: pointer; transition: all .18s;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--magenta), #c2185b);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(233,30,140,.35);
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 28px rgba(233,30,140,.5);
+    }
+    .btn-cyan {
+      background: linear-gradient(135deg, var(--cyan), #0097a7);
+      color: #07070d;
+      box-shadow: 0 4px 20px rgba(0,212,255,.3);
+    }
+    .btn-cyan:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 28px rgba(0,212,255,.45);
+    }
+    .btn-danger {
+      background: rgba(255,23,68,.15);
+      color: var(--red);
+      border: 1px solid rgba(255,23,68,.35);
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: rgba(255,23,68,.25);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+    .btn-sm { padding: 6px 14px; font-size: .78rem; }
+    .btn-full { width: 100%; }
+
+    /* ── STREAM KEY ── */
+    .key-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .key-display {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-size: .85rem;
+      font-family: 'Courier New', monospace;
+      color: var(--cyan);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      letter-spacing: .04em;
+    }
+    .key-display.hidden-key { color: var(--muted); letter-spacing: .2em; }
+
+    /* ── LEADERBOARD ── */
+    .leaderboard-list { display: flex; flex-direction: column; gap: 8px; }
+    .leader-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      background: var(--bg3);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .leader-rank {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: .8rem; flex-shrink: 0;
+    }
+    .leader-rank.r1 { background: #ffd600; color: #07070d; }
+    .leader-rank.r2 { background: #b0bec5; color: #07070d; }
+    .leader-rank.r3 { background: #bf8c5a; color: #07070d; }
+    .leader-rank.other { background: var(--border); color: var(--muted); }
+    .leader-name { flex: 1; font-weight: 600; font-size: .88rem; }
+    .leader-amount { font-weight: 700; color: var(--magenta); font-size: .88rem; }
+    .empty-state {
+      text-align: center; padding: 32px;
+      color: var(--muted); font-size: .85rem;
+    }
+    .empty-state .emoji { font-size: 2rem; display: block; margin-bottom: 8px; }
+
+    /* ── STREAM HISTORY ── */
+    .stream-list { display: flex; flex-direction: column; gap: 8px; }
+    .stream-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg3);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color .18s;
+    }
+    .stream-item:hover { border-color: var(--magenta); }
+    .stream-item.active-stream { border-color: var(--cyan); }
+    .stream-info { flex: 1; min-width: 0; }
+    .stream-title-text {
+      font-weight: 600; font-size: .9rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .stream-meta { font-size: .75rem; color: var(--muted); margin-top: 3px; }
+    .status-badge {
+      padding: 3px 10px; border-radius: 20px;
+      font-size: .7rem; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; flex-shrink: 0;
+    }
+    .status-badge.live    { background: rgba(255,23,68,.2);   color: var(--red);    border: 1px solid rgba(255,23,68,.4); animation: pulse-badge 1.6s infinite; }
+    .status-badge.ended   { background: rgba(107,107,144,.15); color: var(--muted);  border: 1px solid var(--border); }
+    .status-badge.pending { background: rgba(255,214,0,.15);  color: var(--yellow); border: 1px solid rgba(255,214,0,.3); }
+    .status-badge.premium { background: rgba(233,30,140,.18); color: var(--magenta); border: 1px solid rgba(233,30,140,.35); }
+
+    /* ── SECTION HEADER ── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 1rem; font-weight: 700; color: var(--text);
+    }
+    .section-sub { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+    .divider {
+      border: none; border-top: 1px solid var(--border);
+      margin: 24px 0;
+    }
+
+    /* ── GO LIVE CONTROLS ── */
+    .go-live-panel {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 16px; text-align: center; padding: 8px 0;
+    }
+    .live-ring {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--magenta), var(--cyan));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.2rem;
+      box-shadow: 0 0 0 0 rgba(233,30,140,.4);
+      transition: box-shadow .3s;
+      position: relative;
+    }
+    .live-ring.pulsing {
+      animation: ring-pulse 1.8s infinite;
+    }
+    @keyframes ring-pulse {
+      0%   { box-shadow: 0 0 0 0   rgba(233,30,140,.5); }
+      70%  { box-shadow: 0 0 0 22px rgba(233,30,140,0); }
+      100% { box-shadow: 0 0 0 0   rgba(233,30,140,0); }
+    }
+    .live-status-text {
+      font-size: .85rem; color: var(--muted); font-weight: 500;
+    }
+    .viewer-count-big {
+      font-size: 2.5rem; font-weight: 800; color: var(--cyan);
+      line-height: 1;
+    }
+    .viewer-label { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── TOAST / GIFT ALERT ── */
+    #toast-container {
+      position: fixed; top: 72px; right: 16px;
+      z-index: 9999;
+      display: flex; flex-direction: column; gap: 10px;
+      pointer-events: none;
+      max-width: 340px;
+    }
+    .toast {
+      background: var(--card);
+      border: 1px solid var(--magenta);
+      border-radius: 12px;
+      padding: 14px 18px;
+      box-shadow: 0 8px 32px rgba(233,30,140,.35);
+      display: flex; align-items: center; gap: 12px;
+      animation: toast-in .35s cubic-bezier(.34,1.56,.64,1);
+      pointer-events: auto;
+    }
+    .toast.removing {
+      animation: toast-out .3s ease forwards;
+    }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(60px) scale(.9); }
+      to   { opacity: 1; transform: translateX(0)   scale(1); }
+    }
+    @keyframes toast-out {
+      to { opacity: 0; transform: translateX(60px) scale(.9); }
+    }
+    .toast-emoji { font-size: 1.8rem; flex-shrink: 0; }
+    .toast-body { flex: 1; }
+    .toast-title { font-weight: 700; font-size: .88rem; color: var(--text); }
+    .toast-sub   { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+    .toast-tier {
+      font-size: .65rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 20px;
+      flex-shrink: 0;
+    }
+    .toast-tier.tier1 { background: rgba(255,214,0,.2);  color: var(--yellow); border: 1px solid rgba(255,214,0,.4); }
+    .toast-tier.tier2 { background: rgba(0,212,255,.15); color: var(--cyan);   border: 1px solid rgba(0,212,255,.35); }
+    .toast-tier.tier3 { background: rgba(233,30,140,.18); color: var(--magenta); border: 1px solid rgba(233,30,140,.35); }
+
+    /* ── SPINNER ── */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── MISC ── */
+    .mb-8  { margin-bottom: 8px; }
+    .mb-16 { margin-bottom: 16px; }
+    .mb-24 { margin-bottom: 24px; }
+    .mt-8  { margin-top: 8px; }
+    .flex-row { display: flex; align-items: center; gap: 8px; }
+    .flex-end { justify-content: flex-end; }
+    .text-muted { color: var(--muted); font-size: .8rem; }
+    .text-center { text-align: center; }
+    .refresh-note { font-size: .72rem; color: var(--muted); }
+    .copy-success { color: var(--green); font-size: .78rem; display: none; }
+    .earnings-usd {
+      font-size: 1.8rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--magenta), var(--cyan));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="topbar">
+  <div class="topbar-brand">
+    <span class="n">NV</span><span class="v">ME</span><span class="dot">.live</span>
+  </div>
+  <div id="live-badge-nav" class="live-badge">
+    <span class="dot-blink"></span> LIVE
+  </div>
+  <div class="topbar-user">
+    <div class="avatar" id="user-avatar">?</div>
+    <span id="user-display">Loading…</span>
+  </div>
+</nav>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<!-- AUTH GATE -->
+<div id="auth-gate">
+  <div style="font-size:3rem;">🔐</div>
+  <h2>Creator Dashboard</h2>
+  <p>Please <a href="/">sign in at nvme.live</a> to access your Go Live dashboard and manage your streams.</p>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+
+  <!-- ── ROW 1: STATS ── -->
+  <div class="grid-3 mb-24">
+    <div class="stat-card cyan">
+      <div class="stat-label">👁 Viewers</div>
+      <div class="stat-value cyan" id="stat-viewers">0</div>
+      <div class="stat-sub">Live right now</div>
+    </div>
+    <div class="stat-card magenta">
+      <div class="stat-label">🎁 Gifts</div>
+      <div class="stat-value magenta" id="stat-gifts">0</div>
+      <div class="stat-sub">This session</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">💰 Earnings</div>
+      <div class="earnings-usd" id="stat-earnings">$0.00</div>
+      <div class="stat-sub">Total gifts value</div>
+    </div>
+  </div>
+
+  <!-- ── ROW 2: GO LIVE + CREATE STREAM ── -->
+  <div class="grid-2 mb-24">
+
+    <!-- GO LIVE CONTROL -->
+    <div class="card">
+      <div class="card-title"><span class="icon">📡</span> Stream Control</div>
+      <div class="go-live-panel">
+        <div class="live-ring" id="live-ring">📹</div>
+        <div class="live-status-text" id="live-status-text">Not streaming</div>
+        <div>
+          <div class="viewer-count-big" id="viewer-count-big">0</div>
+          <div class="viewer-label">viewers watching</div>
+        </div>
+
+        <div class="flex-row" style="gap:12px;flex-wrap:wrap;justify-content:center;">
+          <button class="btn btn-cyan" id="btn-go-live" onclick="goLive()">▶ Go Live</button>
+          <button class="btn btn-danger" id="btn-end-live" onclick="endLive()" style="display:none">⏹ End Stream</button>
+        </div>
+
+        <div id="stream-key-section" style="width:100%;display:none;">
+          <div class="card-title" style="margin-bottom:8px;"><span class="icon">🔑</span> Stream Key</div>
+          <div class="key-row">
+            <div class="key-display hidden-key" id="stream-key-display">••••••••••••••••</div>
+            <button class="btn btn-ghost btn-sm" id="btn-toggle-key" onclick="toggleKey()">Show</button>
+            <button class="btn btn-ghost btn-sm" id="btn-copy-key" onclick="copyKey()">Copy</button>
+          </div>
+          <span class="copy-success" id="copy-success">✓ Copied!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREATE STREAM -->
+    <div class="card">
+      <div class="card-title"><span class="icon">✨</span> Create New Stream</div>
+      <form id="create-stream-form" onsubmit="createStream(event)">
+        <div class="form-group">
+          <label>Stream Title *</label>
+          <input type="text" id="stream-title" placeholder="What are you streaming today?" required />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="stream-desc" placeholder="Tell viewers what this stream is about…"></textarea>
+        </div>
+        <div class="form-group">
+          <div class="toggle-row">
+            <div class="toggle-label">
+              Premium Stream
+              <small>Subscribers only — earn more per gift</small>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="premium-toggle" />
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="btn-create">
+          ✦ Create Stream
+        </button>
+        <div id="create-error" style="color:var(--red);font-size:.8rem;margin-top:8px;display:none;"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── ROW 3: GIFT LEADERBOARD + STREAM HISTORY ── -->
+  <div class="grid-2 mb-24">
+
+    <!-- GIFT LEADERBOARD -->
+    <div class="card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">🏆 Gift Leaderboard</div>
+          <div class="section-sub refresh-note" id="lb-refresh-note">Auto-refreshes every 30s</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadLeaderboard()">↻ Refresh</button>
+      </div>
+      <div id="leaderboard-list" class="leaderboard-list">
+        <div class="empty-state"><span class="emoji">🎁</span>No gifts yet — go live to start receiving!</div>
+      </div>
+    </div>
+
+    <!-- STREAM HISTORY -->
+    <div class="card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">📋 My Streams</div>
+          <div class="section-sub">Last 20 streams</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadStreams()">↻ Refresh</button>
+      </div>
+      <div id="stream-list" class="stream-list">
+        <div class="empty-state"><span class="emoji">📡</span>No streams yet — create your first one!</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<script>
+/* ════════════════════════════════════════════════
+   NVME.LIVE  —  Creator Dashboard
+   ════════════════════════════════════════════════ */
+
+const API   = '';
+const TOKEN = localStorage.getItem('nvme_token');
+const headers = {
+  'Content-Type':  'application/json',
+  'Authorization': `Bearer ${TOKEN}`
+};
+
+// ── state ──────────────────────────────────────
+let currentStreamId  = null;
+let isLive           = false;
+let viewerCount      = 0;
+let totalGifts       = 0;
+let totalGiftValue   = 0;
+let streamKey        = null;
+let keyVisible       = false;
+let lbInterval       = null;
+let socket           = null;
+
+// ── bootstrap ──────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  if (!TOKEN) {
+    document.getElementById('auth-gate').style.display = 'flex';
+    return;
+  }
+  document.getElementById('app').classList.add('visible');
+  initSocket();
+  loadStreams();
+  startLeaderboardInterval();
+  fetchUserProfile();
+});
+
+// ── user profile ───────────────────────────────
+async function fetchUserProfile() {
+  try {
+    const r = await fetch(`${API}/api/auth/me`, { headers });
+    if (!r.ok) return;
+    const d = await r.json();
+    const name = d.username || d.display_name || d.email || 'Creator';
+    document.getElementById('user-display').textContent = name;
+    document.getElementById('user-avatar').textContent  = name.charAt(0).toUpperCase();
+  } catch { /* silent */ }
+}
+
+// ── socket.io ──────────────────────────────────
+function initSocket() {
+  try {
+    socket = io({ auth: { token: TOKEN } });
+
+    socket.on('connect', () => {
+      console.log('[socket] connected', socket.id);
+      if (currentStreamId) socket.emit('join_stream', { streamId: currentStreamId });
+    });
+
+    socket.on('viewer_count', ({ count }) => {
+      viewerCount = Number(count) || 0;
+      document.getElementById('stat-viewers').textContent     = fmt(viewerCount);
+      document.getElementById('viewer-count-big').textContent = fmt(viewerCount);
+    });
+
+    socket.on('gift_received', ({ senderName, gift }) => {
+      totalGifts++;
+      const val = giftValue(gift);
+      totalGiftValue += val;
+      document.getElementById('stat-gifts').textContent    = fmt(totalGifts);
+      document.getElementById('stat-earnings').textContent = fmtUSD(totalGiftValue);
+      showGiftToast(senderName, gift);
+      // debounce leaderboard refresh
+      clearTimeout(window._lbDebounce);
+      window._lbDebounce = setTimeout(loadLeaderboard, 2000);
+    });
+
+    socket.on('stream_ended', () => {
+      if (isLive) updateLiveState(false);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.warn('[socket] disconnected:', reason);
+    });
+  } catch(e) {
+    console.warn('[socket] init failed:', e);
+  }
+}
+
+// ── create stream ──────────────────────────────
+async function createStream(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-create');
+  const errEl = document.getElementById('create-error');
+  errEl.style.display = 'none';
+  const title   = document.getElementById('stream-title').value.trim();
+  const desc    = document.getElementById('stream-desc').value.trim();
+  const premium = document.getElementById('premium-toggle').checked;
+  if (!title) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Creating…';
+
+  try {
+    const r = await fetch(`${API}/api/streams`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ title, description: desc, is_premium: premium })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.message || data.error || 'Failed to create stream');
+
+    currentStreamId = data.id || data.stream_id || data._id;
+    streamKey       = data.stream_key;
+
+    if (streamKey) {
+      document.getElementById('stream-key-section').style.display = 'block';
+      renderStreamKey();
+    }
+
+    if (socket) socket.emit('join_stream', { streamId: currentStreamId });
+
+    // enable go live
+    document.getElementById('btn-go-live').disabled = false;
+    document.getElementById('live-status-text').textContent = 'Stream created — ready to go live!';
+
+    showNotification('✅ Stream Created', `"${title}" is ready. Click Go Live when you're ready!`, 'success');
+    loadStreams();
+    e.target.reset();
+  } catch(err) {
+    errEl.textContent   = err.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✦ Create Stream';
+  }
+}
+
+// ── go live ────────────────────────────────────
+async function goLive() {
+  if (!currentStreamId) {
+    showNotification('⚠️ No stream selected', 'Create a stream first, or select one from history.', 'warning');
+    return;
+  }
+  const btn = document.getElementById('btn-go-live');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const r = await fetch(`${API}/api/streams/${currentStreamId}/go-live`, {
+      method: 'POST', headers
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.message || data.error || 'Failed to go live');
+
+    updateLiveState(true);
+    if (data.stream_key && !streamKey) {
+      streamKey = data.stream_key;
+      document.getElementById('stream-key-section').style.display = 'block';
+      renderStreamKey();
+    }
+    loadStreams();
+    showNotification('🔴 You are LIVE!', 'Your stream has started. Go rock it!', 'live');
+  } catch(err) {
+    showNotification('❌ Error', err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '▶ Go Live';
+  }
+}
+
+// ── end live ───────────────────────────────────
+async function endLive() {
+  if (!currentStreamId || !isLive) return;
+  if (!confirm('End your live stream? This cannot be undone.')) return;
+
+  const btn = document.getElementById('btn-end-live');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const r = await fetch(`${API}/api/streams/${currentStreamId}/end-live`, {
+      method: 'POST', headers
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.message || 'Failed to end stream');
+    }
+    updateLiveState(false);
+    loadStreams();
+    showNotification('✅ Stream Ended', 'Your stream has ended. Great job!', 'success');
+  } catch(err) {
+    showNotification('❌ Error', err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '⏹ End Stream';
+  }
+}
+
+function updateLiveState(live) {
+  isLive = live;
+  const badge   = document.getElementById('live-badge-nav');
+  const ring    = document.getElementById('live-ring');
+  const statusT = document.getElementById('live-status-text');
+  const btnGo   = document.getElementById('btn-go-live');
+  const btnEnd  = document.getElementById('btn-end-live');
+
+  if (live) {
+    badge.classList.add('visible');
+    ring.classList.add('pulsing');
+    ring.textContent = '🔴';
+    statusT.textContent = '● Streaming LIVE';
+    statusT.style.color = 'var(--red)';
+    btnGo.style.display  = 'none';
+    btnEnd.style.display = 'inline-flex';
+    startLeaderboardInterval();
+  } else {
+    badge.classList.remove('visible');
+    ring.classList.remove('pulsing');
+    ring.textContent = '📹';
+    statusT.textContent = 'Stream ended';
+    statusT.style.color = 'var(--muted)';
+    btnGo.style.display  = 'inline-flex';
+    btnEnd.style.display = 'none';
+    document.getElementById('stat-viewers').textContent     = '0';
+    document.getElementById('viewer-count-big').textContent = '0';
+  }
+}
+
+// ── load streams history ───────────────────────
+async function loadStreams() {
+  try {
+    const r = await fetch(`${API}/api/creator/streams?limit=20`, { headers });
+    if (!r.ok) return;
+    const data = await r.json();
+    const streams = data.streams || data.data || data || [];
+    renderStreamList(Array.isArray(streams) ? streams.slice(0,20) : []);
+  } catch(e) {
+    console.warn('loadStreams error', e);
+  }
+}
+
+function renderStreamList(streams) {
+  const el = document.getElementById('stream-list');
+  if (!streams.length) {
+    el.innerHTML = '<div class="empty-state"><span class="emoji">📡</span>No streams yet — create your first one!</div>';
+    return;
+  }
+  el.innerHTML = streams.map(s => {
+    const status    = s.status || (s.is_live ? 'live' : 'ended');
+    const isPremium = s.is_premium || s.premium;
+    const ts        = s.created_at || s.createdAt || s.started_at || '';
+    const timeStr   = ts ? new Date(ts).toLocaleString() : '';
+    const isActive  = s.id === currentStreamId || s._id === currentStreamId;
+    return `
+      <div class="stream-item${isActive ? ' active-stream' : ''}" onclick="selectStream('${s.id || s._id}', '${(s.stream_key||'').replace(/'/g,"\\'")}')"
+           title="Click to select this stream">
+        <div class="stream-info">
+          <div class="stream-title-text">${esc(s.title || 'Untitled Stream')}</div>
+          <div class="stream-meta">${timeStr}${timeStr ? ' · ' : ''}${fmt(s.viewer_peak || 0)} peak viewers · ${fmt(s.total_gifts_received || 0)} gifts</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+          ${isPremium ? '<span class="status-badge premium">⭐ Premium</span>' : ''}
+          <span class="status-badge ${statusClass(status)}">${statusLabel(status)}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function selectStream(id, key) {
+  currentStreamId = id;
+  if (key && key !== 'undefined') {
+    streamKey = key;
+    document.getElementById('stream-key-section').style.display = 'block';
+    renderStreamKey();
+  }
+  loadLeaderboard();
+  if (socket) socket.emit('join_stream', { streamId: id });
+  loadStreams(); // re-render to highlight selection
+  showNotification('✅ Stream Selected', `Now monitoring stream ${id.slice(-6)}`, 'info');
+}
+
+// ── leaderboard ────────────────────────────────
+async function loadLeaderboard() {
+  if (!currentStreamId) return;
+  document.getElementById('lb-refresh-note').textContent = 'Refreshing…';
+  try {
+    const r = await fetch(`${API}/api/streams/${currentStreamId}/gift-leaderboard`, { headers });
+    if (!r.ok) return;
+    const data = await r.json();
+    const leaders = data.leaderboard || data.data || data || [];
+    renderLeaderboard(Array.isArray(leaders) ? leaders : []);
+    // update earnings from leaderboard total
+    const total = leaders.reduce((s, l) => s + (Number(l.total_value || l.amount_usd || 0)), 0);
+    if (total > totalGiftValue) {
+      totalGiftValue = total;
+      document.getElementById('stat-earnings').textContent = fmtUSD(total);
+    }
+    const giftCount = leaders.reduce((s, l) => s + (Number(l.gift_count || l.count || 0)), 0);
+    if (giftCount > totalGifts) {
+      totalGifts = giftCount;
+      document.getElementById('stat-gifts').textContent = fmt(giftCount);
+    }
+  } catch(e) {
+    console.warn('leaderboard error', e);
+  } finally {
+    const now = new Date().toLocaleTimeString();
+    document.getElementById('lb-refresh-note').textContent = `Last updated ${now} · auto every 30s`;
+  }
+}
+
+function renderLeaderboard(leaders) {
+  const el = document.getElementById('leaderboard-list');
+  if (!leaders.length) {
+    el.innerHTML = '<div class="empty-state"><span class="emoji">🎁</span>No gifts yet on this stream!</div>';
+    return;
+  }
+  el.innerHTML = leaders.slice(0,10).map((l, i) => {
+    const rank   = i + 1;
+    const rClass = rank === 1 ? 'r1' : rank === 2 ? 'r2' : rank === 3 ? 'r3' : 'other';
+    const name   = esc(l.username || l.sender_name || l.display_name || 'Anonymous');
+    const amount = fmtUSD(l.total_value || l.amount_usd || l.total || 0);
+    const count  = Number(l.gift_count || l.count || 0);
+    return `
+      <div class="leader-item">
+        <div class="leader-rank ${rClass}">${rank}</div>
+        <div class="leader-name">${name}
+          ${count ? `<span style="font-weight:400;color:var(--muted);font-size:.75rem;"> · ${fmt(count)} gifts</span>` : ''}
+        </div>
+        <div class="leader-amount">${amount}</div>
+      </div>`;
+  }).join('');
+}
+
+function startLeaderboardInterval() {
+  if (lbInterval) clearInterval(lbInterval);
+  lbInterval = setInterval(loadLeaderboard, 30000);
+}
+
+// ── stream key ─────────────────────────────────
+function renderStreamKey() {
+  const el = document.getElementById('stream-key-display');
+  if (!streamKey) return;
+  if (keyVisible) {
+    el.textContent = streamKey;
+    el.classList.remove('hidden-key');
+    document.getElementById('btn-toggle-key').textContent = 'Hide';
+  } else {
+    el.textContent = '••••••••••••••••';
+    el.classList.add('hidden-key');
+    document.getElementById('btn-toggle-key').textContent = 'Show';
+  }
+}
+function toggleKey() {
+  keyVisible = !keyVisible;
+  renderStreamKey();
+}
+async function copyKey() {
+  if (!streamKey) return;
+  try {
+    await navigator.clipboard.writeText(streamKey);
+    const el = document.getElementById('copy-success');
+    el.style.display = 'inline';
+    setTimeout(() => el.style.display = 'none', 2000);
+  } catch {
+    prompt('Copy this stream key:', streamKey);
+  }
+}
+
+// ── gift toast ─────────────────────────────────
+function showGiftToast(senderName, gift) {
+  const container = document.getElementById('toast-container');
+  const tier  = gift.tier || giftTier(gift.value || gift.coins || 0);
+  const emoji = gift.emoji || giftEmoji(tier);
+  const name  = gift.name  || 'Gift';
+
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `
+    <div class="toast-emoji">${emoji}</div>
+    <div class="toast-body">
+      <div class="toast-title">${esc(senderName || 'Someone')} sent a gift!</div>
+      <div class="toast-sub">${esc(name)} • ${fmtUSD(giftValue(gift))}</div>
+    </div>
+    <div class="toast-tier ${tierClass(tier)}">${tier}</div>`;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('removing');
+    setTimeout(() => el.remove(), 320);
+  }, 5000);
+}
+
+// ── notifications ──────────────────────────────
+function showNotification(title, msg, type) {
+  const container = document.getElementById('toast-container');
+  const colors = {
+    success: 'var(--green)',
+    error:   'var(--red)',
+    warning: 'var(--yellow)',
+    live:    'var(--red)',
+    info:    'var(--cyan)'
+  };
+  const color = colors[type] || colors.info;
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.style.borderColor = color;
+  el.innerHTML = `
+    <div class="toast-body">
+      <div class="toast-title">${title}</div>
+      <div class="toast-sub">${msg}</div>
+    </div>`;
+  container.appendChild(el);
+  setTimeout(() => { el.classList.add('removing'); setTimeout(() => el.remove(), 320); }, 4000);
+}
+
+// ── helpers ────────────────────────────────────
+function fmt(n)     { return Number(n).toLocaleString(); }
+function fmtUSD(n)  { return '$' + Number(n).toFixed(2); }
+function esc(s)     { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function giftValue(gift) {
+  if (!gift) return 0;
+  return Number(gift.value_usd || gift.amount_usd || gift.value || gift.coins * 0.01 || 0);
+}
+function giftTier(val) {
+  if (val >= 10) return 'EPIC';
+  if (val >= 3)  return 'RARE';
+  return 'COMMON';
+}
+function giftEmoji(tier) {
+  const map = { EPIC: '💎', RARE: '🌟', COMMON: '🎁' };
+  return map[tier] || '🎁';
+}
+function tierClass(tier) {
+  const map = { EPIC: 'tier3', RARE: 'tier2', COMMON: 'tier1' };
+  return map[(tier||'').toUpperCase()] || 'tier1';
+}
+
+function statusClass(s) {
+  const m = { live: 'live', active: 'live', ended: 'ended', completed: 'ended', pending: 'pending', scheduled: 'pending' };
+  return m[(s||'').toLowerCase()] || 'ended';
+}
+function statusLabel(s) {
+  const m = { live: '● LIVE', active: '● LIVE', ended: '✓ Ended', completed: '✓ Ended', pending: '⏳ Pending', scheduled: '🕐 Scheduled' };
+  return m[(s||'').toLowerCase()] || s || 'ended';
+}
+</script>
+</body>
+</html>

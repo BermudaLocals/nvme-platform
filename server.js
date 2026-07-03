@@ -14,6 +14,10 @@ const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const session = require('express-session');
 
 const app = express();
+const http = require('http');
+const { Server: IOServer } = require('socket.io');
+const server = http.createServer(app);
+const io = new IOServer(server, { cors: { origin: '*', credentials: true } });
 const PORT = process.env.PORT || 3090;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -1035,14 +1039,250 @@ checkAuth();
 </html>`);
 });
 
+// ── NEW DB TABLES: DMs + Live Chat ────────────────────────────────────────
+// (run at startup alongside existing initDB)
+async function initRealtimeDB() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS dm_conversations (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      participant_a UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      participant_b UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      last_message_at TIMESTAMPTZ DEFAULT NOW(),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(participant_a, participant_b)
+    );
+    CREATE TABLE IF NOT EXISTS dm_messages (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      conversation_id UUID NOT NULL REFERENCES dm_conversations(id) ON DELETE CASCADE,
+      sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      media_url TEXT,
+      is_read BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS livestream_chat (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  console.log('Realtime DB tables ready');
+}
+initRealtimeDB().catch(e => console.error('initRealtimeDB error:', e.message));
+
+// ── REST: Livestream endpoints ────────────────────────────────────────────
+app.post('/api/streams', authMiddleware, async (req, res) => {
+  try {
+    const { title, description, is_premium, price_credits } = req.body;
+    const streamKey = uuidv4().replace(/-/g,'').substring(0,24);
+    const { rows } = await db.query(
+      'INSERT INTO livestreams (user_id,title,description,stream_key,is_premium,price_credits) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [req.user.id, title||'Live Stream', description||'', streamKey, is_premium||false, price_credits||0]
+    );
+    res.status(201).json({ ok: true, stream: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/streams/:id/go-live', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      "UPDATE livestreams SET status='live', started_at=NOW(), viewer_count=0 WHERE id=$1 AND user_id=$2 RETURNING *",
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'stream not found' });
+    io.emit('stream_live', { streamId: rows[0].id, userId: rows[0].user_id, title: rows[0].title });
+    res.json({ ok: true, stream: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/streams/:id/end-live', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      "UPDATE livestreams SET status='ended', ended_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING *",
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'stream not found' });
+    io.to(`stream:${rows[0].id}`).emit('stream_ended', { streamId: rows[0].id });
+    res.json({ ok: true, stream: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/streams/live', async (req, res) => {
+  try {
+    const { rows } = await db.query("SELECT ls.*, u.username, u.avatar_url FROM livestreams ls JOIN users u ON u.id=ls.user_id WHERE ls.status='live' ORDER BY ls.viewer_count DESC");
+    res.json({ ok: true, streams: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/streams/:id/chat', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT lc.*, u.username, u.avatar_url FROM livestream_chat lc JOIN users u ON u.id=lc.user_id WHERE lc.stream_id=$1 ORDER BY lc.created_at DESC LIMIT 100',
+      [req.params.id]
+    );
+    res.json({ ok: true, chat: rows.reverse() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── REST: DM endpoints ────────────────────────────────────────────────────
+app.get('/api/dm/conversations', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT dc.*,
+        CASE WHEN dc.participant_a=$1 THEN u2.username ELSE u1.username END AS other_username,
+        CASE WHEN dc.participant_a=$1 THEN u2.avatar_url ELSE u1.avatar_url END AS other_avatar,
+        CASE WHEN dc.participant_a=$1 THEN dc.participant_b ELSE dc.participant_a END AS other_user_id,
+        (SELECT content FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) AS last_message,
+        (SELECT COUNT(*) FROM dm_messages WHERE conversation_id=dc.id AND sender_id!=$1 AND is_read=false)::int AS unread_count
+      FROM dm_conversations dc
+      JOIN users u1 ON u1.id=dc.participant_a
+      JOIN users u2 ON u2.id=dc.participant_b
+      WHERE dc.participant_a=$1 OR dc.participant_b=$1
+      ORDER BY dc.last_message_at DESC`,
+      [req.user.id]
+    );
+    res.json({ ok: true, conversations: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/dm/:conversationId/messages', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT dm.*, u.username, u.avatar_url FROM dm_messages dm JOIN users u ON u.id=dm.sender_id WHERE dm.conversation_id=$1 ORDER BY dm.created_at ASC LIMIT 100',
+      [req.params.conversationId]
+    );
+    res.json({ ok: true, messages: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── SOCKET.IO REAL-TIME ENGINE ─────────────────────────────────────────────
+const onlineUsers = new Map(); // userId -> socketId
+
+io.on('connection', (socket) => {
+  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  let userId = null;
+  if (token) {
+    try { const d = jwt.verify(token, JWT_SECRET); userId = d.id || d.userId; } catch {}
+  }
+
+  if (userId) {
+    onlineUsers.set(userId, socket.id);
+    io.emit('user_online', { userId });
+  }
+
+  // ── LIVE STREAMING ──────────────────────────────────────────────────────
+  socket.on('join_stream', async ({ streamId }) => {
+    socket.join(`stream:${streamId}`);
+    try {
+      const { rows } = await db.query(
+        'UPDATE livestreams SET viewer_count=viewer_count+1, peak_viewer_count=GREATEST(peak_viewer_count, viewer_count+1) WHERE id=$1 AND status=$2 RETURNING viewer_count',
+        [streamId, 'live']
+      );
+      if (rows[0]) io.to(`stream:${streamId}`).emit('viewer_count', { streamId, count: rows[0].viewer_count });
+    } catch {}
+  });
+
+  socket.on('leave_stream', async ({ streamId }) => {
+    socket.leave(`stream:${streamId}`);
+    try {
+      const { rows } = await db.query(
+        'UPDATE livestreams SET viewer_count=GREATEST(0,viewer_count-1) WHERE id=$1 RETURNING viewer_count',
+        [streamId]
+      );
+      if (rows[0]) io.to(`stream:${streamId}`).emit('viewer_count', { streamId, count: rows[0].viewer_count });
+    } catch {}
+  });
+
+  socket.on('live_chat', async ({ streamId, message }) => {
+    if (!userId || !message?.trim()) return;
+    try {
+      const { rows: urows } = await db.query('SELECT username, avatar_url FROM users WHERE id=$1', [userId]);
+      const user = urows[0];
+      await db.query('INSERT INTO livestream_chat (stream_id,user_id,message) VALUES ($1,$2,$3)', [streamId, userId, message.trim()]);
+      io.to(`stream:${streamId}`).emit('live_chat', {
+        streamId, userId, username: user?.username, avatar: user?.avatar_url,
+        message: message.trim(), ts: new Date().toISOString()
+      });
+    } catch {}
+  });
+
+  socket.on('send_gift', async ({ streamId, giftId }) => {
+    if (!userId) return;
+    try {
+      const { rows: grows } = await db.query('SELECT * FROM gifts WHERE id=$1 AND is_active=true', [giftId]);
+      const gift = grows[0];
+      if (!gift) return;
+      const { rows: urows } = await db.query('SELECT balance_credits, username FROM users WHERE id=$1', [userId]);
+      const sender = urows[0];
+      if (!sender || sender.balance_credits < gift.credit_cost) {
+        socket.emit('gift_error', { error: 'insufficient credits' }); return;
+      }
+      await db.query('UPDATE users SET balance_credits=balance_credits-$1 WHERE id=$2', [gift.credit_cost, userId]);
+      await db.query('UPDATE livestreams SET total_gifts_received=total_gifts_received+$1 WHERE id=$2', [gift.usd_value, streamId]);
+      io.to(`stream:${streamId}`).emit('gift_received', {
+        streamId, senderId: userId, senderName: sender.username,
+        gift: { name: gift.name, emoji: gift.emoji, value: gift.usd_value }, ts: new Date().toISOString()
+      });
+    } catch {}
+  });
+
+  // ── DIRECT MESSAGES (WhatsApp style) ────────────────────────────────────
+  socket.on('dm_send', async ({ toUserId, content, mediaUrl }) => {
+    if (!userId || !content?.trim()) return;
+    try {
+      const a = userId < toUserId ? userId : toUserId;
+      const b = userId < toUserId ? toUserId : userId;
+      let { rows: convRows } = await db.query(
+        'INSERT INTO dm_conversations (participant_a,participant_b) VALUES ($1,$2) ON CONFLICT (participant_a,participant_b) DO UPDATE SET last_message_at=NOW() RETURNING id',
+        [a, b]
+      );
+      const convId = convRows[0].id;
+      const { rows: msgRows } = await db.query(
+        'INSERT INTO dm_messages (conversation_id,sender_id,content,media_url) VALUES ($1,$2,$3,$4) RETURNING *',
+        [convId, userId, content.trim(), mediaUrl || null]
+      );
+      const msg = msgRows[0];
+      const { rows: senderRows } = await db.query('SELECT username, avatar_url FROM users WHERE id=$1', [userId]);
+      const payload = { ...msg, sender: senderRows[0] };
+      socket.emit('dm_message', payload);
+      const toSocket = onlineUsers.get(toUserId);
+      if (toSocket) io.to(toSocket).emit('dm_message', payload);
+    } catch {}
+  });
+
+  socket.on('dm_typing', ({ toUserId, isTyping }) => {
+    if (!userId) return;
+    const toSocket = onlineUsers.get(toUserId);
+    if (toSocket) io.to(toSocket).emit('dm_typing', { fromUserId: userId, isTyping });
+  });
+
+  socket.on('dm_read', async ({ conversationId }) => {
+    if (!userId) return;
+    try {
+      await db.query('UPDATE dm_messages SET is_read=true WHERE conversation_id=$1 AND sender_id!=$2', [conversationId, userId]);
+      socket.emit('dm_read_ack', { conversationId });
+    } catch {}
+  });
+
+  // ── DISCONNECT ──────────────────────────────────────────────────────────
+  socket.on('disconnect', () => {
+    if (userId) {
+      onlineUsers.delete(userId);
+      io.emit('user_offline', { userId });
+    }
+  });
+});
+
 // ── Start ─────────────────────────────────────────────────────
 initDB().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`[nvme.live] ONLINE :${PORT} | Empire: Dollar Double Empire`);
   });
 }).catch(e => {
   console.error('[nvme.live] DB init failed:', e.message);
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`[nvme.live] ONLINE :${PORT} (no DB — check DATABASE_URL)`);
   });
 });

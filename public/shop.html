@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Buy Credits — nvme.live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #07070d;
+      --bg2:      #0e0e1a;
+      --bg3:      #14142a;
+      --magenta:  #e91e8c;
+      --cyan:     #00d4ff;
+      --gold:     #ffd700;
+      --text:     #f0f0ff;
+      --muted:    #7a7a9a;
+      --radius:   14px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: var(--bg2);
+      border-bottom: 1px solid rgba(233,30,140,.25);
+      padding: 0 1.5rem;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 900;
+      letter-spacing: -.5px;
+      background: linear-gradient(135deg, var(--magenta) 0%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-decoration: none;
+    }
+
+    .balance-chip {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      background: var(--bg3);
+      border: 1px solid rgba(0,212,255,.2);
+      border-radius: 50px;
+      padding: .4rem 1rem;
+      font-size: .875rem;
+      font-weight: 600;
+      color: var(--cyan);
+      transition: opacity .3s;
+    }
+
+    .balance-chip .coin-icon { font-size: 1rem; }
+    .balance-chip .balance-amount { color: var(--text); }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 3rem 1.5rem 2rem;
+    }
+
+    .hero h1 {
+      font-size: clamp(1.75rem, 5vw, 2.75rem);
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: .75rem;
+    }
+
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--magenta) 0%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+
+    /* ── NOT LOGGED IN ── */
+    #not-logged-in {
+      display: none;
+      text-align: center;
+      padding: 4rem 1.5rem;
+    }
+
+    #not-logged-in .signin-box {
+      background: var(--bg2);
+      border: 1px solid rgba(233,30,140,.3);
+      border-radius: var(--radius);
+      padding: 2.5rem 2rem;
+      max-width: 360px;
+      margin: 0 auto;
+    }
+
+    #not-logged-in h2 { font-size: 1.4rem; margin-bottom: .5rem; }
+    #not-logged-in p  { color: var(--muted); margin-bottom: 1.5rem; }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      background: linear-gradient(135deg, var(--magenta) 0%, #c2185b 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: .75rem 2rem;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity .2s, transform .15s;
+    }
+
+    .btn-primary:hover { opacity: .9; transform: translateY(-1px); }
+
+    /* ── GRID ── */
+    #shop-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.25rem;
+      padding: 0 1.5rem 4rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    /* ── CARD ── */
+    .credit-card {
+      background: var(--bg2);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: var(--radius);
+      padding: 1.75rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      transition: transform .2s, box-shadow .2s, border-color .2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .credit-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(233,30,140,.04) 0%, rgba(0,212,255,.04) 100%);
+      pointer-events: none;
+    }
+
+    .credit-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(233,30,140,.18);
+      border-color: rgba(233,30,140,.4);
+    }
+
+    /* DIGITAL KING special styling */
+    .credit-card.king {
+      border: 1.5px solid transparent;
+      background-clip: padding-box;
+      position: relative;
+    }
+
+    .credit-card.king::after {
+      content: '';
+      position: absolute;
+      inset: -1.5px;
+      border-radius: calc(var(--radius) + 1.5px);
+      background: linear-gradient(135deg, var(--gold) 0%, #ff8c00 40%, var(--gold) 100%);
+      z-index: -1;
+      animation: king-glow 2.5s ease-in-out infinite alternate;
+    }
+
+    @keyframes king-glow {
+      from { filter: drop-shadow(0 0 6px rgba(255,215,0,.5)); }
+      to   { filter: drop-shadow(0 0 20px rgba(255,215,0,.9)); }
+    }
+
+    .credit-card.king .card-emoji { animation: crown-bounce 1.8s ease-in-out infinite; }
+
+    @keyframes crown-bounce {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-6px); }
+    }
+
+    .card-emoji { font-size: 2.25rem; }
+    .card-name  { font-size: 1.1rem; font-weight: 700; }
+    .card-badge {
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, var(--gold), #ff8c00);
+      color: #000;
+      border-radius: 4px;
+      padding: .15rem .5rem;
+      display: inline-block;
+    }
+    .card-credits { font-size: 2rem; font-weight: 800; color: var(--cyan); }
+    .card-credits span { font-size: .95rem; font-weight: 500; color: var(--muted); }
+    .card-price  { font-size: 1.35rem; font-weight: 700; color: var(--magenta); }
+    .card-cpp    { font-size: .75rem; color: var(--muted); margin-top: -.5rem; }
+
+    .buy-btn {
+      margin-top: auto;
+      background: linear-gradient(135deg, var(--magenta) 0%, #c2185b 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: .8rem 1.5rem;
+      font-size: .95rem;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity .2s, transform .15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .buy-btn.king-btn {
+      background: linear-gradient(135deg, var(--gold) 0%, #ff8c00 100%);
+      color: #000;
+    }
+
+    .buy-btn:hover { opacity: .9; transform: scale(1.02); }
+    .buy-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .btn-spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── PAYPAL MODAL ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.72);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal-box {
+      background: var(--bg2);
+      border: 1px solid rgba(233,30,140,.3);
+      border-radius: var(--radius);
+      padding: 2rem;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .modal-box h2 { font-size: 1.25rem; margin-bottom: .25rem; }
+    .modal-box p  { color: var(--muted); font-size: .875rem; margin-bottom: 1.5rem; }
+    #paypal-button-container { min-height: 48px; }
+    .modal-close-btn {
+      margin-top: 1rem;
+      width: 100%;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,.15);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: .65rem;
+      cursor: pointer;
+      font-size: .875rem;
+      transition: border-color .2s;
+    }
+    .modal-close-btn:hover { border-color: rgba(255,255,255,.4); color: var(--text); }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      background: var(--bg3);
+      border: 1px solid rgba(0,212,255,.3);
+      border-radius: 50px;
+      padding: .75rem 1.75rem;
+      font-size: .9rem;
+      font-weight: 600;
+      z-index: 300;
+      transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.success { border-color: rgba(0,212,255,.5); color: var(--cyan); }
+    #toast.error   { border-color: rgba(233,30,140,.5); color: var(--magenta); }
+
+    /* ── MOBILE ── */
+    @media (max-width: 480px) {
+      #shop-grid { grid-template-columns: 1fr 1fr; gap: .75rem; padding: 0 .75rem 3rem; }
+      .credit-card { padding: 1.25rem 1rem; }
+      .card-credits { font-size: 1.5rem; }
+    }
+
+    @media (max-width: 340px) {
+      #shop-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <a href="/" class="logo">nvme.live</a>
+    <div class="balance-chip" id="balance-chip">
+      <span class="coin-icon">🪙</span>
+      <span>Balance:</span>
+      <span class="balance-amount" id="balance-display">…</span>
+    </div>
+  </header>
+
+  <!-- NOT LOGGED IN STATE -->
+  <div id="not-logged-in">
+    <div class="signin-box">
+      <h2>Sign in to buy credits</h2>
+      <p>You need an account to purchase credits and send gifts during live streams.</p>
+      <a href="/login" class="btn-primary">Sign In</a>
+    </div>
+  </div>
+
+  <!-- SHOP (authenticated) -->
+  <main id="shop-main">
+    <section class="hero">
+      <h1>Power Up with <span>ORBAT Credits</span></h1>
+      <p>Send gifts in live streams, tip creators, and unlock exclusive interactions.</p>
+    </section>
+
+    <div id="shop-grid"></div>
+  </main>
+
+  <!-- PAYPAL MODAL -->
+  <div class="modal-overlay" id="paypal-modal">
+    <div class="modal-box">
+      <h2 id="modal-pack-name">Checkout</h2>
+      <p id="modal-pack-desc">Complete your purchase with PayPal.</p>
+      <div id="paypal-button-container"></div>
+      <button class="modal-close-btn" id="modal-close-btn">Cancel</button>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast"></div>
+
+  <!-- PayPal SDK (client-id injected by server or fallback) -->
+  <script>
+    // Server should set window.__PAYPAL_CLIENT_ID before this loads
+    // Fallback: read from meta tag or use placeholder
+    window.__PAYPAL_CLIENT_ID = window.__PAYPAL_CLIENT_ID ||
+      document.querySelector('meta[name="paypal-client-id"]')?.content ||
+      'PAYPAL_CLIENT_ID';
+  </script>
+  <script>
+    (function () {
+      const sdkSrc = `https://www.paypal.com/sdk/js?client-id=${window.__PAYPAL_CLIENT_ID}&currency=USD`;
+      const s = document.createElement('script');
+      s.src = sdkSrc;
+      s.setAttribute('data-sdk-integration-source', 'button-factory');
+      s.onload = () => { window.__paypalReady = true; if (window.__paypalReadyCb) window.__paypalReadyCb(); };
+      document.head.appendChild(s);
+    })();
+  </script>
+
+  <script>
+    /* ═══════════════════════════════════════════════
+       CREDIT PACKAGES
+    ═══════════════════════════════════════════════ */
+    const PACKAGES = [
+      { id: 'starter',   emoji: '🪙', name: 'Starter Pack',       credits: 100,   price: 0.99,  usd: '$0.99'  },
+      { id: 'captain',   emoji: '🪙', name: 'Captain Pack',       credits: 500,   price: 3.99,  usd: '$3.99'  },
+      { id: 'commander', emoji: '🪙', name: 'Commander Pack',     credits: 1200,  price: 7.99,  usd: '$7.99'  },
+      { id: 'elite',     emoji: '🪙', name: 'Elite Pack',         credits: 3000,  price: 17.99, usd: '$17.99' },
+      { id: 'cxo',       emoji: '🪙', name: 'CxO Pack',           credits: 7000,  price: 34.99, usd: '$34.99' },
+      { id: 'king',      emoji: '👑', name: 'DIGITAL KING Pack',  credits: 20000, price: 89.99, usd: '$89.99', king: true },
+    ];
+
+    /* ═══════════════════════════════════════════════
+       AUTH
+    ═══════════════════════════════════════════════ */
+    const TOKEN = localStorage.getItem('nvme_token');
+    const API   = '';
+
+    function authHeaders() {
+      return { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
+    }
+
+    /* ═══════════════════════════════════════════════
+       TOAST
+    ═══════════════════════════════════════════════ */
+    let toastTimer = null;
+    function showToast(msg, type = 'success') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `show ${type}`;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+    }
+
+    /* ═══════════════════════════════════════════════
+       CONFETTI
+    ═══════════════════════════════════════════════ */
+    function fireConfetti() {
+      const opts = { particleCount: 120, spread: 80, origin: { y: 0.6 } };
+      confetti({ ...opts, colors: ['#e91e8c', '#00d4ff', '#ffd700', '#fff'] });
+      setTimeout(() => confetti({ ...opts, origin: { y: 0.55 }, angle: 60 }), 250);
+      setTimeout(() => confetti({ ...opts, origin: { y: 0.55 }, angle: 120 }), 400);
+    }
+
+    /* ═══════════════════════════════════════════════
+       BALANCE
+    ═══════════════════════════════════════════════ */
+    async function fetchBalance() {
+      if (!TOKEN) return;
+      try {
+        const res = await fetch(`${API}/api/credits/balance`, { headers: authHeaders() });
+        if (!res.ok) throw new Error('failed');
+        const data = await res.json();
+        const amount = data.balance ?? data.balance_credits ?? data.credits ?? 0;
+        document.getElementById('balance-display').textContent = Number(amount).toLocaleString();
+      } catch {
+        document.getElementById('balance-display').textContent = '—';
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       RENDER GRID
+    ═══════════════════════════════════════════════ */
+    function renderGrid() {
+      const grid = document.getElementById('shop-grid');
+      grid.innerHTML = '';
+      PACKAGES.forEach(pkg => {
+        const cpp = (pkg.price / pkg.credits * 100).toFixed(3);
+        const card = document.createElement('div');
+        card.className = 'credit-card' + (pkg.king ? ' king' : '');
+        card.innerHTML = `
+          <div class="card-emoji">${pkg.emoji}</div>
+          <div>
+            <div class="card-name">${pkg.name}</div>
+            ${pkg.king ? '<span class="card-badge">Best Value 👑</span>' : ''}
+          </div>
+          <div class="card-credits">${pkg.credits.toLocaleString()} <span>credits</span></div>
+          <div class="card-price">${pkg.usd}</div>
+          <div class="card-cpp">${cpp}¢ per credit</div>
+          <button class="buy-btn ${pkg.king ? 'king-btn' : ''}" data-id="${pkg.id}">
+            Buy Now
+          </button>
+        `;
+        grid.appendChild(card);
+      });
+
+      grid.querySelectorAll('.buy-btn').forEach(btn => {
+        btn.addEventListener('click', () => openCheckout(btn.dataset.id));
+      });
+    }
+
+    /* ═══════════════════════════════════════════════
+       PAYPAL CHECKOUT
+    ═══════════════════════════════════════════════ */
+    let activePackage = null;
+
+    function openCheckout(pkgId) {
+      activePackage = PACKAGES.find(p => p.id === pkgId);
+      if (!activePackage) return;
+
+      document.getElementById('modal-pack-name').textContent = activePackage.name;
+      document.getElementById('modal-pack-desc').textContent =
+        `${activePackage.credits.toLocaleString()} credits for ${activePackage.usd}`;
+
+      document.getElementById('paypal-modal').classList.add('open');
+      renderPayPalButtons();
+    }
+
+    function closeModal() {
+      document.getElementById('paypal-modal').classList.remove('open');
+      document.getElementById('paypal-button-container').innerHTML = '';
+      activePackage = null;
+    }
+
+    document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+    document.getElementById('paypal-modal').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeModal();
+    });
+
+    function renderPayPalButtons() {
+      const container = document.getElementById('paypal-button-container');
+      container.innerHTML = '';
+
+      function doRender() {
+        if (!window.paypal) { showToast('PayPal SDK not loaded yet. Retrying…', 'error'); return; }
+
+        paypal.Buttons({
+          style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'pay', height: 48 },
+
+          createOrder: async () => {
+            try {
+              const res = await fetch(`${API}/api/credits/create-order`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ packageId: activePackage.id })
+              });
+              if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Order failed'); }
+              const { orderId } = await res.json();
+              return orderId;
+            } catch (err) {
+              showToast(`Error: ${err.message}`, 'error');
+              throw err;
+            }
+          },
+
+          onApprove: async (data) => {
+            const container = document.getElementById('paypal-button-container');
+            container.innerHTML = '<p style="text-align:center;color:var(--muted);padding:1rem">Processing…</p>';
+            try {
+              const res = await fetch(`${API}/api/credits/capture-order`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ orderId: data.orderID })
+              });
+              if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Capture failed'); }
+              const result = await res.json();
+              const newBalance = result.newBalance ?? result.balance ?? result.balance_credits ?? '?';
+              closeModal();
+              fireConfetti();
+              showToast(`✅ Credits added! Balance: ${Number(newBalance).toLocaleString()}`, 'success');
+              document.getElementById('balance-display').textContent = Number(newBalance).toLocaleString();
+            } catch (err) {
+              showToast(`Payment error: ${err.message}`, 'error');
+              container.innerHTML = '';
+              renderPayPalButtons();
+            }
+          },
+
+          onError: (err) => {
+            console.error('PayPal error', err);
+            showToast('PayPal error. Please try again.', 'error');
+          },
+
+          onCancel: () => {
+            showToast('Purchase cancelled.', 'error');
+            closeModal();
+          }
+        }).render('#paypal-button-container');
+      }
+
+      if (window.__paypalReady || window.paypal) {
+        doRender();
+      } else {
+        window.__paypalReadyCb = doRender;
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       INIT
+    ═══════════════════════════════════════════════ */
+    (function init() {
+      if (!TOKEN) {
+        document.getElementById('not-logged-in').style.display = 'block';
+        document.getElementById('shop-main').style.display = 'none';
+        document.getElementById('balance-chip').style.display = 'none';
+        return;
+      }
+      fetchBalance();
+      renderGrid();
+    })();
+  </script>
+</body>
+</html>

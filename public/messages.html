@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#07070d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="nvme.live" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <title>Messages — nvme.live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #07070d;
+      --bg2:     #0e0e1a;
+      --bg3:     #14142a;
+      --bg4:     #1a1a30;
+      --magenta: #e91e8c;
+      --cyan:    #00d4ff;
+      --green:   #25d366;
+      --red:     #ff4444;
+      --text:    #f0f0ff;
+      --muted:   #7a7a9a;
+      --sent-bg: #e91e8c;
+      --recv-bg: #1a1a30;
+      --nav-h:   60px;
+      --hdr-h:   56px;
+      --safe-b:  env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ─────────────────────────────────────────
+       PWA INSTALL BANNER
+    ───────────────────────────────────────── */
+    #pwa-banner {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 999;
+      background: linear-gradient(90deg, #0e0e1a 0%, #14142a 100%);
+      border-bottom: 1px solid rgba(233,30,140,.3);
+      padding: .65rem 1rem;
+      align-items: center;
+      gap: .75rem;
+      backdrop-filter: blur(12px);
+    }
+    #pwa-banner.visible { display: flex; }
+    .pwa-icon { font-size: 1.6rem; flex-shrink: 0; }
+    .pwa-text { flex: 1; }
+    .pwa-text strong { display: block; font-size: .875rem; color: var(--text); }
+    .pwa-text span   { font-size: .75rem; color: var(--muted); }
+    .pwa-btn {
+      background: linear-gradient(135deg, var(--magenta), #c2185b);
+      color: #fff;
+      border: none;
+      border-radius: 20px;
+      padding: .45rem 1rem;
+      font-size: .8rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .pwa-dismiss {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: .25rem;
+      flex-shrink: 0;
+    }
+
+    /* ─────────────────────────────────────────
+       APP SHELL
+    ───────────────────────────────────────── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding-top: 0;
+      transition: padding-top .2s;
+    }
+    #app.banner-open { padding-top: 52px; }
+
+    /* ─────────────────────────────────────────
+       MAIN CONTENT AREA (above bottom nav)
+    ───────────────────────────────────────── */
+    #main-area {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ─────────────────────────────────────────
+       LEFT PANEL — CONVERSATIONS
+    ───────────────────────────────────────── */
+    #conv-panel {
+      width: 360px;
+      max-width: 100%;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid rgba(255,255,255,.07);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+
+    /* panel header */
+    .panel-hdr {
+      height: var(--hdr-h);
+      display: flex;
+      align-items: center;
+      padding: 0 1rem;
+      gap: .75rem;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      flex-shrink: 0;
+    }
+
+    .panel-hdr .logo {
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: -.5px;
+      background: linear-gradient(135deg, var(--magenta), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      flex: 1;
+    }
+
+    .panel-hdr h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      flex: 1;
+    }
+
+    .icon-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--bg3);
+      border: none;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background .2s;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover { background: var(--bg4); }
+
+    /* search */
+    .search-bar {
+      padding: .6rem 1rem;
+      flex-shrink: 0;
+    }
+    .search-bar input {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 20px;
+      padding: .55rem 1rem .55rem 2.25rem;
+      color: var(--text);
+      font-size: .875rem;
+      font-family: inherit;
+      outline: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%237a7a9a' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.868-3.833zm-5.242 1.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: .8rem center;
+    }
+    .search-bar input::placeholder { color: var(--muted); }
+    .search-bar input:focus { border-color: rgba(233,30,140,.4); }
+
+    /* conversation list */
+    #conv-list {
+      flex: 1;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    #conv-list::-webkit-scrollbar { width: 4px; }
+    #conv-list::-webkit-scrollbar-track { background: transparent; }
+    #conv-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+
+    .conv-item {
+      display: flex;
+      align-items: center;
+      gap: .875rem;
+      padding: .75rem 1rem;
+      cursor: pointer;
+      transition: background .15s;
+      position: relative;
+    }
+    .conv-item:hover   { background: var(--bg2); }
+    .conv-item.active  { background: var(--bg3); }
+    .conv-item.unread .conv-name { font-weight: 700; }
+    .conv-item.unread .conv-preview { color: var(--text); }
+
+    .avatar-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .avatar {
+      width: 46px; height: 46px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--magenta), var(--cyan));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: .95rem;
+      color: #fff;
+      overflow: hidden;
+      object-fit: cover;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .online-dot {
+      position: absolute;
+      bottom: 1px; right: 1px;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--green);
+      border: 2px solid var(--bg);
+      display: none;
+    }
+    .online-dot.visible { display: block; }
+
+    .conv-info { flex: 1; min-width: 0; }
+    .conv-name    { font-size: .9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conv-preview { font-size: .78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+
+    .conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: .3rem; flex-shrink: 0; }
+    .conv-time  { font-size: .7rem; color: var(--muted); }
+    .unread-badge {
+      background: var(--magenta);
+      color: #fff;
+      border-radius: 50px;
+      font-size: .65rem;
+      font-weight: 700;
+      min-width: 18px;
+      height: 18px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+    }
+    .unread-badge.visible { display: flex; }
+
+    /* empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: .75rem;
+      padding: 3rem 1.5rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    .empty-state .icon { font-size: 3rem; }
+    .empty-state p { font-size: .875rem; }
+
+    /* ─────────────────────────────────────────
+       RIGHT PANEL — CHAT
+    ───────────────────────────────────────── */
+    #chat-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: var(--bg);
+      position: relative;
+    }
+
+    /* chat header */
+    #chat-hdr {
+      height: var(--hdr-h);
+      display: flex;
+      align-items: center;
+      padding: 0 1rem;
+      gap: .75rem;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      flex-shrink: 0;
+      background: var(--bg);
+    }
+
+    #chat-hdr .back-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 1.3rem;
+      cursor: pointer;
+      padding: .25rem;
+      flex-shrink: 0;
+    }
+
+    #chat-hdr .chat-user-info { flex: 1; min-width: 0; }
+    #chat-hdr .chat-user-name { font-size: .95rem; font-weight: 700; }
+    #chat-hdr .chat-user-status { font-size: .72rem; color: var(--muted); }
+    #chat-hdr .chat-user-status.online { color: var(--green); }
+
+    .call-btn {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background .2s, transform .15s;
+      flex-shrink: 0;
+    }
+    .call-btn:hover { transform: scale(1.08); }
+    .audio-call-btn { background: rgba(37,211,102,.15); color: var(--green); }
+    .video-call-btn { background: rgba(0,212,255,.15); color: var(--cyan); }
+    .audio-call-btn:hover { background: rgba(37,211,102,.25); }
+    .video-call-btn:hover { background: rgba(0,212,255,.25); }
+
+    /* no-chat placeholder */
+    #no-chat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      color: var(--muted);
+      padding: 2rem;
+      text-align: center;
+    }
+    #no-chat .big-icon { font-size: 4rem; opacity: .4; }
+    #no-chat h3 { font-size: 1.2rem; color: var(--text); }
+    #no-chat p  { font-size: .875rem; max-width: 300px; }
+
+    /* messages area */
+    #messages-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      overscroll-behavior: contain;
+    }
+    #messages-area::-webkit-scrollbar { width: 4px; }
+    #messages-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+
+    /* date divider */
+    .date-divider {
+      text-align: center;
+      font-size: .7rem;
+      color: var(--muted);
+      margin: .5rem 0;
+      position: relative;
+    }
+    .date-divider::before, .date-divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: calc(50% - 60px);
+      height: 1px;
+      background: rgba(255,255,255,.07);
+    }
+    .date-divider::before { left: 0; }
+    .date-divider::after  { right: 0; }
+
+    /* bubbles */
+    .bubble-row {
+      display: flex;
+      align-items: flex-end;
+      gap: .4rem;
+    }
+    .bubble-row.sent     { flex-direction: row-reverse; }
+    .bubble-row.received { flex-direction: row; }
+
+    .bubble {
+      max-width: 68%;
+      padding: .6rem .9rem;
+      border-radius: 18px;
+      font-size: .875rem;
+      line-height: 1.45;
+      word-break: break-word;
+      position: relative;
+    }
+    .bubble-row.sent     .bubble { background: var(--sent-bg); color: #fff; border-bottom-right-radius: 4px; }
+    .bubble-row.received .bubble { background: var(--recv-bg); color: var(--text); border-bottom-left-radius: 4px; }
+
+    .bubble-meta {
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+      margin-top: .25rem;
+      justify-content: flex-end;
+    }
+    .bubble-time { font-size: .65rem; color: rgba(255,255,255,.55); }
+    .read-tick   { font-size: .7rem; color: rgba(255,255,255,.55); }
+    .read-tick.read { color: var(--cyan); }
+
+    /* typing indicator */
+    #typing-indicator {
+      display: none;
+      align-items: center;
+      gap: .3rem;
+      padding: .5rem 1rem;
+      color: var(--muted);
+      font-size: .78rem;
+      flex-shrink: 0;
+    }
+    #typing-indicator.visible { display: flex; }
+    .typing-dots { display: flex; gap: 3px; }
+    .typing-dots span {
+      width: 6px; height: 6px;
+      background: var(--muted);
+      border-radius: 50%;
+      animation: typing-bounce .9s ease-in-out infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: .2s; }
+    .typing-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes typing-bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: .4; }
+      40%            { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* input bar */
+    #input-bar {
+      display: flex;
+      align-items: flex-end;
+      gap: .6rem;
+      padding: .65rem 1rem;
+      border-top: 1px solid rgba(255,255,255,.07);
+      background: var(--bg);
+      flex-shrink: 0;
+      padding-bottom: calc(.65rem + var(--safe-b));
+    }
+
+    #msg-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 22px;
+      padding: .6rem 1rem;
+      color: var(--text);
+      font-size: .9rem;
+      font-family: inherit;
+      outline: none;
+      resize: none;
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.4;
+      transition: border-color .2s;
+    }
+    #msg-input::placeholder { color: var(--muted); }
+    #msg-input:focus { border-color: rgba(233,30,140,.4); }
+
+    #send-btn {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--magenta);
+      border: none;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: opacity .2s, transform .15s;
+    }
+    #send-btn:hover { opacity: .85; transform: scale(1.05); }
+    #send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+    /* ─────────────────────────────────────────
+       VIDEO CALL OVERLAY
+    ───────────────────────────────────────── */
+    #vc-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      background: #000;
+      flex-direction: column;
+    }
+    #vc-overlay.open { display: flex; }
+
+    #vc-remote-video {
+      flex: 1;
+      width: 100%;
+      object-fit: cover;
+      background: #111;
+    }
+
+    #vc-local-pip {
+      position: absolute;
+      top: 1rem; right: 1rem;
+      width: 110px; height: 165px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid rgba(255,255,255,.2);
+      background: #1a1a1a;
+      cursor: move;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+    }
+    #vc-local-pip video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    #vc-info {
+      position: absolute;
+      top: 0; left: 0; right: 150px;
+      padding: 1rem 1.25rem;
+      background: linear-gradient(to bottom, rgba(0,0,0,.7), transparent);
+    }
+    #vc-caller-name  { font-size: 1.1rem; font-weight: 700; }
+    #vc-call-status  { font-size: .8rem; color: rgba(255,255,255,.6); margin-top: .2rem; }
+
+    #vc-controls {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 1.5rem 0;
+      padding-bottom: calc(1.5rem + var(--safe-b));
+      background: linear-gradient(to top, rgba(0,0,0,.8), transparent);
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+    }
+
+    .vc-btn {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      font-size: 1.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity .2s, transform .15s;
+    }
+    .vc-btn:hover { transform: scale(1.08); opacity: .9; }
+    #vc-btn-mute    { background: rgba(255,255,255,.2); color: #fff; }
+    #vc-btn-video   { background: rgba(255,255,255,.2); color: #fff; }
+    #vc-btn-flip    { background: rgba(255,255,255,.2); color: #fff; }
+    #vc-btn-hangup  { background: var(--red); color: #fff; }
+
+    /* incoming call dialog */
+    #vc-incoming {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 600;
+      background: rgba(0,0,0,.75);
+      align-items: center;
+      justify-content: center;
+    }
+    #vc-incoming.open { display: flex; }
+    .incoming-box {
+      background: var(--bg2);
+      border: 1px solid rgba(0,212,255,.3);
+      border-radius: 20px;
+      padding: 2.5rem 2rem;
+      text-align: center;
+      max-width: 320px;
+      width: 90%;
+    }
+    .incoming-avatar {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--magenta), var(--cyan));
+      margin: 0 auto 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.75rem;
+      font-weight: 700;
+      animation: ring-pulse 1s ease-in-out infinite;
+    }
+    @keyframes ring-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0,212,255,.4); }
+      50%       { box-shadow: 0 0 0 14px rgba(0,212,255,0); }
+    }
+    .incoming-box h3 { font-size: 1.1rem; margin-bottom: .25rem; }
+    .incoming-box p  { font-size: .8rem; color: var(--muted); margin-bottom: 1.75rem; }
+    .incoming-actions { display: flex; justify-content: center; gap: 2rem; }
+    .inc-btn {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      border: none;
+      font-size: 1.4rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .15s;
+    }
+    .inc-btn:hover { transform: scale(1.1); }
+    .inc-accept { background: var(--green); color: #fff; }
+    .inc-reject { background: var(--red);   color: #fff; }
+
+    /* ─────────────────────────────────────────
+       BOTTOM NAV (TikTok style)
+    ───────────────────────────────────────── */
+    #bottom-nav {
+      height: var(--nav-h);
+      padding-bottom: var(--safe-b);
+      background: var(--bg2);
+      border-top: 1px solid rgba(255,255,255,.07);
+      display: flex;
+      align-items: stretch;
+      flex-shrink: 0;
+    }
+
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--muted);
+      font-size: .6rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+      position: relative;
+      transition: color .2s;
+      border: none;
+      background: none;
+      padding: 0;
+    }
+    .nav-item .nav-icon { font-size: 1.35rem; line-height: 1; }
+    .nav-item.active { color: var(--text); }
+    .nav-item.active .nav-icon { filter: drop-shadow(0 0 6px var(--magenta)); }
+
+    /* TikTok + button in middle */
+    .nav-item.plus-btn {
+      color: #fff;
+    }
+    .plus-inner {
+      width: 40px; height: 28px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .plus-inner::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 8px;
+      background: var(--cyan);
+      transform: translateX(-3px);
+    }
+    .plus-inner::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 8px;
+      background: var(--magenta);
+      transform: translateX(3px);
+    }
+    .plus-inner span {
+      position: relative;
+      z-index: 1;
+      background: #fff;
+      border-radius: 6px;
+      width: 36px; height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      color: #000;
+      font-weight: 900;
+    }
+
+    .nav-badge {
+      position: absolute;
+      top: 4px;
+      right: calc(50% - 14px);
+      background: var(--magenta);
+      color: #fff;
+      border-radius: 50px;
+      font-size: .55rem;
+      font-weight: 700;
+      min-width: 15px;
+      height: 15px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      border: 1.5px solid var(--bg2);
+    }
+    .nav-badge.visible { display: flex; }
+
+    /* ─────────────────────────────────────────
+       NOT LOGGED IN
+    ───────────────────────────────────────── */
+    #not-logged-in {
+      display: none;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .signin-box {
+      background: var(--bg2);
+      border: 1px solid rgba(233,30,140,.3);
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      max-width: 340px;
+      width: 100%;
+      text-align: center;
+    }
+    .signin-box .box-icon { font-size: 3rem; margin-bottom: 1rem; }
+    .signin-box h2 { font-size: 1.3rem; margin-bottom: .5rem; }
+    .signin-box p  { color: var(--muted); font-size: .875rem; margin-bottom: 1.5rem; }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      background: linear-gradient(135deg, var(--magenta), #c2185b);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: .75rem 2rem;
+      font-size: .95rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity .2s;
+    }
+    .btn-primary:hover { opacity: .9; }
+
+    /* ─────────────────────────────────────────
+       TOAST
+    ───────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: calc(var(--nav-h) + 1rem + var(--safe-b));
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--bg3);
+      border: 1px solid rgba(0,212,255,.3);
+      border-radius: 50px;
+      padding: .65rem 1.5rem;
+      font-size: .85rem;
+      font-weight: 600;
+      z-index: 400;
+      pointer-events: none;
+      white-space: nowrap;
+      transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.success { color: var(--cyan); }
+    #toast.error   { color: var(--magenta); }
+
+    /* ─────────────────────────────────────────
+       MOBILE RESPONSIVE
+    ───────────────────────────────────────── */
+    @media (max-width: 680px) {
+      #conv-panel {
+        position: absolute;
+        inset: 0;
+        bottom: var(--nav-h);
+        width: 100%;
+        z-index: 10;
+        transition: transform .3s cubic-bezier(.4,0,.2,1);
+      }
+      #conv-panel.hidden {
+        transform: translateX(-100%);
+        pointer-events: none;
+      }
+      #chat-panel {
+        position: absolute;
+        inset: 0;
+        bottom: var(--nav-h);
+        z-index: 9;
+      }
+      #chat-hdr .back-btn { display: flex; }
+      #no-chat { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- PWA INSTALL BANNER -->
+<div id="pwa-banner">
+  <div class="pwa-icon">📲</div>
+  <div class="pwa-text">
+    <strong>Add nvme.live to Home Screen</strong>
+    <span>Fast access, offline support & full-screen experience</span>
+  </div>
+  <button class="pwa-btn" id="pwa-install-btn">Install</button>
+  <button class="pwa-dismiss" id="pwa-dismiss-btn" aria-label="Dismiss">✕</button>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- MAIN AREA -->
+  <div id="main-area">
+
+    <!-- NOT LOGGED IN -->
+    <div id="not-logged-in">
+      <div class="signin-box">
+        <div class="box-icon">💬</div>
+        <h2>Sign in to message</h2>
+        <p>Connect with creators and viewers on nvme.live.</p>
+        <a href="/login" class="btn-primary">Sign In</a>
+      </div>
+    </div>
+
+    <!-- CONVERSATIONS PANEL -->
+    <div id="conv-panel">
+      <div class="panel-hdr">
+        <span class="logo">nvme.live</span>
+        <h2>Messages</h2>
+        <button class="icon-btn" title="New message" id="new-msg-btn">✏️</button>
+      </div>
+      <div class="search-bar">
+        <input type="search" placeholder="Search conversations…" id="search-input" />
+      </div>
+      <div id="conv-list">
+        <div class="empty-state" id="conv-empty">
+          <div class="icon">💬</div>
+          <p>No conversations yet.<br/>Start a chat!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHAT PANEL -->
+    <div id="chat-panel">
+      <div id="chat-hdr">
+        <button class="back-btn" id="back-btn">←</button>
+        <div class="avatar-wrap" id="chat-hdr-avatar" style="display:none">
+          <div class="avatar" id="chat-hdr-av"></div>
+          <div class="online-dot" id="chat-online-dot"></div>
+        </div>
+        <div class="chat-user-info" id="chat-user-info" style="display:none">
+          <div class="chat-user-name" id="chat-user-name">—</div>
+          <div class="chat-user-status" id="chat-user-status">offline</div>
+        </div>
+        <button class="call-btn audio-call-btn" id="audio-call-btn" title="Voice call" style="display:none">📞</button>
+        <button class="call-btn video-call-btn" id="video-call-btn" title="Video call" style="display:none">📹</button>
+      </div>
+
+      <!-- no chat selected -->
+      <div id="no-chat">
+        <div class="big-icon">💬</div>
+        <h3>Your Messages</h3>
+        <p>Select a conversation to start chatting with creators and viewers.</p>
+      </div>
+
+      <!-- messages -->
+      <div id="messages-area" style="display:none"></div>
+
+      <!-- typing -->
+      <div id="typing-indicator">
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span id="typing-name"></span> is typing…
+      </div>
+
+      <!-- input -->
+      <div id="input-bar" style="display:none">
+        <textarea id="msg-input" rows="1" placeholder="Message…" maxlength="2000"></textarea>
+        <button id="send-btn">➤</button>
+      </div>
+    </div>
+
+  </div><!-- /main-area -->
+
+  <!-- BOTTOM NAV (TikTok style) -->
+  <nav id="bottom-nav">
+    <a href="/" class="nav-item" title="Home">
+      <span class="nav-icon">🏠</span>
+      <span>Home</span>
+    </a>
+    <a href="/discover" class="nav-item" title="Discover">
+      <span class="nav-icon">🔍</span>
+      <span>Discover</span>
+    </a>
+    <a href="/go-live" class="nav-item plus-btn" title="Go Live">
+      <div class="plus-inner"><span>+</span></div>
+      <span style="font-size:.6rem;margin-top:2px">Live</span>
+    </a>
+    <a href="/messages" class="nav-item active" title="Messages">
+      <span class="nav-icon">💬</span>
+      <span>Inbox</span>
+      <div class="nav-badge" id="nav-unread-badge">0</div>
+    </a>
+    <a href="/profile" class="nav-item" title="Profile">
+      <span class="nav-icon">👤</span>
+      <span>Profile</span>
+    </a>
+  </nav>
+
+</div><!-- /app -->
+
+<!-- VIDEO CALL OVERLAY -->
+<div id="vc-overlay">
+  <video id="vc-remote-video" autoplay playsinline></video>
+  <div id="vc-local-pip">
+    <video id="vc-local-video" autoplay playsinline muted></video>
+  </div>
+  <div id="vc-info">
+    <div id="vc-caller-name">—</div>
+    <div id="vc-call-status">Connecting…</div>
+  </div>
+  <div id="vc-controls">
+    <button class="vc-btn" id="vc-btn-mute"   title="Mute">🎤</button>
+    <button class="vc-btn" id="vc-btn-video"  title="Camera">📷</button>
+    <button class="vc-btn" id="vc-btn-flip"   title="Flip">🔄</button>
+    <button class="vc-btn" id="vc-btn-hangup" title="Hang up">📵</button>
+  </div>
+</div>
+
+<!-- INCOMING CALL DIALOG -->
+<div id="vc-incoming">
+  <div class="incoming-box">
+    <div class="incoming-avatar" id="inc-avatar">?</div>
+    <h3 id="inc-caller-name">Someone</h3>
+    <p id="inc-call-type">Incoming video call…</p>
+    <div class="incoming-actions">
+      <button class="inc-btn inc-reject" id="inc-reject">📵</button>
+      <button class="inc-btn inc-accept" id="inc-accept">📹</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   AUTH
+═══════════════════════════════════════════════════════════ */
+const TOKEN = localStorage.getItem('nvme_token');
+const API   = '';
+const ME    = JSON.parse(localStorage.getItem('nvme_user') || 'null');
+
+function authHeaders() {
+  return { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════ */
+let toastTimer = null;
+function showToast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3200);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PWA INSTALL PROMPT
+═══════════════════════════════════════════════════════════ */
+let deferredInstallPrompt = null;
+const pwaBanner = document.getElementById('pwa-banner');
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if (!localStorage.getItem('pwa_dismissed')) {
+    pwaBanner.classList.add('visible');
+    document.getElementById('app').classList.add('banner-open');
+  }
+});
+
+document.getElementById('pwa-install-btn').addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    pwaBanner.classList.remove('visible');
+    document.getElementById('app').classList.remove('banner-open');
+  }
+  deferredInstallPrompt = null;
+});
+
+document.getElementById('pwa-dismiss-btn').addEventListener('click', () => {
+  pwaBanner.classList.remove('visible');
+  document.getElementById('app').classList.remove('banner-open');
+  localStorage.setItem('pwa_dismissed', '1');
+});
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════ */
+let conversations   = [];
+let activeConvId    = null;
+let activeToUserId  = null;
+let onlineUsers     = new Set();
+let typingTimers    = {};
+let socket          = null;
+let myTypingTimer   = null;
+
+/* ═══════════════════════════════════════════════════════════
+   SOCKET.IO
+═══════════════════════════════════════════════════════════ */
+function initSocket() {
+  socket = io({ auth: { token: TOKEN } });
+
+  socket.on('connect',    ()   => console.log('[WS] connected', socket.id));
+  socket.on('disconnect', ()   => console.log('[WS] disconnected'));
+
+  /* online presence */
+  socket.on('user_online',  ({ userId }) => {
+    onlineUsers.add(String(userId));
+    updateOnlineIndicators();
+  });
+  socket.on('user_offline', ({ userId }) => {
+    onlineUsers.delete(String(userId));
+    updateOnlineIndicators();
+  });
+
+  /* incoming message */
+  socket.on('dm_message', (msg) => {
+    const conv = conversations.find(c => c.id === msg.conversationId);
+    if (conv) {
+      conv.lastMessage = msg.content;
+      conv.lastAt = msg.createdAt;
+      if (msg.conversationId !== activeConvId) {
+        conv.unreadCount = (conv.unreadCount || 0) + 1;
+      }
+      renderConvList();
+    }
+    if (msg.conversationId === activeConvId) {
+      appendBubble(msg, false);
+      scrollToBottom();
+    }
+    updateNavBadge();
+  });
+
+  /* typing */
+  socket.on('dm_typing', ({ fromUserId, isTyping }) => {
+    if (String(fromUserId) !== String(activeToUserId)) return;
+    const el = document.getElementById('typing-indicator');
+    if (isTyping) {
+      el.classList.add('visible');
+      clearTimeout(typingTimers[fromUserId]);
+      typingTimers[fromUserId] = setTimeout(() => el.classList.remove('visible'), 3000);
+    } else {
+      el.classList.remove('visible');
+    }
+  });
+
+  /* read receipts */
+  socket.on('dm_read', ({ conversationId, readerId }) => {
+    if (conversationId !== activeConvId) return;
+    document.querySelectorAll('.read-tick').forEach(t => t.classList.add('read'));
+  });
+
+  /* video call signaling */
+  socket.on('vc_offer',         handleVcOffer);
+  socket.on('vc_answer',        handleVcAnswer);
+  socket.on('vc_ice_candidate', handleVcIce);
+  socket.on('vc_reject',        handleVcReject);
+  socket.on('vc_hangup',        endCall);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ONLINE INDICATORS
+═══════════════════════════════════════════════════════════ */
+function updateOnlineIndicators() {
+  document.querySelectorAll('.conv-item').forEach(item => {
+    const uid = item.dataset.userId;
+    const dot = item.querySelector('.online-dot');
+    if (dot) dot.classList.toggle('visible', onlineUsers.has(String(uid)));
+  });
+  if (activeToUserId) {
+    const isOn = onlineUsers.has(String(activeToUserId));
+    const st = document.getElementById('chat-user-status');
+    if (st) {
+      st.textContent = isOn ? '● Online' : 'Offline';
+      st.className = 'chat-user-status' + (isOn ? ' online' : '');
+    }
+    const dot = document.getElementById('chat-online-dot');
+    if (dot) dot.classList.toggle('visible', isOn);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NAV BADGE
+═══════════════════════════════════════════════════════════ */
+function updateNavBadge() {
+  const total = conversations.reduce((s, c) => s + (c.unreadCount || 0), 0);
+  const badge = document.getElementById('nav-unread-badge');
+  badge.textContent = total > 99 ? '99+' : total;
+  badge.classList.toggle('visible', total > 0);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CONVERSATIONS
+═══════════════════════════════════════════════════════════ */
+async function loadConversations() {
+  try {
+    const res = await fetch(`${API}/api/dm/conversations`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('Failed to load');
+    conversations = await res.json();
+    renderConvList();
+    updateNavBadge();
+  } catch (e) {
+    showToast('Could not load conversations', 'error');
+  }
+}
+
+function renderConvList(filter = '') {
+  const list  = document.getElementById('conv-list');
+  const empty = document.getElementById('conv-empty');
+  const items = conversations.filter(c =>
+    !filter || (c.username || '').toLowerCase().includes(filter.toLowerCase())
+  );
+
+  // remove old items (keep empty state)
+  list.querySelectorAll('.conv-item').forEach(el => el.remove());
+
+  empty.style.display = items.length ? 'none' : 'flex';
+
+  items.forEach(conv => {
+    const other   = conv.otherUser || {};
+    const name    = other.username || conv.username || 'User';
+    const initials = name.slice(0,2).toUpperCase();
+    const isOnline = onlineUsers.has(String(other.id || conv.userId));
+    const unread   = conv.unreadCount || 0;
+    const timeStr  = formatTime(conv.lastAt || conv.updatedAt);
+
+    const item = document.createElement('div');
+    item.className = 'conv-item' + (unread > 0 ? ' unread' : '') + (conv.id === activeConvId ? ' active' : '');
+    item.dataset.convId  = conv.id;
+    item.dataset.userId  = other.id || conv.userId || '';
+    item.innerHTML = `
+      <div class="avatar-wrap">
+        ${other.avatar ? `<img class="avatar" src="${other.avatar}" alt="${name}" />` : `<div class="avatar">${initials}</div>`}
+        <div class="online-dot ${isOnline ? 'visible' : ''}"></div>
+      </div>
+      <div class="conv-info">
+        <div class="conv-name">${escHtml(name)}</div>
+        <div class="conv-preview">${escHtml(conv.lastMessage || 'No messages yet')}</div>
+      </div>
+      <div class="conv-meta">
+        <div class="conv-time">${timeStr}</div>
+        <div class="unread-badge ${unread > 0 ? 'visible' : ''}">${unread > 99 ? '99+' : unread}</div>
+      </div>
+    `;
+    item.addEventListener('click', () => openConversation(conv));
+    list.appendChild(item);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   OPEN CONVERSATION
+═══════════════════════════════════════════════════════════ */
+function openConversation(conv) {
+  activeConvId   = conv.id;
+  const other    = conv.otherUser || {};
+  activeToUserId = other.id || conv.userId || null;
+  const name     = other.username || conv.username || 'User';
+  const initials = name.slice(0,2).toUpperCase();
+
+  // update header
+  const avEl = document.getElementById('chat-hdr-av');
+  avEl.innerHTML = other.avatar ? `<img src="${other.avatar}" alt="${name}" />` : initials;
+  document.getElementById('chat-hdr-avatar').style.display = '';
+  document.getElementById('chat-user-name').textContent = name;
+  document.getElementById('chat-user-info').style.display = '';
+  document.getElementById('audio-call-btn').style.display = '';
+  document.getElementById('video-call-btn').style.display = '';
+  document.getElementById('vc-caller-name').textContent = name;
+
+  updateOnlineIndicators();
+
+  // show/hide panels on mobile
+  document.getElementById('conv-panel').classList.add('hidden');
+
+  // show messages
+  document.getElementById('no-chat').style.display = 'none';
+  document.getElementById('messages-area').style.display = 'flex';
+  document.getElementById('input-bar').style.display = 'flex';
+  document.getElementById('typing-indicator').classList.remove('visible');
+  document.getElementById('typing-name').textContent = name;
+
+  // mark read
+  conv.unreadCount = 0;
+  renderConvList();
+  updateNavBadge();
+
+  loadMessages(conv.id);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MESSAGES
+═══════════════════════════════════════════════════════════ */
+async function loadMessages(convId) {
+  const area = document.getElementById('messages-area');
+  area.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>Loading…</p></div>';
+  try {
+    const res = await fetch(`${API}/api/dm/${convId}/messages`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('Failed');
+    const messages = await res.json();
+    area.innerHTML = '';
+    if (!messages.length) {
+      area.innerHTML = '<div class="empty-state"><div class="icon">👋</div><p>No messages yet.<br/>Say hello!</p></div>';
+      return;
+    }
+    let lastDate = null;
+    messages.forEach(msg => {
+      const d = new Date(msg.createdAt).toDateString();
+      if (d !== lastDate) {
+        const div = document.createElement('div');
+        div.className = 'date-divider';
+        div.textContent = formatDateLabel(msg.createdAt);
+        area.appendChild(div);
+        lastDate = d;
+      }
+      area.appendChild(buildBubble(msg, true));
+    });
+    scrollToBottom();
+  } catch {
+    area.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>Could not load messages.</p></div>';
+  }
+}
+
+function buildBubble(msg, isHistory = false) {
+  const isSent = String(msg.fromUserId) === String(ME?.id);
+  const row = document.createElement('div');
+  row.className = `bubble-row ${isSent ? 'sent' : 'received'}`;
+  row.dataset.msgId = msg.id;
+
+  const time = formatTime(msg.createdAt);
+  const isRead = msg.isRead || false;
+
+  row.innerHTML = `
+    <div class="bubble">
+      ${escHtml(msg.content)}
+      <div class="bubble-meta">
+        <span class="bubble-time">${time}</span>
+        ${isSent ? `<span class="read-tick ${isRead ? 'read' : ''}">✓✓</span>` : ''}
+      </div>
+    </div>
+  `;
+  return row;
+}
+
+function appendBubble(msg, scroll = true) {
+  const area = document.getElementById('messages-area');
+  // remove empty state if present
+  area.querySelector('.empty-state')?.remove();
+  const el = buildBubble(msg);
+  area.appendChild(el);
+  if (scroll) scrollToBottom();
+}
+
+function scrollToBottom() {
+  const area = document.getElementById('messages-area');
+  requestAnimationFrame(() => { area.scrollTop = area.scrollHeight; });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SEND MESSAGE
+═══════════════════════════════════════════════════════════ */
+function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const content = input.value.trim();
+  if (!content || !activeToUserId || !socket) return;
+
+  const tempMsg = {
+    id: 'temp_' + Date.now(),
+    fromUserId: ME?.id,
+    content,
+    createdAt: new Date().toISOString(),
+    isRead: false,
+    conversationId: activeConvId
+  };
+  appendBubble(tempMsg);
+  input.value = '';
+  input.style.height = 'auto';
+
+  socket.emit('dm_send', { toUserId: activeToUserId, content, conversationId: activeConvId });
+
+  // update conversation preview
+  const conv = conversations.find(c => c.id === activeConvId);
+  if (conv) { conv.lastMessage = content; conv.lastAt = tempMsg.createdAt; }
+  renderConvList();
+
+  clearTimeout(myTypingTimer);
+  socket.emit('dm_typing', { toUserId: activeToUserId, isTyping: false });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INPUT EVENTS
+═══════════════════════════════════════════════════════════ */
+const msgInput = document.getElementById('msg-input');
+
+msgInput.addEventListener('input', () => {
+  // auto-resize
+  msgInput.style.height = 'auto';
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+
+  // typing event
+  if (!socket || !activeToUserId) return;
+  socket.emit('dm_typing', { toUserId: activeToUserId, isTyping: true });
+  clearTimeout(myTypingTimer);
+  myTypingTimer = setTimeout(() => {
+    socket.emit('dm_typing', { toUserId: activeToUserId, isTyping: false });
+  }, 2000);
+});
+
+msgInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+document.getElementById('send-btn').addEventListener('click', sendMessage);
+
+/* ═══════════════════════════════════════════════════════════
+   SEARCH
+═══════════════════════════════════════════════════════════ */
+document.getElementById('search-input').addEventListener('input', e => {
+  renderConvList(e.target.value);
+});
+
+/* ═══════════════════════════════════════════════════════════
+   BACK BUTTON (mobile)
+═══════════════════════════════════════════════════════════ */
+document.getElementById('back-btn').addEventListener('click', () => {
+  document.getElementById('conv-panel').classList.remove('hidden');
+  activeConvId   = null;
+  activeToUserId = null;
+});
+
+/* ═══════════════════════════════════════════════════════════
+   VIDEO CALL — WebRTC
+═══════════════════════════════════════════════════════════ */
+let pc          = null;
+let localStream = null;
+let isMuted     = false;
+let isCamOff    = false;
+let isVideoCall = false;
+let facingMode  = 'user';
+let incomingCallData = null;
+
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' }
+];
+
+async function startCall(withVideo = true) {
+  if (!activeToUserId) return;
+  isVideoCall = withVideo;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: withVideo ? { facingMode } : false
+    });
+  } catch {
+    showToast('Could not access camera/mic', 'error');
+    return;
+  }
+
+  document.getElementById('vc-local-video').srcObject = localStream;
+  openVcOverlay();
+  document.getElementById('vc-call-status').textContent = 'Calling…';
+
+  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  pc.onicecandidate = e => {
+    if (e.candidate) socket.emit('vc_ice_candidate', { toUserId: activeToUserId, candidate: e.candidate });
+  };
+  pc.ontrack = e => {
+    document.getElementById('vc-remote-video').srcObject = e.streams[0];
+  };
+  pc.onconnectionstatechange = () => {
+    const s = pc?.connectionState;
+    if (s === 'connected')    document.getElementById('vc-call-status').textContent = 'Connected';
+    if (s === 'disconnected') endCall();
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  socket.emit('vc_offer', { toUserId: activeToUserId, offer, withVideo });
+}
+
+async function handleVcOffer({ fromUserId, offer, withVideo }) {
+  incomingCallData = { fromUserId, offer, withVideo };
+  const conv = conversations.find(c => {
+    const o = c.otherUser || {};
+    return String(o.id || c.userId) === String(fromUserId);
+  });
+  const name = conv ? (conv.otherUser?.username || conv.username || 'Someone') : 'Someone';
+  document.getElementById('inc-caller-name').textContent = name;
+  document.getElementById('inc-avatar').textContent = name.slice(0,2).toUpperCase();
+  document.getElementById('inc-call-type').textContent = withVideo ? 'Incoming video call…' : 'Incoming voice call…';
+  document.getElementById('inc-accept').textContent = withVideo ? '📹' : '📞';
+  document.getElementById('vc-incoming').classList.add('open');
+}
+
+async function acceptCall() {
+  if (!incomingCallData) return;
+  const { fromUserId, offer, withVideo } = incomingCallData;
+  document.getElementById('vc-incoming').classList.remove('open');
+  isVideoCall = withVideo;
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: true, video: withVideo ? { facingMode } : false
+    });
+  } catch {
+    showToast('Could not access camera/mic', 'error');
+    return;
+  }
+
+  document.getElementById('vc-local-video').srcObject = localStream;
+  openVcOverlay();
+  document.getElementById('vc-call-status').textContent = 'Connected';
+
+  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.onicecandidate = e => {
+    if (e.candidate) socket.emit('vc_ice_candidate', { toUserId: fromUserId, candidate: e.candidate });
+  };
+  pc.ontrack = e => {
+    document.getElementById('vc-remote-video').srcObject = e.streams[0];
+  };
+
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  socket.emit('vc_answer', { toUserId: fromUserId, answer });
+  incomingCallData = null;
+}
+
+async function handleVcAnswer({ answer }) {
+  if (!pc) return;
+  await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  document.getElementById('vc-call-status').textContent = 'Connected';
+}
+
+async function handleVcIce({ candidate }) {
+  try { await pc?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+}
+
+function handleVcReject() {
+  showToast('Call declined', 'error');
+  endCall();
+}
+
+function endCall() {
+  document.getElementById('vc-overlay').classList.remove('open');
+  document.getElementById('vc-incoming').classList.remove('open');
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  if (pc) { pc.close(); pc = null; }
+  document.getElementById('vc-remote-video').srcObject = null;
+  document.getElementById('vc-local-video').srcObject  = null;
+  if (activeToUserId && socket) socket.emit('vc_hangup', { toUserId: activeToUserId });
+}
+
+function openVcOverlay() {
+  document.getElementById('vc-overlay').classList.add('open');
+  const name = document.getElementById('chat-user-name').textContent;
+  document.getElementById('vc-caller-name').textContent = name;
+}
+
+/* vc controls */
+document.getElementById('vc-btn-mute').addEventListener('click', () => {
+  isMuted = !isMuted;
+  localStream?.getAudioTracks().forEach(t => { t.enabled = !isMuted; });
+  document.getElementById('vc-btn-mute').textContent = isMuted ? '🔇' : '🎤';
+});
+
+document.getElementById('vc-btn-video').addEventListener('click', () => {
+  isCamOff = !isCamOff;
+  localStream?.getVideoTracks().forEach(t => { t.enabled = !isCamOff; });
+  document.getElementById('vc-btn-video').textContent = isCamOff ? '🚫' : '📷';
+});
+
+document.getElementById('vc-btn-flip').addEventListener('click', async () => {
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  if (!localStream || !isVideoCall) return;
+  const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: true });
+  const videoTrack = newStream.getVideoTracks()[0];
+  const sender = pc?.getSenders().find(s => s.track?.kind === 'video');
+  if (sender) sender.replaceTrack(videoTrack);
+  localStream.getVideoTracks().forEach(t => t.stop());
+  document.getElementById('vc-local-video').srcObject = newStream;
+  localStream = newStream;
+});
+
+document.getElementById('vc-btn-hangup').addEventListener('click', endCall);
+document.getElementById('inc-accept').addEventListener('click', acceptCall);
+document.getElementById('inc-reject').addEventListener('click', () => {
+  if (incomingCallData) socket.emit('vc_reject', { toUserId: incomingCallData.fromUserId });
+  document.getElementById('vc-incoming').classList.remove('open');
+  incomingCallData = null;
+});
+
+document.getElementById('video-call-btn').addEventListener('click', () => startCall(true));
+document.getElementById('audio-call-btn').addEventListener('click', () => startCall(false));
+
+/* draggable PiP */
+(function makeDraggable() {
+  const pip = document.getElementById('vc-local-pip');
+  let ox = 0, oy = 0, sx = 0, sy = 0;
+  pip.addEventListener('mousedown', drag);
+  pip.addEventListener('touchstart', drag, { passive: true });
+  function drag(e) {
+    const pt = e.touches ? e.touches[0] : e;
+    sx = pt.clientX; sy = pt.clientY;
+    ox = pip.offsetLeft; oy = pip.offsetTop;
+    document.addEventListener('mousemove', move);
+    document.addEventListener('touchmove', move, { passive: true });
+    document.addEventListener('mouseup',   end);
+    document.addEventListener('touchend',  end);
+  }
+  function move(e) {
+    const pt = e.touches ? e.touches[0] : e;
+    pip.style.left = (ox + pt.clientX - sx) + 'px';
+    pip.style.top  = (oy + pt.clientY - sy) + 'px';
+    pip.style.right = 'auto';
+  }
+  function end() {
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('touchmove', move);
+    document.removeEventListener('mouseup',   end);
+    document.removeEventListener('touchend',  end);
+  }
+})();
+
+/* ═══════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════ */
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 60000)   return 'now';
+  if (diff < 3600000) return Math.floor(diff/60000) + 'm';
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  if (diff < 86400000*7) return d.toLocaleDateString([],{weekday:'short'});
+  return d.toLocaleDateString([],{month:'short',day:'numeric'});
+}
+
+function formatDateLabel(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  const yest = new Date(now); yest.setDate(yest.getDate()-1);
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'});
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════ */
+(function init() {
+  if (!TOKEN) {
+    document.getElementById('not-logged-in').style.display = 'flex';
+    document.getElementById('conv-panel').style.display = 'none';
+    document.getElementById('chat-panel').style.display = 'none';
+    document.getElementById('bottom-nav').style.display = 'none';
+    return;
+  }
+  initSocket();
+  loadConversations();
+})();
+</script>
+</body>
+</html>

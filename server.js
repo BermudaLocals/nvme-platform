@@ -91,6 +91,14 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false }));
+app.get('/shop', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  let html = fs.readFileSync(path.join(__dirname, 'public/shop.html'), 'utf8');
+  html = html.replace('</head>', `<script>window.__PAYPAL_CLIENT_ID=${JSON.stringify(process.env.PAYPAL_CLIENT_ID||'')};</script>\n</head>`);
+  res.type('html').send(html);
+});
+
 app.use(require('express').static(require('path').join(__dirname, 'public')));
 
 // ── Auth helper ──────────────────────────────────────────────
@@ -1321,6 +1329,37 @@ io.on('connection', (socket) => {
       await db.query('UPDATE dm_messages SET is_read=true WHERE conversation_id=$1 AND sender_id!=$2', [conversationId, userId]);
       socket.emit('dm_read_ack', { conversationId });
     } catch {}
+  });
+
+  // ── WebRTC Video/Voice Call Signaling ────────────────────────────────────
+  socket.on('vc_offer', ({ toUserId, offer, withVideo }) => {
+    if (!userId) return;
+    const toSocket = onlineUsers.get(toUserId);
+    if (toSocket) io.to(toSocket).emit('vc_offer', { fromUserId: userId, offer, withVideo });
+  });
+
+  socket.on('vc_answer', ({ toUserId, answer }) => {
+    if (!userId) return;
+    const toSocket = onlineUsers.get(toUserId);
+    if (toSocket) io.to(toSocket).emit('vc_answer', { fromUserId: userId, answer });
+  });
+
+  socket.on('vc_ice_candidate', ({ toUserId, candidate }) => {
+    if (!userId) return;
+    const toSocket = onlineUsers.get(toUserId);
+    if (toSocket) io.to(toSocket).emit('vc_ice_candidate', { fromUserId: userId, candidate });
+  });
+
+  socket.on('vc_reject', ({ toUserId }) => {
+    if (!userId) return;
+    const toSocket = onlineUsers.get(toUserId);
+    if (toSocket) io.to(toSocket).emit('vc_reject', { fromUserId: userId });
+  });
+
+  socket.on('vc_hangup', ({ toUserId }) => {
+    if (!userId) return;
+    const toSocket = onlineUsers.get(toUserId);
+    if (toSocket) io.to(toSocket).emit('vc_hangup', { fromUserId: userId });
   });
 
   // ── DISCONNECT ──────────────────────────────────────────────────────────

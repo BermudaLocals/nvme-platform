@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>nvme.live — LIVE</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────── */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#07070d; color:#fff; font-family:'Segoe UI',system-ui,sans-serif; height:100vh; overflow:hidden; }
+
+    /* ── Layout ───────────────────────────────────────────── */
+    #app { display:flex; height:100vh; }
+    #stream-area { flex:1; position:relative; background:#0a0a12; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    #sidebar { width:320px; display:flex; flex-direction:column; background:#0f0f1a; border-left:1px solid #1a1a2e; }
+
+    /* ── Stream area ──────────────────────────────────────── */
+    #stream-video { width:100%; height:100%; object-fit:cover; }
+    #stream-placeholder { text-align:center; color:#444; }
+    #stream-placeholder .live-badge { display:inline-flex; align-items:center; gap:8px; background:linear-gradient(135deg,#e91e8c,#c2185b); color:#fff; font-weight:800; font-size:1.1rem; padding:8px 20px; border-radius:30px; margin-bottom:16px; animation:pulseBadge 2s ease-in-out infinite; }
+    @keyframes pulseBadge { 0%,100%{box-shadow:0 0 0 0 rgba(233,30,140,0.4)} 50%{box-shadow:0 0 0 12px rgba(233,30,140,0)} }
+    #stream-placeholder .live-dot { width:10px; height:10px; background:#fff; border-radius:50%; animation:blink 1s step-end infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* ── Gift overlay ─────────────────────────────────────── */
+    #gift-overlay { position:absolute; inset:0; pointer-events:none; z-index:100; overflow:hidden; }
+    .gift-anim { position:absolute; display:flex; flex-direction:column; align-items:center; animation-fill-mode:forwards; }
+
+    /* Lv1 — Recruit: corner coin flip */
+    .gift-recruit { bottom:80px; right:20px; animation:recruitAnim 2.5s ease-out forwards; font-size:2rem; }
+    @keyframes recruitAnim {
+      0%  { opacity:0; transform:scale(0) rotate(0deg); }
+      20% { opacity:1; transform:scale(1.2) rotate(180deg); }
+      80% { opacity:1; transform:scale(1) rotate(360deg); }
+      100%{ opacity:0; transform:scale(0.5) translateY(-40px); }
+    }
+
+    /* Lv2 — Soldier: sword slash across screen */
+    .gift-soldier { top:50%; left:-20%; transform:translateY(-50%); animation:soldierAnim 2s ease-in-out forwards; font-size:3.5rem; white-space:nowrap; filter:drop-shadow(0 0 12px #e91e8c); }
+    @keyframes soldierAnim {
+      0%  { opacity:0; left:-20%; transform:translateY(-50%) rotate(-15deg) scale(0.8); }
+      25% { opacity:1; left:15%;  transform:translateY(-50%) rotate(-15deg) scale(1.5); }
+      70% { opacity:1; left:65%;  transform:translateY(-50%) rotate(-15deg) scale(1.4); }
+      100%{ opacity:0; left:115%; transform:translateY(-50%) rotate(-15deg) scale(0.8); }
+    }
+
+    /* Lv3 — Captain: fire from bottom */
+    .gift-captain { bottom:-20%; left:50%; transform:translateX(-50%); animation:captainAnim 3s ease-out forwards; font-size:5rem; filter:drop-shadow(0 0 20px #ff6600); }
+    @keyframes captainAnim {
+      0%  { opacity:0; bottom:-20%; transform:translateX(-50%) scale(0.4); }
+      20% { opacity:1; bottom:8%;  transform:translateX(-50%) scale(2); }
+      60% { bottom:18%; transform:translateX(-50%) scale(1.6); }
+      85% { opacity:1; }
+      100%{ opacity:0; bottom:45%; transform:translateX(-50%) scale(0.9); }
+    }
+
+    /* Lv4 — Director: lightning strike */
+    .gift-director { top:-5%; left:50%; transform:translateX(-50%); animation:directorAnim 2.5s ease-out forwards; font-size:6rem; filter:drop-shadow(0 0 30px #00d4ff); }
+    @keyframes directorAnim {
+      0%  { opacity:0; top:-5%; transform:translateX(-50%) scaleY(0.1); }
+      15% { opacity:1; top:5%;  transform:translateX(-50%) scaleY(1.6) scaleX(0.7); }
+      30% { top:10%;  transform:translateX(-50%) scale(1.4); }
+      60% { opacity:1; top:15%; transform:translateX(-50%) scale(1.2); }
+      100%{ opacity:0; top:10%; transform:translateX(-50%) scale(0.5); }
+    }
+
+    /* Lv5 — Commander: golden crown drop */
+    .gift-commander { top:-15%; left:50%; transform:translateX(-50%); animation:commanderAnim 4s ease-out forwards; font-size:7rem; filter:drop-shadow(0 0 40px gold); }
+    @keyframes commanderAnim {
+      0%  { opacity:0; top:-15%; transform:translateX(-50%) scale(0.3) rotate(-10deg); }
+      25% { opacity:1; top:20%;  transform:translateX(-50%) scale(1.6) rotate(5deg); }
+      50% { top:28%;  transform:translateX(-50%) scale(1.4) rotate(-2deg); }
+      80% { opacity:1; top:25%;  transform:translateX(-50%) scale(1.3) rotate(0deg); }
+      100%{ opacity:0; top:15%;  transform:translateX(-50%) scale(0.9); }
+    }
+    /* Confetti particle */
+    .confetti-dot { position:absolute; width:8px; height:8px; border-radius:50%; pointer-events:none; }
+
+    /* Lv6 — CxO Elite: diamond rain full-screen */
+    .gift-cxo { position:absolute; inset:0; animation:cxoAnim 4s ease-in-out forwards;
+      background:linear-gradient(135deg,rgba(0,212,255,0.12),rgba(100,0,180,0.12));
+      display:flex; align-items:center; justify-content:center; flex-direction:column; gap:12px;
+    }
+    @keyframes cxoAnim { 0%{opacity:0} 10%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+    .gift-cxo .cxo-title { font-size:2.8rem; font-weight:900; background:linear-gradient(90deg,#00d4ff,#a855f7,#00d4ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-size:200%; animation:shimmerCxo 1.5s linear infinite; letter-spacing:4px; }
+    @keyframes shimmerCxo { 0%{background-position:0%} 100%{background-position:200%} }
+    .gift-cxo .cxo-diamonds { font-size:2.5rem; animation:diamondPulse 0.4s ease-in-out infinite alternate; }
+    @keyframes diamondPulse { from{letter-spacing:6px;filter:drop-shadow(0 0 8px #00d4ff)} to{letter-spacing:18px;filter:drop-shadow(0 0 24px #a855f7)} }
+    .rain-diamond { position:absolute; pointer-events:none; font-size:1.5rem; animation:fallDown linear forwards; }
+    @keyframes fallDown { 0%{transform:translateY(-60px) rotate(0deg);opacity:1} 100%{transform:translateY(110vh) rotate(360deg);opacity:0} }
+
+    /* Lv7 — DIGITAL KING: full screen takeover */
+    .gift-king { position:absolute; inset:0; background:rgba(0,0,0,0.96); animation:kingAnim 6s ease-in-out forwards;
+      display:flex; align-items:center; justify-content:center; flex-direction:column; gap:16px; z-index:200;
+    }
+    @keyframes kingAnim { 0%{opacity:0} 5%{opacity:1} 85%{opacity:1} 100%{opacity:0} }
+    .gift-king .king-bg-glow { position:absolute; inset:0; background:radial-gradient(ellipse at center,rgba(255,215,0,0.15) 0%,transparent 70%); animation:kingGlow 1s ease-in-out infinite alternate; }
+    @keyframes kingGlow { from{opacity:0.6} to{opacity:1} }
+    .gift-king .king-emoji { font-size:8rem; animation:kingPulse 0.6s ease-in-out infinite alternate; position:relative; z-index:1; }
+    @keyframes kingPulse { from{transform:scale(1);filter:drop-shadow(0 0 20px gold) drop-shadow(0 0 60px rgba(255,215,0,0.5))} to{transform:scale(1.08);filter:drop-shadow(0 0 50px gold) drop-shadow(0 0 120px rgba(255,215,0,0.7))} }
+    .gift-king .king-title { font-size:3.2rem; font-weight:900; letter-spacing:6px; background:linear-gradient(90deg,#FFD700,#FFA500,#FFD700,#FFF8DC,#FFD700); -webkit-background-clip:text; -webkit-text-fill-color:transparent; animation:shimmerGold 0.8s linear infinite; background-size:300%; position:relative; z-index:1; }
+    @keyframes shimmerGold { 0%{background-position:0%} 100%{background-position:300%} }
+    .gift-king .king-sender-name { font-size:1.6rem; font-weight:700; color:#FFD700; text-shadow:0 0 20px gold; position:relative; z-index:1; }
+    .gift-king .king-sub { font-size:1rem; color:#aaa; position:relative; z-index:1; }
+    .gift-king canvas { position:absolute; inset:0; z-index:0; }
+    /* Camera shake */
+    .shake { animation:cameraShake 0.08s steps(1) infinite; }
+    @keyframes cameraShake {
+      0%  { transform:translate(0,0) rotate(0deg); }
+      16% { transform:translate(-4px,3px) rotate(-0.3deg); }
+      33% { transform:translate(4px,-3px) rotate(0.3deg); }
+      50% { transform:translate(-3px,4px) rotate(0deg); }
+      66% { transform:translate(3px,-2px) rotate(-0.3deg); }
+      83% { transform:translate(-2px,3px) rotate(0.3deg); }
+      100%{ transform:translate(2px,-4px) rotate(0deg); }
+    }
+
+    /* ── Sender label ─────────────────────────────────────── */
+    .gift-label { background:rgba(0,0,0,0.75); backdrop-filter:blur(4px); padding:5px 14px; border-radius:20px; font-size:0.82rem; margin-top:8px; white-space:nowrap; border:1px solid rgba(255,255,255,0.1); }
+
+    /* ── Chat sidebar ─────────────────────────────────────── */
+    #chat-header { padding:14px 16px; font-weight:700; font-size:0.95rem; border-bottom:1px solid #1a1a2e; display:flex; justify-content:space-between; align-items:center; background:#0d0d1a; }
+    #viewer-count { background:linear-gradient(135deg,#e91e8c,#c2185b); color:#fff; border-radius:20px; padding:3px 11px; font-size:0.78rem; font-weight:700; }
+    #chat-messages { flex:1; overflow-y:auto; padding:12px 10px; display:flex; flex-direction:column; gap:7px; }
+    #chat-messages::-webkit-scrollbar { width:3px; }
+    #chat-messages::-webkit-scrollbar-thumb { background:#2a2a3e; border-radius:4px; }
+    .chat-msg { font-size:0.88rem; line-height:1.45; word-break:break-word; }
+    .chat-msg .name { font-weight:700; margin-right:5px; }
+    .chat-msg.gift-msg { background:linear-gradient(90deg,rgba(233,30,140,0.18),rgba(0,212,255,0.08),transparent); padding:7px 10px; border-radius:8px; border-left:3px solid #e91e8c; }
+    .chat-msg.gift-msg .name { color:#e91e8c; }
+    .chat-msg.regular .name { color:#00d4ff; }
+
+    /* ── Gift picker ──────────────────────────────────────── */
+    #gift-panel { border-top:1px solid #1a1a2e; padding:12px; background:#0d0d1a; }
+    #gift-panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    #gift-panel h4 { font-size:0.78rem; color:#7a8499; text-transform:uppercase; letter-spacing:1.5px; }
+    #balance-display { font-size:0.78rem; color:gold; font-weight:700; }
+    #gift-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:10px; }
+    .gift-btn { background:#13131f; border:1px solid #2a2a3e; border-radius:10px; padding:8px 3px; cursor:pointer; text-align:center; transition:all 0.18s; user-select:none; }
+    .gift-btn:hover { border-color:#e91e8c; background:#1e0f18; transform:scale(1.06); }
+    .gift-btn.selected { border-color:gold; background:#1e1800; box-shadow:0 0 8px rgba(255,215,0,0.3); }
+    .gift-btn .g-emoji { font-size:1.45rem; display:block; }
+    .gift-btn .g-name { font-size:0.6rem; color:#7a8499; margin-top:2px; display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    .gift-btn .g-cost { font-size:0.68rem; color:gold; font-weight:700; display:block; }
+    #send-gift-btn { width:100%; background:linear-gradient(135deg,#e91e8c,#7c3aed); border:none; color:#fff; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:0.92rem; transition:opacity 0.2s,transform 0.1s; letter-spacing:0.5px; }
+    #send-gift-btn:hover { opacity:0.88; transform:scale(1.01); }
+    #send-gift-btn:active { transform:scale(0.98); }
+    #gift-err { font-size:0.75rem; color:#f87171; margin-top:5px; display:none; text-align:center; }
+
+    /* ── Chat input ───────────────────────────────────────── */
+    #chat-input-area { padding:10px; border-top:1px solid #1a1a2e; display:flex; gap:7px; background:#0d0d1a; }
+    #chat-input { flex:1; background:#13131f; border:1px solid #2a2a3e; color:#fff; padding:8px 12px; border-radius:20px; font-size:0.88rem; outline:none; transition:border-color 0.2s; }
+    #chat-input:focus { border-color:#e91e8c; }
+    #chat-input::placeholder { color:#3a3a5e; }
+    #chat-send { background:linear-gradient(135deg,#e91e8c,#c2185b); border:none; color:#fff; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:1rem; flex-shrink:0; transition:transform 0.1s; }
+    #chat-send:hover { transform:scale(1.1); }
+
+    /* ── Responsive ───────────────────────────────────────── */
+    @media(max-width:640px) {
+      #sidebar { width:100%; position:fixed; bottom:0; left:0; right:0; height:45vh; z-index:50; }
+      #app { flex-direction:column; }
+      #stream-area { height:55vh; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- ── Stream Area ── -->
+  <div id="stream-area">
+    <div id="stream-placeholder">
+      <div class="live-badge"><span class="live-dot"></span> LIVE</div>
+      <div style="font-size:0.95rem;color:#555">Stream loading…</div>
+    </div>
+    <video id="stream-video" style="display:none" autoplay muted playsinline></video>
+    <div id="gift-overlay"></div>
+  </div>
+
+  <!-- ── Sidebar ── -->
+  <div id="sidebar">
+    <div id="chat-header">
+      <span>🔴 LIVE CHAT</span>
+      <span id="viewer-count">👁 0</span>
+    </div>
+    <div id="chat-messages"></div>
+
+    <!-- Gift Picker -->
+    <div id="gift-panel">
+      <div id="gift-panel-header">
+        <h4>🔱 ORBAT Gifts</h4>
+        <span id="balance-display">🪙 —</span>
+      </div>
+      <div id="gift-grid"></div>
+      <button id="send-gift-btn">Send Gift 🎁</button>
+      <div id="gift-err"></div>
+    </div>
+
+    <!-- Chat Input -->
+    <div id="chat-input-area">
+      <input id="chat-input" placeholder="Say something..." maxlength="200">
+      <button id="chat-send">➤</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Config ─────────────────────────────────────────────────── */
+const TOKEN    = localStorage.getItem('nvme_token');
+const STREAM_ID = new URLSearchParams(location.search).get('id');
+
+/* ── ORBAT Gift Tier Definitions ──────────────────────────────── */
+const GIFTS = [
+  { name:'Recruit',      emoji:'🪙',  cost:10,    level:1 },
+  { name:'Soldier',      emoji:'⚔️',  cost:50,    level:2 },
+  { name:'Captain',      emoji:'🔥',  cost:200,   level:3 },
+  { name:'Director',     emoji:'⚡',  cost:500,   level:4 },
+  { name:'Commander',    emoji:'👑',  cost:1000,  level:5 },
+  { name:'CxO Elite',    emoji:'💎',  cost:5000,  level:6 },
+  { name:'DIGITAL KING', emoji:'🔱',  cost:10000, level:7 },
+];
+
+/* ── Socket ──────────────────────────────────────────────────── */
+const socket = io({ auth: { token: TOKEN } });
+let selectedGift = null;
+
+/* ── Build gift picker grid ──────────────────────────────────── */
+const grid = document.getElementById('gift-grid');
+GIFTS.forEach(g => {
+  const btn = document.createElement('div');
+  btn.className = 'gift-btn';
+  btn.innerHTML = `<span class="g-emoji">${g.emoji}</span><span class="g-name">${g.name}</span><span class="g-cost">${g.cost}🪙</span>`;
+  btn.onclick = () => {
+    document.querySelectorAll('.gift-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedGift = g;
+    document.getElementById('gift-err').style.display = 'none';
+  };
+  grid.appendChild(btn);
+});
+
+/* ── Send gift ───────────────────────────────────────────────── */
+document.getElementById('send-gift-btn').onclick = () => {
+  if (!selectedGift) { showGiftErr('Select a gift first'); return; }
+  if (!STREAM_ID)    { showGiftErr('No stream ID in URL'); return; }
+  if (!TOKEN)        { showGiftErr('You must be logged in'); return; }
+  socket.emit('send_gift_by_name', { streamId: STREAM_ID, giftName: selectedGift.name });
+};
+function showGiftErr(msg) {
+  const el = document.getElementById('gift-err');
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+
+/* ── Join stream ─────────────────────────────────────────────── */
+if (STREAM_ID) socket.emit('join_stream', { streamId: STREAM_ID });
+
+/* ── Socket events ───────────────────────────────────────────── */
+socket.on('viewer_count', ({ count }) => {
+  document.getElementById('viewer-count').textContent = `👁 ${count}`;
+});
+socket.on('gift_error', ({ error }) => showGiftErr(error));
+
+/* ── Chat ────────────────────────────────────────────────────── */
+function addChat(username, message, isGift = false) {
+  const box = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + (isGift ? 'gift-msg' : 'regular');
+  div.innerHTML = `<span class="name">${escHtml(username)}</span><span>${escHtml(message)}</span>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  while (box.children.length > 120) box.removeChild(box.firstChild);
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+socket.on('live_chat', ({ username, message }) => addChat(username, message));
+
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg || !STREAM_ID) return;
+  socket.emit('live_chat', { streamId: STREAM_ID, message: msg });
+  input.value = '';
+}
+document.getElementById('chat-send').onclick = sendChat;
+document.getElementById('chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+
+/* ════════════════════════════════════════════════════════════════
+   GIFT ANIMATIONS
+════════════════════════════════════════════════════════════════ */
+const overlay    = document.getElementById('gift-overlay');
+const streamArea = document.getElementById('stream-area');
+
+function spawnGift({ senderName, gift }) {
+  const level = gift.level || (GIFTS.findIndex(g => g.name === gift.name) + 1);
+  const el    = document.createElement('div');
+  el.className = 'gift-anim';
+  const sn = escHtml(senderName);
+
+  /* ── Level 1 — Recruit ────────────────────────────────── */
+  if (level === 1) {
+    el.classList.add('gift-recruit');
+    el.innerHTML = `<span>${gift.emoji || '🪙'}</span><div class="gift-label">${sn} · Recruit</div>`;
+    overlay.appendChild(el);
+    setTimeout(() => el.remove(), 2700);
+
+  /* ── Level 2 — Soldier ────────────────────────────────── */
+  } else if (level === 2) {
+    el.classList.add('gift-soldier');
+    el.innerHTML = `<span style="margin-right:10px">${gift.emoji || '⚔️'}</span><span>${sn} — SOLDIER!</span>`;
+    overlay.appendChild(el);
+    setTimeout(() => el.remove(), 2200);
+
+  /* ── Level 3 — Captain ────────────────────────────────── */
+  } else if (level === 3) {
+    el.classList.add('gift-captain');
+    el.innerHTML = `<span>${gift.emoji || '🔥'}</span><div class="gift-label">${sn} — CAPTAIN!</div>`;
+    overlay.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+
+  /* ── Level 4 — Director ───────────────────────────────── */
+  } else if (level === 4) {
+    el.classList.add('gift-director');
+    el.innerHTML = `<span>${gift.emoji || '⚡'}</span><div class="gift-label">${sn} — DIRECTOR!</div>`;
+    overlay.appendChild(el);
+    setTimeout(() => el.remove(), 2700);
+
+  /* ── Level 5 — Commander ──────────────────────────────── */
+  } else if (level === 5) {
+    el.classList.add('gift-commander');
+    el.innerHTML = `<span>${gift.emoji || '👑'}</span><div class="gift-label">${sn} — COMMANDER!</div>`;
+    // Confetti burst
+    for (let i = 0; i < 35; i++) {
+      const c = document.createElement('div');
+      c.className = 'confetti-dot';
+      c.style.cssText = `
+        left:${40 + Math.random() * 20}%;
+        top:${25 + Math.random() * 20}%;
+        background:hsl(${Math.random()*360},100%,60%);
+        width:${5+Math.random()*7}px; height:${5+Math.random()*7}px;
+        animation:recruitAnim ${0.8+Math.random()*1.6}s ease-out forwards ${Math.random()*0.5}s;
+      `;
+      overlay.appendChild(c);
+      setTimeout(() => c.remove(), 3200);
+    }
+    overlay.appendChild(el);
+    setTimeout(() => el.remove(), 4300);
+
+  /* ── Level 6 — CxO Elite ──────────────────────────────── */
+  } else if (level === 6) {
+    el.classList.add('gift-cxo');
+    el.innerHTML = `
+      <div class="cxo-diamonds">💎💎💎💎💎</div>
+      <div class="cxo-title">CxO ELITE</div>
+      <div class="gift-label" style="font-size:0.95rem">${sn} sent <strong>5,000 credits!</strong></div>
+    `;
+    overlay.appendChild(el);
+    // Diamond rain
+    const rainInterval = setInterval(() => {
+      const d = document.createElement('div');
+      d.className = 'rain-diamond';
+      d.textContent = '💎';
+      d.style.cssText = `left:${Math.random()*100}%;top:-40px;font-size:${1+Math.random()*1.5}rem;animation-duration:${1.2+Math.random()*1.5}s;`;
+      overlay.appendChild(d);
+      setTimeout(() => d.remove(), 3000);
+    }, 130);
+    setTimeout(() => { clearInterval(rainInterval); el.remove(); }, 4200);
+
+  /* ── Level 7 — DIGITAL KING ───────────────────────────── */
+  } else if (level === 7) {
+    el.classList.add('gift-king');
+    const canvasId = 'king-canvas-' + Date.now();
+    el.innerHTML = `
+      <canvas id="${canvasId}"></canvas>
+      <div class="king-bg-glow"></div>
+      <div class="king-emoji">🔱</div>
+      <div class="king-title">DIGITAL KING</div>
+      <div class="king-sender-name">${sn}</div>
+      <div class="king-sub">sent 10,000 credits 👑</div>
+    `;
+    overlay.appendChild(el);
+
+    // Camera shake on stream area
+    streamArea.classList.add('shake');
+
+    // Particle canvas
+    requestAnimationFrame(() => {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      canvas.width  = el.offsetWidth  || window.innerWidth;
+      canvas.height = el.offsetHeight || window.innerHeight;
+      const ctx = canvas.getContext('2d');
+      const pts = Array.from({ length: 150 }, () => ({
+        x:  Math.random() * canvas.width,
+        y:  Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 5,
+        vy: (Math.random() - 0.5) * 5,
+        r:  1.5 + Math.random() * 3.5,
+        c:  `hsl(${38 + Math.random() * 25},100%,${50+Math.random()*30}%)`
+      }));
+      let running = true;
+      function drawFrame() {
+        if (!running) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (const p of pts) {
+          p.x += p.vx; p.y += p.vy;
+          if (p.x < 0 || p.x > canvas.width)  p.vx *= -1;
+          if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fillStyle = p.c;
+          ctx.fill();
+        }
+        requestAnimationFrame(drawFrame);
+      }
+      drawFrame();
+      setTimeout(() => { running = false; }, 6000);
+    });
+
+    setTimeout(() => { streamArea.classList.remove('shake'); el.remove(); }, 6200);
+  }
+
+  // Always add a gift chat message
+  const emoji = gift.emoji || '🎁';
+  addChat(senderName, `${emoji} sent ${gift.name}!`, true);
+}
+
+/* ── Socket gift event ───────────────────────────────────────── */
+socket.on('gift_received', (data) => {
+  const giftDef = GIFTS.find(g => g.name === data.gift?.name) || GIFTS[0];
+  spawnGift({
+    senderName: data.senderName || 'Anonymous',
+    gift: { ...data.gift, level: giftDef ? giftDef.level : 1, emoji: giftDef ? giftDef.emoji : '🎁' }
+  });
+});
+</script>
+</body>
+</html>

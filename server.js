@@ -91,6 +91,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false }));
+app.use(require('express').static(require('path').join(__dirname, 'public')));
 
 // ── Auth helper ──────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'kush-empire-jwt-secret-2026';
@@ -190,6 +191,36 @@ async function initDB() {
       END IF;
     END $$;
   `).catch(e => console.warn('DB init warning:', e.message));
+
+  // ── Gift catalog table (ORBAT tiers) ──────────────────────
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS gift_catalog (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT UNIQUE NOT NULL,
+      emoji TEXT NOT NULL,
+      icon_url TEXT,
+      credit_cost NUMERIC NOT NULL,
+      usd_value NUMERIC NOT NULL,
+      creator_pct INTEGER DEFAULT 70,
+      platform_pct INTEGER DEFAULT 30,
+      is_active BOOLEAN DEFAULT true,
+      tier_level INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.warn('gift_catalog init warning:', e.message));
+
+  // ── Seed ORBAT gift tiers ─────────────────────────────────
+  await db.query(`
+    INSERT INTO gift_catalog (name, emoji, icon_url, credit_cost, usd_value, creator_pct, platform_pct, tier_level, is_active) VALUES
+    ('Recruit',      '🪙', '/gifts/recruit.png',      10,    0.10, 70, 30, 1, true),
+    ('Soldier',      '⚔️', '/gifts/soldier.png',      50,    0.50, 70, 30, 2, true),
+    ('Captain',      '🔥', '/gifts/captain.png',      200,   2.00, 70, 30, 3, true),
+    ('Director',     '⚡', '/gifts/director.png',     500,   5.00, 70, 30, 4, true),
+    ('Commander',    '👑', '/gifts/commander.png',    1000, 10.00, 70, 30, 5, true),
+    ('CxO Elite',    '💎', '/gifts/cxo.png',          5000, 50.00, 70, 30, 6, true),
+    ('DIGITAL KING', '🔱', '/gifts/king.png',        10000,100.00, 70, 30, 7, true)
+    ON CONFLICT (name) DO NOTHING
+  `).catch(() => {});
 }
 
 // ── Routes: Health ───────────────────────────────────────────
@@ -468,7 +499,7 @@ app.get('/', (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>nvme.live — The Future of Short Video Entertainment</title>
 <style>
-  :root{--bg:#0a0a0f;--card:#13131a;--border:#1e1e2e;--accent:#7c3aed;--accent2:#06b6d4;--text:#f8fafc;--muted:#64748b}
+  :root{--bg:#07070d;--card:#0f0f1a;--border:#1a1a2e;--accent:#e91e8c;--accent2:#00d4ff;--text:#f8fafc;--muted:#7a8499}
   *{margin:0;padding:0;box-sizing:border-box}
   body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh}
   nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 2rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(10,10,15,0.95);backdrop-filter:blur(12px);z-index:100}
@@ -1211,7 +1242,7 @@ io.on('connection', (socket) => {
   socket.on('send_gift', async ({ streamId, giftId }) => {
     if (!userId) return;
     try {
-      const { rows: grows } = await db.query('SELECT * FROM gifts WHERE id=$1 AND is_active=true', [giftId]);
+      const { rows: grows } = await db.query('SELECT * FROM gift_catalog WHERE id=$1 AND is_active=true', [giftId]);
       const gift = grows[0];
       if (!gift) return;
       const { rows: urows } = await db.query('SELECT balance_credits, username FROM users WHERE id=$1', [userId]);
@@ -1220,12 +1251,38 @@ io.on('connection', (socket) => {
         socket.emit('gift_error', { error: 'insufficient credits' }); return;
       }
       await db.query('UPDATE users SET balance_credits=balance_credits-$1 WHERE id=$2', [gift.credit_cost, userId]);
-      await db.query('UPDATE livestreams SET total_gifts_received=total_gifts_received+$1 WHERE id=$2', [gift.usd_value, streamId]);
+      await db.query('UPDATE livestreams SET total_gifts_received=total_gifts_received+$1 WHERE id=$2', [gift.usd_value, streamId]).catch(()=>{});
       io.to(`stream:${streamId}`).emit('gift_received', {
         streamId, senderId: userId, senderName: sender.username,
-        gift: { name: gift.name, emoji: gift.emoji, value: gift.usd_value }, ts: new Date().toISOString()
+        gift: { name: gift.name, emoji: gift.emoji, value: gift.usd_value, level: gift.tier_level }, ts: new Date().toISOString()
       });
     } catch {}
+  });
+
+  // ── ORBAT GIFT: send by name ────────────────────────────────────────────
+  socket.on('send_gift_by_name', async ({ streamId, giftName }) => {
+    if (!userId) return;
+    try {
+      const { rows: grows } = await db.query('SELECT * FROM gift_catalog WHERE name=$1 AND is_active=true', [giftName]);
+      const gift = grows[0];
+      if (!gift) return;
+      const { rows: urows } = await db.query('SELECT balance_credits, username FROM users WHERE id=$1', [userId]);
+      const sender = urows[0];
+      if (!sender || sender.balance_credits < gift.credit_cost) {
+        socket.emit('gift_error', { error: 'insufficient credits' }); return;
+      }
+      await db.query('UPDATE users SET balance_credits=balance_credits-$1 WHERE id=$2', [gift.credit_cost, userId]);
+      await db.query('UPDATE livestreams SET total_gifts_received=total_gifts_received+$1 WHERE id=$2', [gift.usd_value, streamId]).catch(()=>{});
+      const ORBAT_NAMES = ['Recruit','Soldier','Captain','Director','Commander','CxO Elite','DIGITAL KING'];
+      const level = gift.tier_level || (ORBAT_NAMES.indexOf(giftName) + 1);
+      io.to(`stream:${streamId}`).emit('gift_received', {
+        streamId,
+        senderId: userId,
+        senderName: sender.username,
+        gift: { name: gift.name, emoji: gift.emoji, value: gift.usd_value, level },
+        ts: new Date().toISOString()
+      });
+    } catch(e) { socket.emit('gift_error', { error: e.message }); }
   });
 
   // ── DIRECT MESSAGES (WhatsApp style) ────────────────────────────────────

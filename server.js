@@ -1190,7 +1190,7 @@ app.post('/api/streams/:id/end-live', authMiddleware, async (req, res) => {
 
 app.get('/api/streams/live', async (req, res) => {
   try {
-    const { rows } = await db.query("SELECT ls.*, u.username, u.avatar_url FROM livestreams ls JOIN users u ON u.id=ls.user_id WHERE ls.status='live' ORDER BY ls.viewer_count DESC");
+    const { rows } = await db.query("SELECT ls.*, u.username, u.avatar_url FROM live_streams ls JOIN users u ON u.id=ls.user_id WHERE ls.is_active=true ORDER BY ls.viewer_count DESC");
     res.json({ ok: true, streams: rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

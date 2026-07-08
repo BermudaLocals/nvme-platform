@@ -35,6 +35,44 @@ passport.deserializeUser((user, done) => done(null, user));
 
 // ── GOOGLE OAUTH STRATEGY ────────────────────────────────────────────────────
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback',
+        failureRedirect: '/auth/failure'
+      },
+      async (accessToken, refreshToken, profile, done) => {
+        try {
+          const email = profile.emails?.[0]?.value;
+          const username = profile.displayName?.replace(/\s+/g, '_').toLowerCase() || 'user_' + profile.id;
+          const avatar = profile.photos?.[0]?.value || null;
+          let result = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
+          let user;
+          if (result.rows.length === 0) {
+            const r = await pool.query(
+              'INSERT INTO users (id,email,username,password_hash,avatar_url,created_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING *',
+              [uuidv4(), email, username, 'GOOGLE_OAUTH', avatar]
+            );
+            user = r.rows[0];
+          } else {
+            user = result.rows[0];
+            if (avatar && !user.avatar_url) {
+              await pool.query('UPDATE users SET avatar_url=$1 WHERE id=$2', [avatar, user.id]);
+              user.avatar_url = avatar;
+            }
+          }
+          return done(null, { id: user.id, email: user.email, username: user.username });
+        } catch (err) {
+          console.error('[GoogleOAuth] Callback error:', err.stack);
+          return done(null, false);
+        }
+      }
+    )
+  );
+}
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -279,7 +317,9 @@ app.post('/api/auth/login', async (req, res) => {
     const { rows } = await db.query('SELECT * FROM users WHERE email=$1', [email.toLowerCase().trim()]);
     if (!rows.length) return res.status(401).json({ error: 'invalid credentials' });
     const user = rows[0];
-    const ok = await bcrypt.compare(password, user.password_hash);
+    const hash = user.password_hash || user.password;
+    if (!hash) return res.status(401).json({ error: 'invalid credentials' });
+    const ok = await bcrypt.compare(password, hash);
     if (!ok) return res.status(401).json({ error: 'invalid credentials' });
     res.json({ ok: true, token: signToken({ id: user.id, email: user.email }), user: { id: user.id, email: user.email, username: user.username, plan: user.plan } });
   } catch (e) { res.status(500).json({ error: e.message }); }

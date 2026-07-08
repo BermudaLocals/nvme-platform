@@ -72,36 +72,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     )
   );
 }
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback'
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      const email = profile.emails?.[0]?.value;
-      const username = profile.displayName?.replace(/\s+/g,'_').toLowerCase() || 'user_' + profile.id;
-      const avatar = profile.photos?.[0]?.value || null;
-      let result = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
-      let user;
-      if (result.rows.length === 0) {
-        const r = await pool.query(
-          'INSERT INTO users (id,email,username,password_hash,avatar_url,created_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING *',
-          [uuidv4(), email, username, 'GOOGLE_OAUTH', avatar]
-        );
-        user = r.rows[0];
-      } else {
-        user = result.rows[0];
-        if (avatar && !user.avatar_url) {
-          await pool.query('UPDATE users SET avatar_url=$1 WHERE id=$2',[avatar,user.id]);
-          user.avatar_url = avatar;
-        }
-      }
-      return done(null, { id: user.id, email: user.email, username: user.username });
-    } catch(e) { return done(e); }
-  }));
-}
-
 // ── Production env guardrails (resilient) ────────────────────
 if (IS_PROD) {
   const required = ['DATABASE_URL', 'JWT_SECRET'];
@@ -276,12 +246,14 @@ app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'em
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/?auth=failed' }),
   (req, res) => {
+    if (!req.user) return res.redirect('/?auth=failed');
     const token = signToken({ id: req.user.id, email: req.user.email });
     // Redirect to frontend with token in query param; frontend stores it
     res.redirect(`/?token=${token}&user=${encodeURIComponent(JSON.stringify({ id:req.user.id, email:req.user.email, username:req.user.username }))}`);
   }
 );
 
+app.get('/app.html', (req, res) => res.redirect('/'));
 app.get('/health', (req, res) => res.json({
   app: 'nvme.live',
   status: 'ONLINE',
@@ -314,7 +286,7 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-    const { rows } = await db.query('SELECT * FROM users WHERE email=$1', [email.toLowerCase().trim()]);
+    const { rows } = await pool.query('SELECT * FROM users WHERE email=$1', [email.toLowerCase().trim()]);
     if (!rows.length) return res.status(401).json({ error: 'invalid credentials' });
     const user = rows[0];
     const hash = user.password_hash || user.password;
@@ -327,7 +299,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT id, email, username, plan, created_at FROM users WHERE id=$1', [req.user.id]);
+    const { rows } = await pool.query('SELECT id, email, username, plan, created_at FROM users WHERE id=$1', [req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'user not found' });
     res.json({ ok: true, user: rows[0] });
   } catch (e) { res.status(500).json({ error: e.message }); }

@@ -1436,7 +1436,7 @@ app.post('/api/credits/create-order', authMiddleware, async (req, res) => {
   const pkg = CREDIT_PACKAGES.find(p => p.id === packageId);
   if (!pkg) return res.status(400).json({ error: 'invalid package' });
   try {
-    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${(process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET)}`).toString('base64');
     const tokenRes = await fetch('https://api-m.paypal.com/v1/oauth2/token', {
       method: 'POST',
       headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1463,7 +1463,7 @@ app.post('/api/credits/capture-order', authMiddleware, async (req, res) => {
   const pkg = CREDIT_PACKAGES.find(p => p.id === packageId);
   if (!pkg) return res.status(400).json({ error: 'invalid package' });
   try {
-    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${(process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET)}`).toString('base64');
     const tokenRes = await fetch('https://api-m.paypal.com/v1/oauth2/token', {
       method: 'POST',
       headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },

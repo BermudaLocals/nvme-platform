@@ -1367,6 +1367,7 @@ checkAuth();
 
 // ═══════════════════════════════════════════════════════
 // RICH FUNCTIONS — merged from backup (best-of-both)
+// NOTE: backup IIFE init removed — current app init handles startup
 // ═══════════════════════════════════════════════════════
 
 function loginWithGoogle() {
@@ -2383,10 +2384,7 @@ function editProfile() { showToast('✏️ Profile editor coming soon!'); }
 // ════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════
-(async () => {
-  const handledGoogle = await handleGoogleAuthRedirect();
-  if (!handledGoogle) checkExistingSession();
-})();
+// NOTE: backup IIFE removed — current app's initApp() handles startup via checkAuth()
 </script>
 
 <!-- PROGRESSIVE JACKPOT SCREEN -->

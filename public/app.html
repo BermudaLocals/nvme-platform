@@ -248,6 +248,45 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .auth-error{background:rgba(255,75,75,0.15);border:1px solid rgba(255,75,75,0.4);border-radius:10px;padding:0.6rem 0.9rem;font-size:0.82rem;color:var(--red);margin-bottom:1rem;display:none}
 .auth-error.show{display:block}
 ::-webkit-scrollbar{width:0;height:0}
+
+/* Profile Edit */
+.profile-edit-btn{background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.4);color:#a78bfa;padding:8px 22px;border-radius:20px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:700;margin-top:.5rem;transition:all .2s}
+.profile-edit-btn:hover{background:rgba(124,58,237,.3)}
+.pedit-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px)}
+.pedit-overlay.active{display:flex}
+.pedit-sheet{background:#0f0f1a;border:1px solid rgba(124,58,237,.2);border-radius:24px 24px 0 0;width:100%;max-width:480px;padding:1.5rem 1.5rem 2.5rem}
+.pedit-handle{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 1.5rem}
+.pedit-sheet h3{font-size:1.2rem;font-weight:800;margin-bottom:1.25rem}
+.pedit-avatar-wrap{text-align:center;margin-bottom:1.5rem;position:relative;display:inline-block;left:50%;transform:translateX(-50%)}
+.pedit-avatar-img{width:88px;height:88px;border-radius:50%;object-fit:cover;background:linear-gradient(135deg,var(--purple),var(--pink));display:block}
+.pedit-avatar-change{position:absolute;bottom:0;right:0;background:var(--purple);border:2px solid #0f0f1a;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.75rem;color:#fff;font-weight:800}
+.pedit-field{margin-bottom:1rem}
+.pedit-field label{font-size:.75rem;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;font-weight:600;display:block;margin-bottom:.4rem}
+.pedit-input{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:12px 14px;border-radius:12px;font-family:'Outfit',sans-serif;font-size:.95rem;outline:none;transition:border-color .2s}
+.pedit-input:focus{border-color:var(--purple)}
+.pedit-counter{font-size:.72rem;color:rgba(255,255,255,.3);text-align:right;margin-top:.25rem}
+.pedit-save{width:100%;background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;padding:14px;border-radius:12px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:1rem;font-weight:800;margin-top:.25rem}
+.pedit-cancel{width:100%;background:transparent;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:12px;border-radius:12px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.9rem;margin-top:.75rem}
+
+/* Battle Guest Panel */
+.guest-panel{background:rgba(255,255,255,.04);border:1px solid rgba(124,58,237,.2);border-radius:16px;padding:1rem;margin:1rem 0}
+.guest-panel-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.4);font-weight:700;margin-bottom:.75rem}
+.guest-slots{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.guest-slot{background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.12);border-radius:12px;padding:.75rem;text-align:center;position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem}
+.guest-slot.filled{border-style:solid;border-color:rgba(124,58,237,.4);background:rgba(124,58,237,.06)}
+.guest-slot-label{font-size:.7rem;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.guest-slot-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#ff2e5b);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.9rem;margin:0 auto}
+.guest-slot-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.guest-slot-name{font-size:.8rem;font-weight:700;color:#fff}
+.guest-invite-btn{width:100%;background:rgba(124,58,237,.2);border:1px solid rgba(124,58,237,.4);color:#a78bfa;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:700;transition:all .2s;margin-top:.25rem}
+.guest-invite-btn:hover{background:rgba(124,58,237,.4)}
+.guest-remove-btn{position:absolute;top:6px;right:6px;background:rgba(255,46,91,.2);border:1px solid rgba(255,46,91,.3);color:#ff2e5b;width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:.65rem;display:flex;align-items:center;justify-content:center;line-height:1}
+.guest-live-badge{position:absolute;top:6px;left:6px;background:var(--pink);color:#fff;font-size:.55rem;font-weight:800;padding:2px 6px;border-radius:4px;letter-spacing:.05em}
+/* Guest invite search */
+.guest-search-wrap{display:flex;gap:.5rem;margin-top:.75rem}
+.guest-search-input{flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:8px 12px;border-radius:10px;font-family:'Outfit',sans-serif;font-size:.85rem;outline:none}
+.guest-search-input:focus{border-color:var(--purple)}
+.guest-search-btn{background:var(--purple);border:none;color:#fff;padding:8px 14px;border-radius:10px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.8rem;font-weight:700;white-space:nowrap}
 </style>
 <script src="/socket.io/socket.io.js">
 // ===== PROGRESSIVE JACKPOT =====
@@ -308,6 +347,188 @@ function showJackpotWin(d) {
 }
 // Load jackpot when screen shown
 const _origShowScreen = typeof showScreen === 'function' ? showScreen : null;
+
+// ===== PROFILE EDIT =====
+function openProfileEdit() {
+  const modal = document.getElementById('peditModal');
+  if(!currentUser) { showNotif && showNotif('Sign in first'); return; }
+  // Pre-fill fields
+  document.getElementById('peditDisplayName').value = currentUser.display_name || currentUser.username || '';
+  document.getElementById('peditUsername').value = currentUser.username || '';
+  document.getElementById('peditBio').value = currentUser.bio || '';
+  const img = document.getElementById('peditAvatarPreview');
+  img.src = currentUser.avatar_url || '/img/icon-192.png';
+  updateCounts();
+  modal.classList.add('active');
+}
+function closePeditOutside(e) {
+  if(e.target === document.getElementById('peditModal')) document.getElementById('peditModal').classList.remove('active');
+}
+function updateCounts() {
+  const dn = document.getElementById('peditDisplayName');
+  const bio = document.getElementById('peditBio');
+  if(dn) document.getElementById('peditDNCount').textContent = dn.value.length;
+  if(bio) document.getElementById('peditBioCount').textContent = bio.value.length;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const dn = document.getElementById('peditDisplayName');
+  const bio = document.getElementById('peditBio');
+  if(dn) dn.addEventListener('input', updateCounts);
+  if(bio) bio.addEventListener('input', updateCounts);
+});
+function previewAvatar(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById('peditAvatarPreview').src = e.target.result; };
+  reader.readAsDataURL(file);
+}
+async function saveProfile() {
+  const btn = document.querySelector('.pedit-save');
+  btn.textContent = 'Saving...'; btn.disabled = true;
+  try {
+    // 1. Upload avatar if new file selected
+    const fileInput = document.getElementById('peditFileInput');
+    if(fileInput.files[0]) {
+      const formData = new FormData();
+      formData.append('avatar', fileInput.files[0]);
+      const r = await fetch(API+'/api/profile/avatar', { method:'POST', headers:{ 'Authorization':'Bearer '+localStorage.getItem('empire_token') }, body: formData });
+      const d = await r.json();
+      if(d.ok) {
+        currentUser.avatar_url = d.avatar_url;
+        document.getElementById('profileAvatar').innerHTML = '<img src="'+d.avatar_url+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+      }
+    }
+    // 2. Update profile fields
+    const body = {
+      display_name: document.getElementById('peditDisplayName').value,
+      username: document.getElementById('peditUsername').value,
+      bio: document.getElementById('peditBio').value
+    };
+    const r2 = await fetch(API+'/api/profile', { method:'PUT', headers: authHeaders(), body: JSON.stringify(body) });
+    const d2 = await r2.json();
+    if(d2.ok) {
+      // Update currentUser
+      Object.assign(currentUser, d2.user);
+      // Update profile screen
+      const usernameEl = document.getElementById('profileUsername');
+      if(usernameEl) usernameEl.textContent = '@' + (d2.user.username || currentUser.username);
+      const bioEl = document.getElementById('profileBio');
+      if(bioEl) bioEl.textContent = d2.user.bio || 'Welcome to NVME';
+      // Update top nav username
+      const navUser = document.getElementById('navUsername');
+      if(navUser) navUser.textContent = '@' + d2.user.username;
+      document.getElementById('peditModal').classList.remove('active');
+      typeof showNotif === 'function' && showNotif('Profile updated!');
+    } else {
+      alert(d2.error || 'Update failed');
+    }
+  } catch(e) { alert('Network error: ' + e.message); }
+  finally { btn.textContent = 'Save Changes'; btn.disabled = false; }
+}
+
+// ===== BATTLE GUEST SYSTEM =====
+let activeStreamId = null;
+let invitingSlot = 1;
+let pendingInviteStreamId = null;
+
+function showGuestInvite(slot) {
+  invitingSlot = slot;
+  const wrap = document.getElementById('guestSearchWrap');
+  wrap.style.display = 'flex';
+  document.getElementById('guestSearchInput').focus();
+  document.getElementById('guestSearchInput').placeholder = `Enter @username for Guest ${slot}`;
+}
+
+async function sendGuestInvite() {
+  const username = document.getElementById('guestSearchInput').value.replace('@','').trim();
+  if(!username) return;
+  if(!activeStreamId) { alert('Start your live stream first'); return; }
+  try {
+    const r = await fetch(API+`/api/streams/${activeStreamId}/invite-guest`, {
+      method:'POST', headers: authHeaders(),
+      body: JSON.stringify({ guest_username: username })
+    });
+    const d = await r.json();
+    if(d.ok) {
+      updateGuestSlot(invitingSlot, d.guest);
+      document.getElementById('guestSearchInput').value = '';
+      document.getElementById('guestSearchWrap').style.display = 'none';
+      typeof showNotif === 'function' && showNotif(`Invited @${username} as Guest ${invitingSlot}`);
+    } else {
+      alert(d.error || 'Could not invite guest');
+    }
+  } catch(e) { alert('Network error'); }
+}
+
+function updateGuestSlot(slot, guest) {
+  const slotEl = document.getElementById(`guestSlot${slot}`);
+  if(!slotEl) return;
+  slotEl.classList.add('filled');
+  const avatarEl = document.getElementById(`guestAvatar${slot}`);
+  if(avatarEl) {
+    if(guest.avatar_url) avatarEl.innerHTML = `<img src="${guest.avatar_url}" alt="">`;
+    else avatarEl.textContent = (guest.username||'G')[0].toUpperCase();
+  }
+  const inviteBtn = slotEl.querySelector('.guest-invite-btn');
+  if(inviteBtn) inviteBtn.textContent = `@${guest.username}`;
+  // Add remove button
+  if(!slotEl.querySelector('.guest-remove-btn')) {
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'guest-remove-btn';
+    removeBtn.textContent = 'x';
+    removeBtn.onclick = () => removeGuest(slot, guest.id);
+    slotEl.appendChild(removeBtn);
+  }
+  // Add live badge
+  if(!slotEl.querySelector('.guest-live-badge')) {
+    const badge = document.createElement('div');
+    badge.className = 'guest-live-badge';
+    badge.textContent = 'INVITED';
+    slotEl.appendChild(badge);
+  }
+}
+
+async function removeGuest(slot, guestId) {
+  if(!activeStreamId) return;
+  await fetch(API+`/api/streams/${activeStreamId}/guests/${guestId}`, { method:'DELETE', headers: authHeaders() });
+  const slotEl = document.getElementById(`guestSlot${slot}`);
+  if(slotEl) {
+    slotEl.classList.remove('filled');
+    slotEl.innerHTML = `<div class="guest-slot-label">Guest ${slot}</div><div class="guest-slot-avatar" id="guestAvatar${slot}">+</div><button class="guest-invite-btn" onclick="showGuestInvite(${slot})">Invite Guest</button>`;
+  }
+}
+
+async function acceptGuestInvite() {
+  document.getElementById('guestInviteNotif').style.display = 'none';
+  if(!pendingInviteStreamId) return;
+  try {
+    const r = await fetch(API+`/api/streams/${pendingInviteStreamId}/join-as-guest`, { method:'POST', headers: authHeaders() });
+    const d = await r.json();
+    if(d.ok) typeof showNotif === 'function' && showNotif('Joined as battle guest!');
+  } catch(e) {}
+}
+
+// Listen for guest invitations via socket
+if(typeof socket !== 'undefined' && socket) {
+  socket.on('you_are_invited', (data) => {
+    pendingInviteStreamId = data.streamId;
+    document.getElementById('guestInviteText').textContent = `@${data.hostUsername} invited you to their battle!`;
+    document.getElementById('guestInviteNotif').style.display = 'block';
+    setTimeout(()=>{ document.getElementById('guestInviteNotif').style.display='none'; }, 30000);
+  });
+  socket.on('guest_joined', (data) => {
+    typeof showNotif === 'function' && showNotif(`@${data.guest.username} joined the battle!`);
+    // Update badge to LIVE
+    [1,2].forEach(s => {
+      const btn = document.querySelector(`#guestSlot${s} .guest-invite-btn`);
+      if(btn && btn.textContent.includes(data.guest.username)) {
+        const badge = document.querySelector(`#guestSlot${s} .guest-live-badge`);
+        if(badge) badge.textContent = 'LIVE';
+      }
+    });
+  });
+}
 </script>
 </head>
 <body>
@@ -1082,6 +1303,73 @@ checkAuth();
 
     <!-- Result -->
     <div id="jackpotResult" style="text-align:center;padding:16px;border-radius:12px;display:none;margin-bottom:20px;"></div>
+  </div>
+</div>
+
+<!-- PROFILE EDIT MODAL -->
+<div class="pedit-overlay" id="peditModal" onclick="closePeditOutside(event)">
+  <div class="pedit-sheet" onclick="event.stopPropagation()">
+    <div class="pedit-handle"></div>
+    <h3>Edit Profile</h3>
+    <div class="pedit-avatar-wrap">
+      <img class="pedit-avatar-img" id="peditAvatarPreview" src="/img/icon-192.png" alt="">
+      <div class="pedit-avatar-change" onclick="document.getElementById('peditFileInput').click()">+</div>
+      <input type="file" id="peditFileInput" accept="image/*" style="display:none" onchange="previewAvatar(event)">
+    </div>
+    <div class="pedit-field">
+      <label>Display Name</label>
+      <input class="pedit-input" id="peditDisplayName" type="text" maxlength="50" placeholder="Your display name">
+      <div class="pedit-counter"><span id="peditDNCount">0</span>/50</div>
+    </div>
+    <div class="pedit-field">
+      <label>Username</label>
+      <input class="pedit-input" id="peditUsername" type="text" maxlength="30" placeholder="@username">
+    </div>
+    <div class="pedit-field">
+      <label>Bio</label>
+      <textarea class="pedit-input" id="peditBio" maxlength="160" rows="3" placeholder="Tell the world who you are..."></textarea>
+      <div class="pedit-counter"><span id="peditBioCount">0</span>/160</div>
+    </div>
+    <button class="pedit-save" onclick="saveProfile()">Save Changes</button>
+    <button class="pedit-cancel" onclick="document.getElementById('peditModal').classList.remove('active')">Cancel</button>
+  </div>
+</div>
+
+<!-- BATTLE GUEST PANEL -->
+<div class="guest-panel" id="guestPanel" style="display:none;">
+  <div class="guest-panel-title">Battle Guests (max 2)</div>
+  <div class="guest-slots">
+    <!-- Guest Slot 1 -->
+    <div class="guest-slot" id="guestSlot1">
+      <div class="guest-slot-label">Guest 1</div>
+      <div class="guest-slot-avatar" id="guestAvatar1">+</div>
+      <button class="guest-invite-btn" onclick="showGuestInvite(1)">Invite Guest</button>
+    </div>
+    <!-- Guest Slot 2 -->
+    <div class="guest-slot" id="guestSlot2">
+      <div class="guest-slot-label">Guest 2</div>
+      <div class="guest-slot-avatar" id="guestAvatar2">+</div>
+      <button class="guest-invite-btn" onclick="showGuestInvite(2)">Invite Guest</button>
+    </div>
+  </div>
+  <!-- Search to invite -->
+  <div class="guest-search-wrap" id="guestSearchWrap" style="display:none;">
+    <input class="guest-search-input" id="guestSearchInput" type="text" placeholder="Enter @username to invite">
+    <button class="guest-search-btn" onclick="sendGuestInvite()">Invite</button>
+  </div>
+</div>
+
+<!-- Guest invite notification (shown to invited user) -->
+<div style="display:none;position:fixed;bottom:80px;left:1rem;right:1rem;z-index:500;" id="guestInviteNotif">
+  <div style="background:linear-gradient(135deg,rgba(124,58,237,.95),rgba(255,46,91,.95));border-radius:16px;padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;backdrop-filter:blur(10px);">
+    <div>
+      <div style="font-weight:800;font-size:.95rem;">Battle Invite!</div>
+      <div id="guestInviteText" style="font-size:.8rem;color:rgba(255,255,255,.8);">You have been invited to join a battle</div>
+    </div>
+    <div style="display:flex;gap:.5rem;flex-shrink:0;">
+      <button onclick="acceptGuestInvite()" style="background:#fff;color:#7c3aed;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:800;font-size:.82rem;">Join</button>
+      <button onclick="document.getElementById('guestInviteNotif').style.display='none';" style="background:rgba(255,255,255,.2);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:.82rem;">Decline</button>
+    </div>
   </div>
 </div>
 </body>

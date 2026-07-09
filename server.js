@@ -61,6 +61,164 @@ app.post('/api/jackpot/enter', authMiddleware, async (req, res) => {
   } catch(e) { console.error('Jackpot error:', e.message); res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// ============ PROFILE EDIT ROUTES ============
+
+// Upload profile photo
+const multer = require('multer');
+const uploadStorage = multer.diskStorage({
+  destination: (req,file,cb) => cb(null, 'public/uploads/avatars/'),
+  filename: (req,file,cb) => {
+    const ext = file.originalname.split('.').pop();
+    cb(null, 'avatar_' + req.user.id + '_' + Date.now() + '.' + ext);
+  }
+});
+const avatarUpload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req,file,cb) => {
+    if(file.mimetype.startsWith('image/')) cb(null,true);
+    else cb(new Error('Images only'));
+  }
+});
+
+// Ensure avatars directory exists
+const fs = require('fs');
+if(!fs.existsSync('public/uploads/avatars')) fs.mkdirSync('public/uploads/avatars', { recursive: true });
+
+// POST /api/profile/avatar — upload profile photo
+app.post('/api/profile/avatar', authMiddleware, avatarUpload.single('avatar'), async (req, res) => {
+  try {
+    if(!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
+    const avatarUrl = '/uploads/avatars/' + req.file.filename;
+    await db.query('UPDATE users SET avatar_url=$1 WHERE id=$2', [avatarUrl, req.user.id]);
+    res.json({ ok: true, avatar_url: avatarUrl });
+  } catch(e) { console.error('Avatar upload error:', e.message); res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// PUT /api/profile — update display name, bio, username
+app.put('/api/profile', authMiddleware, async (req, res) => {
+  try {
+    const { display_name, bio, username } = req.body;
+    // Validate username if provided
+    if(username) {
+      if(!/^[a-zA-Z0-9_]{3,30}$/.test(username))
+        return res.status(400).json({ ok: false, error: 'Username must be 3-30 chars, letters/numbers/underscores only' });
+      // Check not taken
+      const taken = await db.query('SELECT id FROM users WHERE username=$1 AND id!=$2', [username, req.user.id]);
+      if(taken.rows.length > 0)
+        return res.status(400).json({ ok: false, error: 'Username already taken' });
+    }
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let idx = 1;
+    if(display_name !== undefined) { updates.push(`display_name=$${idx++}`); values.push(display_name.slice(0,50)); }
+    if(bio !== undefined) { updates.push(`bio=$${idx++}`); values.push(bio.slice(0,160)); }
+    if(username !== undefined) { updates.push(`username=$${idx++}`); values.push(username); }
+    if(updates.length === 0) return res.status(400).json({ ok: false, error: 'Nothing to update' });
+    values.push(req.user.id);
+    const result = await db.query(
+      `UPDATE users SET ${updates.join(',')} WHERE id=$${idx} RETURNING id,username,display_name,bio,avatar_url`,
+      values
+    );
+    res.json({ ok: true, user: result.rows[0] });
+  } catch(e) { console.error('Profile update error:', e.message); res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ============ LIVE BATTLE GUEST SYSTEM ============
+// Invite up to 2 guests to a live battle
+app.post('/api/streams/:id/invite-guest', authMiddleware, async (req, res) => {
+  try {
+    const { guest_username } = req.body;
+    const streamId = req.params.id;
+    // Check stream exists and belongs to host
+    const stream = await db.query('SELECT * FROM live_streams WHERE id=$1', [streamId]);
+    if(!stream.rows[0]) return res.status(404).json({ ok:false, error:'Stream not found' });
+    // Find guest user
+    const guest = await db.query('SELECT id, username, avatar_url FROM users WHERE username=$1', [guest_username]);
+    if(!guest.rows[0]) return res.status(404).json({ ok:false, error:'User not found' });
+    // Check current guest count (max 2)
+    const currentGuests = await db.query(
+      "SELECT * FROM stream_guests WHERE stream_id=$1 AND status='active'", [streamId]
+    ).catch(() => ({ rows: [] }));
+    if(currentGuests.rows.length >= 2)
+      return res.status(400).json({ ok:false, error:'Maximum 2 guests allowed in battle' });
+    // Create or update guest_slots table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS stream_guests (
+        id SERIAL PRIMARY KEY,
+        stream_id TEXT NOT NULL,
+        guest_user_id TEXT NOT NULL,
+        guest_username VARCHAR(100),
+        guest_avatar TEXT,
+        status VARCHAR(20) DEFAULT 'invited',
+        slot INTEGER DEFAULT 1,
+        invited_at TIMESTAMP DEFAULT NOW()
+      )
+    `).catch(()=>{});
+    const slot = currentGuests.rows.length + 1;
+    await db.query(
+      'INSERT INTO stream_guests (stream_id, guest_user_id, guest_username, guest_avatar, status, slot) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING',
+      [streamId, guest.rows[0].id, guest.rows[0].username, guest.rows[0].avatar_url, 'invited', slot]
+    );
+    // Notify via socket
+    if(global.io) {
+      global.io.to(`stream_${streamId}`).emit('guest_invited', {
+        streamId, guest: guest.rows[0], slot
+      });
+      // Also notify the guest directly
+      global.io.emit('you_are_invited', {
+        streamId, hostUsername: req.user.username, slot
+      });
+    }
+    res.json({ ok:true, guest: guest.rows[0], slot, message:`${guest.rows[0].username} invited as Guest ${slot}` });
+  } catch(e) { console.error('Guest invite error:', e.message); res.status(500).json({ ok:false, error:e.message }); }
+});
+
+// GET guests for a stream
+app.get('/api/streams/:id/guests', async (req, res) => {
+  try {
+    const r = await db.query(
+      "SELECT * FROM stream_guests WHERE stream_id=$1 AND status='active' ORDER BY slot",
+      [req.params.id]
+    ).catch(() => ({ rows: [] }));
+    res.json({ ok:true, guests: r.rows });
+  } catch(e) { res.json({ ok:true, guests:[] }); }
+});
+
+// POST guest accepts/joins
+app.post('/api/streams/:id/join-as-guest', authMiddleware, async (req, res) => {
+  try {
+    await db.query(
+      "UPDATE stream_guests SET status='active' WHERE stream_id=$1 AND guest_user_id=$2",
+      [req.params.id, req.user.id]
+    ).catch(()=>{});
+    if(global.io) {
+      global.io.to(`stream_${req.params.id}`).emit('guest_joined', {
+        streamId: req.params.id,
+        guest: { id: req.user.id, username: req.user.username }
+      });
+    }
+    res.json({ ok:true, message:'Joined as guest' });
+  } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+
+// DELETE remove guest
+app.delete('/api/streams/:id/guests/:guestId', authMiddleware, async (req, res) => {
+  try {
+    await db.query(
+      "UPDATE stream_guests SET status='removed' WHERE stream_id=$1 AND guest_user_id=$2",
+      [req.params.id, req.params.guestId]
+    ).catch(()=>{});
+    if(global.io) {
+      global.io.to(`stream_${req.params.id}`).emit('guest_removed', {
+        streamId: req.params.id, guestId: req.params.guestId
+      });
+    }
+    res.json({ ok:true });
+  } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+
 const PORT = process.env.PORT || 3090;
 const IS_PROD = process.env.NODE_ENV === 'production';
 

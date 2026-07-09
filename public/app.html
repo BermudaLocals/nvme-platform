@@ -249,6 +249,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .auth-error.show{display:block}
 ::-webkit-scrollbar{width:0;height:0}
 </style>
+<script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
@@ -583,8 +584,26 @@ function enterApp(user){
   if(user.avatar_url){
     document.getElementById('profileAvatar').innerHTML = '<img src="'+user.avatar_url+'" alt="">';
   }
+
+  // Initialize socket.io for real-time features
+  if(typeof io !== 'undefined'){
+    const socketConn = io({ auth: { token: localStorage.getItem('nvme_token') } });
+    socketConn.on('connect', () => console.log('[Socket] Connected'));
+    socketConn.on('receive_dm', (msg) => {
+      console.log('[DM]', msg);
+      // Show notification
+      const notif = document.createElement('div');
+      notif.style.cssText = 'position:fixed;top:70px;right:1rem;background:#1a1a3a;border:1px solid rgba(124,92,252,0.4);border-radius:12px;padding:0.75rem 1rem;z-index:999;font-size:0.85rem;animation:fadeIn .3s ease';
+      notif.textContent = '💬 New message';
+      document.body.appendChild(notif);
+      setTimeout(() => notif.remove(), 3000);
+    });
+    socketConn.on('user_online', ({ userId }) => { /* update online indicators */ });
+    window._socket = socketConn;
+  }
   loadWalletBalance();
   renderFeed();
+  loadRealFeed();
   renderChats();
   renderExplore();
   renderTx();
@@ -609,6 +628,7 @@ async function loadWalletBalance(){
     document.getElementById('walletUSD').textContent = (coins*0.01).toFixed(2);
   } catch(e){}
 }
+function updateBalanceTo(newBal){ manusBalance=Math.max(0,newBal); document.getElementById('manus-bal').textContent=manusBalance.toLocaleString(); document.getElementById('walletCoins').textContent=manusBalance.toLocaleString(); document.getElementById('walletUSD').textContent=(manusBalance*0.01).toFixed(2); }
 function updateBalance(delta){
   manusBalance = Math.max(0, manusBalance+delta);
   document.getElementById('manus-bal').textContent = manusBalance.toLocaleString();
@@ -628,8 +648,29 @@ function goLive(){
 async function submitUpload(){
   const title = document.getElementById('uploadTitle').value.trim();
   const caption = document.getElementById('uploadCaption').value.trim();
+  const fileInput = document.getElementById('videoFileInput');
   if(!title) return alert('Please add a title');
-  alert('Video upload coming soon! Drop files at nvme.live/upload 📹');
+  const file = fileInput.files[0];
+  if(!file) {
+    // Text post if no file
+    try{
+      const r = await fetch(API+'/api/videos',{method:'POST',headers:authHeaders(),body:JSON.stringify({title,description:caption,url:'https://nvme.live/placeholder.mp4',thumbnail:'📹'})});
+      const d = await r.json();
+      if(d.ok){ alert('Posted! ✅'); document.getElementById('uploadTitle').value=''; document.getElementById('uploadCaption').value=''; showScreen('feed'); }
+      else alert(d.error || 'Post failed');
+    }catch(e){ alert('Network error'); }
+    return;
+  }
+  const fd = new FormData();
+  fd.append('video', file);
+  fd.append('title', title);
+  fd.append('caption', caption);
+  try{
+    const r = await fetch(API+'/api/upload',{method:'POST',headers:{'Authorization':'Bearer '+localStorage.getItem('nvme_token')},body:fd});
+    const d = await r.json();
+    if(d.ok){ alert('Video posted! ✅'); showScreen('feed'); }
+    else alert(d.error || 'Upload failed');
+  }catch(e){ alert('Upload error: '+e.message); }
 }
 function triggerUpload(){
   document.getElementById('videoFileInput').click();
@@ -786,33 +827,42 @@ function selectDie(el,sym){
   selectedDie=sym;
 }
 function setBet(val){document.getElementById('betAmount').value=val}
-function rollDice(){
+async function rollDice(){
   if(!selectedDie) return alert('Pick a symbol first! Tap one of the dice above.');
-  const syms=['👑','⚓','❤️','💎','♣️','⚡'];
+  const bet=parseInt(document.getElementById('betAmount').value)||50;
   const dice=document.querySelectorAll('.die');
   dice.forEach(d=>d.classList.add('rolling'));
-  setTimeout(()=>{
-    const results=[syms[Math.floor(Math.random()*6)],syms[Math.floor(Math.random()*6)],syms[Math.floor(Math.random()*6)]];
-    dice.forEach((d,i)=>{d.textContent=results[i];d.classList.remove('rolling')});
-    const bet=parseInt(document.getElementById('betAmount').value)||50;
-    const matches=results.filter(r=>r===selectedDie).length;
-    const banner=document.getElementById('resultBanner');
-    banner.classList.add('show');
-    if(matches>0){
-      const win=bet*matches;
-      banner.style.background='rgba(0,245,160,0.1)';
-      banner.style.borderColor='rgba(0,245,160,0.3)';
-      banner.style.color='var(--green)';
-      banner.textContent=`🎉 ${matches} match${matches>1?'es':''}! You won ${win} coins!`;
-      updateBalance(win);
-    } else {
-      banner.style.background='rgba(255,75,75,0.1)';
-      banner.style.borderColor='rgba(255,75,75,0.3)';
-      banner.style.color='var(--red)';
-      banner.textContent=`No match. Lost ${bet} coins. Try again!`;
-      updateBalance(-bet);
-    }
-  },600);
+  const banner=document.getElementById('resultBanner');
+  banner.classList.remove('show');
+  try {
+    const r = await fetch(API+'/api/games/roll',{method:'POST',headers:authHeaders(),body:JSON.stringify({bet,symbol:selectedDie})});
+    const d = await r.json();
+    setTimeout(()=>{
+      if(d.dice) dice.forEach((el,i)=>{el.textContent=d.dice[i];el.classList.remove('rolling');});
+      else dice.forEach(el=>el.classList.remove('rolling'));
+      banner.classList.add('show');
+      if(d.ok && d.won){
+        banner.style.background='rgba(0,245,160,0.1)';banner.style.borderColor='rgba(0,245,160,0.3)';banner.style.color='var(--green)';
+        banner.textContent=`🎉 ${d.matches} match${d.matches>1?'es':''}! You won ${d.winAmount} coins!`;
+        if(d.newBalance!==undefined) updateBalanceTo(d.newBalance);
+      } else {
+        banner.style.background='rgba(255,75,75,0.1)';banner.style.borderColor='rgba(255,75,75,0.3)';banner.style.color='var(--red)';
+        banner.textContent=d.error || `No match. Lost ${bet} coins. Try again!`;
+        if(d.newBalance!==undefined) updateBalanceTo(d.newBalance);
+      }
+    },600);
+  } catch(e){
+    // Fallback to local if API fails
+    const syms=['👑','⚓','❤️','💎','♣️','⚡'];
+    setTimeout(()=>{
+      const results=[syms[Math.floor(Math.random()*6)],syms[Math.floor(Math.random()*6)],syms[Math.floor(Math.random()*6)]];
+      dice.forEach((el,i)=>{el.textContent=results[i];el.classList.remove('rolling');});
+      const matches=results.filter(r=>r===selectedDie).length;
+      banner.classList.add('show');
+      if(matches>0){banner.style.background='rgba(0,245,160,0.1)';banner.style.borderColor='rgba(0,245,160,0.3)';banner.style.color='var(--green)';banner.textContent=`🎉 ${matches} match${matches>1?'es':''}! You won ${bet*matches} coins!`;updateBalance(bet*matches);}
+      else{banner.style.background='rgba(255,75,75,0.1)';banner.style.borderColor='rgba(255,75,75,0.3)';banner.style.color='var(--red)';banner.textContent=`No match. Lost ${bet} coins.`;updateBalance(-bet);}
+    },600);
+  }
 }
 
 // ---- GIFTS ----
@@ -864,6 +914,57 @@ function toggleCat(el){
 
 function showNotif(){spawnCoin({clientX:window.innerWidth-50,clientY:30})}
 
+
+async function loadRealFeed(){
+  try{
+    const r = await fetch(API+'/api/feed',{headers:authHeaders()});
+    if(!r.ok) return;
+    const videos = await r.json();
+    if(!Array.isArray(videos) || !videos.length) return;
+    const c=document.getElementById('feedContainer');
+    const syms=['🏝️','💰','🤖','🎵','⚓','❤️','🏄','💎'];
+    c.innerHTML=videos.map((v,i)=>`
+      <div class="feed-item">
+        <div class="feed-video-bg">${v.thumbnail||syms[i%syms.length]}</div>
+        <div class="feed-overlay"></div>
+        <div class="manus-badge">👁️ ${Number(v.view_count||v.views||0).toLocaleString()}</div>
+        <div class="feed-content">
+          <div class="feed-user">
+            <div class="feed-avatar">${(v.username||'U')[0].toUpperCase()}</div>
+            <span class="feed-username">@${v.username||'creator'}</span>
+            <button class="follow-btn" onclick="event.stopPropagation()">Follow</button>
+          </div>
+          <div class="feed-caption">${v.title||''}</div>
+          <div class="feed-tags">${(v.description||'').slice(0,60)}</div>
+        </div>
+        <div class="feed-actions">
+          <div class="feed-action" onclick="likeVideo(event,'${v.id}')">
+            <div class="feed-action-icon">❤️</div>
+            <div class="feed-action-count">${Number(v.like_count||0).toLocaleString()}</div>
+          </div>
+          <div class="feed-action">
+            <div class="feed-action-icon">💬</div>
+            <div class="feed-action-count">${Number(v.comment_count||0).toLocaleString()}</div>
+          </div>
+          <div class="feed-action" onclick="spawnCoin(event)">
+            <div class="feed-action-icon">🔗</div>
+            <div class="feed-action-count">Share</div>
+          </div>
+          <div class="feed-action" onclick="sendGift(event,'${v.author_id}')">
+            <div class="feed-action-icon">🎁</div>
+            <div class="feed-action-count">Gift</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+    console.log('[Feed] Loaded', videos.length, 'real videos');
+  } catch(e){ console.log('[Feed] Using demo data'); }
+}
+async function likeVideo(e, videoId){
+  e.stopPropagation();
+  spawnCoin(e);
+  try{ await fetch(API+'/api/videos/'+videoId+'/like',{method:'POST',headers:authHeaders()}); }catch(err){}
+}
 // ---- INIT ----
 checkAuth();
 </script>

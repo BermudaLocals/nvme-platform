@@ -12,6 +12,8 @@ const { Pool } = require('pg');
 const passport = require('passport');
 const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const session = require('express-session');
+const connectRedis = require('connect-redis');
+const Redis = require('ioredis');
 
 const app = express();
 const http = require('http');
@@ -22,11 +24,22 @@ const PORT = process.env.PORT || 3090;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // ── SESSION (required for passport) ──────────────────────────────────────────
+// Redis session store with graceful MemoryStore fallback
+let sessionStore = undefined;
+try {
+  if (process.env.REDIS_URL) {
+    const redisClient = new Redis(process.env.REDIS_URL);
+    const RedisStore = connectRedis(session);
+    sessionStore = new RedisStore({ client: redisClient, prefix: 'nvme:sess:' });
+    console.log('[Session] Redis store connected');
+  }
+} catch(e) { console.log('[Session] Redis unavailable, using MemoryStore:', e.message); }
 app.use(session({
+  store: sessionStore,
   secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'nvme-session-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: IS_PROD, maxAge: 7 * 24 * 60 * 60 * 1000 }
+  cookie: { secure: IS_PROD, sameSite: IS_PROD ? 'lax' : false, maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -1443,6 +1456,31 @@ io.on('connection', (socket) => {
   });
 
   // ── DISCONNECT ──────────────────────────────────────────────────────────
+  
+  // ── DM Handlers ──────────────────────────────────────────────
+  socket.on('join_dm', ({ withUserId }) => {
+    if (!userId) return;
+    const roomId = [userId, withUserId].sort().join(':');
+    socket.join('dm:' + roomId);
+  });
+  socket.on('send_dm', async ({ toUserId, message }) => {
+    if (!userId || !message) return;
+    const roomId = [userId, toUserId].sort().join(':');
+    const msg = { from: userId, to: toUserId, message, ts: new Date().toISOString() };
+    try {
+      await db.query(
+        'INSERT INTO messages (id, sender_id, recipient_id, content, created_at) VALUES (gen_random_uuid(), $1, $2, $3, NOW()) ON CONFLICT DO NOTHING',
+        [userId, toUserId, message]
+      ).catch(() => {});
+    } catch(e) {}
+    io.to('dm:' + roomId).emit('receive_dm', msg);
+  });
+  socket.on('typing_dm', ({ toUserId }) => {
+    if (!userId) return;
+    const roomId = [userId, toUserId].sort().join(':');
+    socket.to('dm:' + roomId).emit('typing_dm', { fromUserId: userId });
+  });
+
   socket.on('disconnect', () => {
     if (userId) {
       onlineUsers.delete(userId);
@@ -1587,7 +1625,58 @@ app.get('/api/creator/streams', authMiddleware, async (req, res) => {
 
 // ── Start ─────────────────────────────────────────────────────
 initDB().then(() => {
-  server.listen(PORT, '0.0.0.0', () => {
+  
+// ── Crown & Anchor Game ─────────────────────────────────────────
+app.post('/api/games/roll', authMiddleware, async (req, res) => {
+  try {
+    const { bet = 50, symbol } = req.body;
+    const betAmount = Math.min(Math.max(parseInt(bet) || 50, 10), 10000);
+    const symbols = ['👑','⚓','❤️','💎','♣️','⚡'];
+    if (!symbol || !symbols.includes(symbol)) return res.status(400).json({ error: 'Invalid symbol' });
+    // Check balance
+    const { rows } = await db.query('SELECT balance_credits FROM users WHERE id=$1', [req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    const balance = parseFloat(rows[0].balance_credits) || 0;
+    if (balance < betAmount) return res.status(400).json({ error: 'Insufficient coins', balance });
+    // Roll 3 dice
+    const dice = [symbols[Math.floor(Math.random()*6)], symbols[Math.floor(Math.random()*6)], symbols[Math.floor(Math.random()*6)]];
+    const matches = dice.filter(d => d === symbol).length;
+    const winAmount = matches > 0 ? betAmount * matches : 0;
+    const netChange = winAmount - betAmount;
+    // Update balance
+    await db.query('UPDATE users SET balance_credits = balance_credits + $1 WHERE id=$2', [netChange, req.user.id]);
+    const newBalance = balance + netChange;
+    res.json({ ok: true, dice, matches, won: matches > 0, winAmount, netChange, newBalance: Math.max(0, newBalance) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ── File Upload (CDN via local storage) ──────────────────────────
+const multer = require('multer');
+const path = require('path');
+const uploadDir = __dirname + '/public/uploads';
+require('fs').mkdirSync(uploadDir, { recursive: true });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9.]/g,'_'))
+});
+const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
+app.use('/uploads', require('express').static(uploadDir));
+app.post('/api/upload', authMiddleware, upload.single('video'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const url = '/uploads/' + req.file.filename;
+    const title = req.body.title || req.file.originalname;
+    const caption = req.body.caption || '';
+    const { rows } = await db.query(
+      'INSERT INTO videos (id, user_id, title, description, video_url, created_at) VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW()) RETURNING *',
+      [req.user.id, title, caption, url]
+    );
+    res.json({ ok: true, video: rows[0], url });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`[nvme.live] ONLINE :${PORT} | Empire: Dollar Double Empire`);
   });
 }).catch(e => {

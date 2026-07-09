@@ -1363,6 +1363,1030 @@ async function likeVideo(e, videoId){
 }
 // ---- INIT ----
 checkAuth();
+
+
+// ═══════════════════════════════════════════════════════
+// RICH FUNCTIONS — merged from backup (best-of-both)
+// ═══════════════════════════════════════════════════════
+
+function loginWithGoogle() {
+  // Preserve where we are so the backend can redirect straight back here after auth
+  window.location.href = `${API}/auth/google`;
+}
+
+// After the backend's /auth/google/callback redirects to /?auth=success (or ?auth=failed),
+// this checks the URL, and — since the callback sets an httpOnly JWT cookie — asks the
+// server who we are. Same-origin fetches send that cookie automatically, so no token
+// needs to sit in localStorage for this to work.
+
+async function handleGoogleAuthRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const authStatus = params.get('auth');
+  if (!authStatus) return false;
+
+  // Clean the query string so refreshing doesn't re-trigger this
+  window.history.replaceState({}, document.title, window.location.pathname);
+
+  if (authStatus === 'failed') {
+    showToast('Google sign-in failed. Please try again.');
+    return false;
+  }
+
+  if (authStatus === 'success') {
+    try {
+      const res = await fetch(`${API}/api/auth/me`);
+      if (!res.ok) throw new Error('Session lookup failed');
+      const data = await res.json();
+      currentUser = data.creator || data.user || data;
+      // If the server also hands back a bearer token, keep it so Socket.IO
+      // and any Authorization-header calls keep working too.
+      if (data.token) {
+        token = data.token;
+        localStorage.setItem('nvme_token', token);
+      }
+      enterApp();
+      showToast(`Welcome, ${currentUser?.username || 'creator'}! 👋`);
+      return true;
+    } catch (err) {
+      showToast('Signed in with Google, but could not load your profile.');
+      return false;
+    }
+  }
+  return false;
+}
+
+// ════════════════════════════════════════════
+// SOCKET.IO
+// ════════════════════════════════════════════
+
+function initSocket() {
+  if (socket) return;
+  socket = io('/', { auth: { token } });
+
+  socket.on('connect', () => {
+    console.log('Socket connected');
+    socket.emit('user_online', { token });
+  });
+
+  // Live events
+  socket.on('stream_live', (data) => {
+    showToast(`🔴 ${data.username} just went LIVE!`);
+    loadLiveStreams();
+  });
+
+  socket.on('stream_ended', () => loadLiveStreams());
+
+  socket.on('live_chat', (msg) => {
+    if (currentLiveStream) appendLiveChat(msg.username, msg.message);
+  });
+
+  socket.on('gift_sent', (data) => {
+    if (currentLiveStream) floatGift(data.emoji || '🎁');
+    showToast(`${data.from_username} sent a ${data.gift_name}!`);
+  });
+
+  socket.on('viewer_count', (data) => {
+    document.getElementById('live-viewer-count').textContent = `${data.count} viewers`;
+  });
+
+  // DM events
+  socket.on('dm_receive', (msg) => {
+    if (msg.sender_id === currentConversationId) {
+      appendMessage(msg, false);
+      socket.emit('dm_read', { conversation_id: currentConversationUser?.conv_id });
+    } else {
+      showToast(`💬 New message from ${msg.sender_username}`);
+    }
+    loadConversations();
+  });
+
+  socket.on('dm_typing', (data) => {
+    if (data.user_id === currentConversationId) {
+      showTyping();
+    }
+  });
+
+  // Presence
+  socket.on('user_online', (data) => updateOnlineStatus(data.user_id, true));
+  socket.on('user_offline', (data) => updateOnlineStatus(data.user_id, false));
+
+  // Call signaling
+  socket.on('call_incoming', (data) => {
+    if (confirm(`📞 Incoming ${data.type} call from ${data.from_username}. Answer?`)) {
+      openCallScreen(data.from_username, data.from_user_id, data.type);
+      socket.emit('call_answer', { call_id: data.call_id, accepted: true });
+    } else {
+      socket.emit('call_answer', { call_id: data.call_id, accepted: false });
+    }
+  });
+
+  socket.on('call_answered', (data) => {
+    if (data.accepted) {
+      document.getElementById('call-status').textContent = 'Connected';
+    } else {
+      endCall();
+      showToast('Call declined');
+    }
+  });
+
+  socket.on('call_ended', () => {
+    endCall();
+    showToast('Call ended');
+  });
+
+  // Battle
+  socket.on('battle_gift', (data) => {
+    loadBattles();
+    showToast(`⚔️ ${data.from_username} gifted in battle!`);
+  });
+}
+
+// ════════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════════
+
+async function handleSignup(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.textContent = 'Creating account...'; btn.disabled = true;
+
+  const username = document.getElementById('signup-username').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const password = document.getElementById('signup-password').value;
+
+  try {
+    const res = await fetch(`${API}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || data.message || 'Signup failed');
+
+    token = data.token;
+    localStorage.setItem('nvme_token', token);
+    currentUser = data.creator || data.user;
+    enterApp();
+  } catch (err) {
+    document.getElementById('signup-error').textContent = err.message;
+    btn.textContent = 'Create Account →'; btn.disabled = false;
+  }
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.textContent = 'Signing in...'; btn.disabled = true;
+
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+
+  try {
+    const res = await fetch(`${API}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || data.message || 'Login failed');
+
+    token = data.token;
+    localStorage.setItem('nvme_token', token);
+    currentUser = data.creator || data.user;
+    enterApp();
+  } catch (err) {
+    document.getElementById('login-error').textContent = err.message;
+    btn.textContent = 'Sign In →'; btn.disabled = false;
+  }
+}
+
+async function checkExistingSession() {
+  if (!token) return;
+  try {
+    const res = await fetch(`${API}/api/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Invalid session');
+    const data = await res.json();
+    currentUser = data.creator || data.user || data;
+    enterApp();
+  } catch {
+    localStorage.removeItem('nvme_token');
+    token = null;
+  }
+}
+
+function logout() {
+  fetch(`${API}/api/auth/logout`, { method: 'POST', headers: authHeaders() });
+  localStorage.removeItem('nvme_token');
+  token = null; currentUser = null;
+  if (socket) { socket.disconnect(); socket = null; }
+  document.getElementById('main-app').classList.remove('visible');
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+// ════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════
+
+function switchPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`panel-${name}`)?.classList.add('active');
+  const navMap = { feed: 0, live: 1, battle: 2, dms: 3, profile: 4 };
+  const navBtns = document.querySelectorAll('.nav-btn');
+  if (navMap[name] !== undefined) navBtns[navMap[name]]?.classList.add('active');
+}
+
+function switchFeedTab(tab, el) {
+  document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  loadFeed(tab);
+}
+
+// ════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════
+
+function showToast(msg, duration = 3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function initials(name) {
+  if (!name) return '?';
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+const COLORS = ['#ff2e5b','#9b59ff','#00aaff','#ff8800','#00ff88','#ffd700'];
+
+function colorFor(str) {
+  let hash = 0;
+  for (const c of (str || '')) hash = c.charCodeAt(0) + ((hash << 5) - hash);
+  return COLORS[Math.abs(hash) % COLORS.length];
+}
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr);
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+// ════════════════════════════════════════════
+// PROFILE UI
+// ════════════════════════════════════════════
+
+function updateProfileUI() {
+  if (!currentUser) return;
+  const name = currentUser.username || currentUser.display_name || 'Creator';
+  const initChar = initials(name);
+  const color = colorFor(name);
+
+  document.getElementById('top-avatar').textContent = initChar;
+  document.getElementById('top-avatar').style.background = `linear-gradient(135deg, ${color}, #9b59ff)`;
+
+  document.getElementById('profile-avatar-lg').textContent = initChar;
+  document.getElementById('profile-avatar-lg').style.background = `linear-gradient(135deg, ${color}, #9b59ff)`;
+  document.getElementById('profile-name-lg').textContent = name;
+  document.getElementById('profile-handle-lg').textContent = `@${name.toLowerCase().replace(/\s/g, '_')}`;
+}
+
+// ════════════════════════════════════════════
+// WALLET
+// ════════════════════════════════════════════
+
+async function loadWallet() {
+  try {
+    const res = await fetch(`${API}/api/wallet/balance`, { headers: authHeaders() });
+    const data = await res.json();
+    const bal = data.coin_balance || data.balance || 0;
+    document.getElementById('wallet-balance').textContent = `${bal} 🪙`;
+  } catch {}
+}
+
+function buyCoins() {
+  showToast('💰 Coin packages coming soon!');
+}
+
+// ════════════════════════════════════════════
+// FEED
+// ════════════════════════════════════════════
+
+async function loadFeed(type = 'forYou') {
+  const list = document.getElementById('feed-list');
+  list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Loading...</div>';
+
+  try {
+    const res = await fetch(`${API}/api/videos/feed?limit=20`, { headers: authHeaders() });
+    const data = await res.json();
+    const videos = data.videos || data || [];
+
+    if (!videos.length) {
+      list.innerHTML = `
+        <div style="text-align:center;padding:60px 24px;color:var(--muted)">
+          <div style="font-size:3rem;margin-bottom:16px">🎬</div>
+          <div style="font-weight:600;margin-bottom:8px">No videos yet</div>
+          <div style="font-size:0.85rem">Be the first to upload!</div>
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = videos.map(v => renderVideoCard(v)).join('');
+  } catch {
+    list.innerHTML = renderDemoFeed();
+  }
+}
+
+function renderVideoCard(v) {
+  const name = v.username || v.creator_username || 'creator';
+  const color = colorFor(name);
+  const initChar = initials(name);
+  const likes = v.like_count || v.likes || 0;
+  const comments = v.comment_count || v.comments || 0;
+
+  return `
+    <div class="video-card">
+      <div class="video-thumb" onclick="playVideo(${v.id})">
+        <span style="z-index:1;position:relative">${v.thumbnail_emoji || '🎬'}</span>
+        <div class="play-overlay">
+          <div class="play-btn-big">▶</div>
+        </div>
+      </div>
+      <div class="video-info">
+        <div class="video-meta">
+          <div class="avatar-sm" style="background:linear-gradient(135deg,${color},#9b59ff);pointer-events:none">${initChar}</div>
+          <div>
+            <div class="creator-name">${name}</div>
+            <div style="font-size:0.75rem;color:var(--muted)">${timeAgo(v.created_at)}</div>
+          </div>
+        </div>
+        ${v.description ? `<div class="video-desc">${v.description}</div>` : ''}
+        <div class="video-actions">
+          <button class="action-btn" onclick="likeVideo(${v.id},this)">❤️ ${likes}</button>
+          <button class="action-btn" onclick="openComments(${v.id})">💬 ${comments}</button>
+          <button class="action-btn" onclick="shareVideo(${v.id})">↗️ Share</button>
+          <button class="action-btn" onclick="sendGiftToUser('${name}')">🎁 Gift</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderDemoFeed() {
+  const demos = [
+    { id: 1, username: 'kingkwadz', emoji: '👑', desc: 'The empire is built. 100 apps by Dec 31. 🏆', likes: 412, comments: 28 },
+    { id: 2, username: 'sara_ai', emoji: '🤖', desc: 'AI-powered creator tools are live!', likes: 891, comments: 64 },
+    { id: 3, username: 'live_queen', emoji: '🔥', desc: 'Battle stream tonight at 9PM. Come ready ⚔️', likes: 234, comments: 17 },
+  ];
+  return demos.map(v => `
+    <div class="video-card">
+      <div class="video-thumb" onclick="showToast('Video player coming soon!')">
+        <span style="z-index:1;position:relative;font-size:4rem">${v.emoji}</span>
+        <div class="play-overlay"><div class="play-btn-big">▶</div></div>
+      </div>
+      <div class="video-info">
+        <div class="video-meta">
+          <div class="avatar-sm" style="background:linear-gradient(135deg,${colorFor(v.username)},#9b59ff);pointer-events:none">${initials(v.username)}</div>
+          <div><div class="creator-name">${v.username}</div><div style="font-size:0.75rem;color:var(--muted)">2h ago</div></div>
+        </div>
+        <div class="video-desc">${v.desc}</div>
+        <div class="video-actions">
+          <button class="action-btn" onclick="this.classList.toggle('liked');showToast('❤️ Liked!')">❤️ ${v.likes}</button>
+          <button class="action-btn" onclick="showToast('💬 Comments coming soon!')">💬 ${v.comments}</button>
+          <button class="action-btn" onclick="showToast('Link copied!')">↗️ Share</button>
+          <button class="action-btn" onclick="sendGiftToUser('${v.username}')">🎁 Gift</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function playVideo(id) { showToast('▶ Video player coming soon!'); }
+
+function openComments(id) { showToast('💬 Comments coming soon!'); }
+
+function shareVideo(id) {
+  if (navigator.share) navigator.share({ url: window.location.href });
+  else { navigator.clipboard?.writeText(window.location.href); showToast('Link copied!'); }
+}
+
+// ════════════════════════════════════════════
+// LIVE STREAMS
+// ════════════════════════════════════════════
+
+async function loadLiveStreams() {
+  const grid = document.getElementById('live-grid');
+
+  try {
+    const res = await fetch(`${API}/api/live/streams`, { headers: authHeaders() });
+    const data = await res.json();
+    const streams = data.streams || data || [];
+
+    if (!streams.length) {
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">
+          <div style="font-size:2.5rem;margin-bottom:12px">📡</div>
+          <div style="font-weight:600">No one live right now</div>
+          <div style="font-size:0.8rem;margin-top:6px">Be the first to go live!</div>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = streams.map(s => renderLiveCard(s)).join('');
+  } catch {
+    grid.innerHTML = renderDemoLiveStreams();
+  }
+}
+
+function renderLiveCard(s) {
+  const name = s.username || s.creator_username || 'Creator';
+  const color = colorFor(name);
+  return `
+    <div class="live-card" onclick="joinLiveStream(${JSON.stringify(s).replace(/"/g,'&quot;')})">
+      <div class="live-thumb">
+        <span style="font-size:2.5rem">${s.emoji || '🎬'}</span>
+        <div class="live-pulse">
+          <div class="pulse-dot"></div>
+          <span class="live-viewers">👁 ${s.viewer_count || 0}</span>
+        </div>
+      </div>
+      <div class="live-info">
+        <div class="live-creator">${name}</div>
+        <div class="live-title">${s.title || 'Live stream'}</div>
+      </div>
+    </div>`;
+}
+
+function renderDemoLiveStreams() {
+  const demos = [
+    { id: 1, username: 'kingkwadz', title: 'Empire Building Live 👑', emoji: '👑', viewers: 1204 },
+    { id: 2, username: 'sara_vibes', title: 'Late Night Chill ✨', emoji: '🌙', viewers: 432 },
+    { id: 3, username: 'dj_blaze', title: 'Friday Night Mix 🔥', emoji: '🎧', viewers: 887 },
+    { id: 4, username: 'battle_queen', title: '⚔️ Taking Challengers', emoji: '⚔️', viewers: 2103 },
+  ];
+  return demos.map(s => `
+    <div class="live-card" onclick="joinDemoLive('${s.username}','${s.title}',${s.viewers})">
+      <div class="live-thumb">
+        <span style="font-size:2.5rem">${s.emoji}</span>
+        <div class="live-pulse">
+          <div class="pulse-dot"></div>
+          <span class="live-viewers">👁 ${s.viewers.toLocaleString()}</span>
+        </div>
+      </div>
+      <div class="live-info">
+        <div class="live-creator">${s.username}</div>
+        <div class="live-title">${s.title}</div>
+      </div>
+    </div>`).join('');
+}
+
+// Go Live
+
+async function startGoLive() {
+  const title = prompt('Stream title (or leave blank):') || 'Live Stream';
+  try {
+    const res = await fetch(`${API}/api/live/start`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ title })
+    });
+    const data = await res.json();
+    const stream = data.stream || data;
+    joinLiveStream({ ...stream, username: currentUser?.username, isHost: true });
+  } catch {
+    // Demo mode
+    joinDemoLive(currentUser?.username || 'You', title, 0, true);
+  }
+}
+
+function joinDemoLive(username, title, viewers, isHost = false) {
+  joinLiveStream({ id: 'demo', username, title, viewer_count: viewers, isHost });
+}
+
+function joinLiveStream(stream) {
+  currentLiveStream = stream;
+  document.getElementById('live-creator-name').textContent = stream.username || 'Creator';
+  document.getElementById('live-viewer-count').textContent = `${stream.viewer_count || 0} viewers`;
+  const av = document.getElementById('stream-main-avatar');
+  av.textContent = initials(stream.username);
+  av.style.background = `linear-gradient(135deg, ${colorFor(stream.username)}, #9b59ff)`;
+  document.getElementById('live-creator-avatar').textContent = initials(stream.username);
+
+  buildGiftChips();
+  document.getElementById('live-room').classList.add('open');
+  document.getElementById('live-chat-messages').innerHTML = '';
+
+  if (socket && stream.id) {
+    socket.emit('join_stream', { stream_id: stream.id });
+  }
+}
+
+function closeLiveRoom() {
+  if (currentLiveStream && socket) {
+    socket.emit('leave_stream', { stream_id: currentLiveStream.id });
+  }
+  currentLiveStream = null;
+  document.getElementById('live-room').classList.remove('open');const NVME_GIFT_CATALOG = {
+  'Rose': '1c4ce61a-656f-4152-8efc-53a61008d218',
+  'Fire': 'f83ccb5c-2877-405a-8e0b-f490da75df10',
+  'Star': '77202b69-8e90-4df6-b94e-1ce9129e591f',
+  'Diamond': 'b8262da5-14d6-4a6f-afe7-a49dd22da0fe',
+  'Crown': '34f46c2b-f6fb-4359-91b8-7672a1eb75ee',
+  'Rocket': 'b5e672ba-dc83-4583-8273-d11d09e64271'
+};
+
+function buildGiftChips() {
+  const gifts = [
+    { name: 'Rose', emoji: '🌹', cost: 1 },
+    { name: 'Fire', emoji: '🔥', cost: 10 },
+    { name: 'Star', emoji: '⭐', cost: 20 },
+    { name: 'Diamond', emoji: '💎', cost: 50 },
+    { name: 'Crown', emoji: '👑', cost: 100 },
+    { name: 'Rocket', emoji: '🚀', cost: 200 },
+  ];
+  document.getElementById('live-gift-row').innerHTML = gifts.map(g =>
+    `<div class="gift-chip" onclick="sendLiveGift('${g.name}','${g.emoji}',${g.cost})">
+      ${g.emoji} <span>${g.name}</span> <span style="color:var(--gold)">${g.cost}🪙</span>
+    </div>`
+  ).join('');
+}
+
+async function sendLiveGift(name, emoji, cost) {
+  if (!currentLiveStream) return;
+  const giftId = NVME_GIFT_CATALOG[name];
+  if (!giftId) {
+    showToast(`⚠️ Unknown gift: ${name}`);
+    return;
+  }
+  if (currentLiveStream.id === 'demo') {
+    floatGift(emoji);
+    showToast(`${emoji} ${name} sent! (demo mode, not saved)`);
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/api/gifts/send`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        gift_id: giftId,
+        receiver_id: currentLiveStream.creator_id,
+        live_stream_id: currentLiveStream.id,
+        quantity: 1
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ Gift failed: ${err.error || res.status}`);
+      return;
+    }
+    floatGift(emoji);
+    showToast(`${emoji} ${name} sent! (-${cost}🪙)`);
+    if (socket) {
+      socket.emit('send_gift', {
+        stream_id: currentLiveStream.id,
+        gift_name: name,
+        emoji,
+        from_username: currentUser?.username
+      });
+    }
+  } catch (err) {
+    showToast(`⚠️ Network error sending gift`);
+    console.error('[gift] send failed:', err);
+  }
+}
+    `<div class="gift-chip" onclick="sendLiveGift('${g.name}','${g.emoji}',${g.cost})">
+      ${g.emoji} <span>${g.name}</span> <span style="color:var(--gold)">${g.cost}🪙</span>
+    </div>`
+  ).join('');
+}
+
+function sendGiftToUser(username) {
+  showToast(`🎁 Gifting ${username} — open their stream to send gifts!`);
+}
+
+function floatGift(emoji) {
+  const container = document.getElementById('gift-floats');
+  const el = document.createElement('div');
+  el.className = 'floating-gift';
+  el.textContent = emoji;
+  el.style.left = Math.random() * 80 + 10 + '%';
+  el.style.animationDuration = (1.8 + Math.random()) + 's';
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function sendLiveChat() {
+  const input = document.getElementById('live-chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  if (socket && currentLiveStream) {
+    socket.emit('live_chat', {
+      stream_id: currentLiveStream.id,
+      message: msg,
+      username: currentUser?.username
+    });
+  }
+  appendLiveChat(currentUser?.username || 'You', msg);
+}
+
+function appendLiveChat(username, msg) {
+  const container = document.getElementById('live-chat-messages');
+  const el = document.createElement('div');
+  el.className = 'chat-msg';
+  el.innerHTML = `<span class="chat-user">${username}</span>${msg}`;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+// ════════════════════════════════════════════
+// BATTLES
+// ════════════════════════════════════════════
+
+async function loadBattles() {
+  const list = document.getElementById('battle-list');
+  try {
+    const res = await fetch(`${API}/api/live/streams?type=battle`, { headers: authHeaders() });
+    const data = await res.json();
+    const battles = data.battles || [];
+    if (battles.length) {
+      list.innerHTML = battles.map(b => renderBattleCard(b)).join('');
+    } else {
+      list.innerHTML = renderDemoBattles();
+    }
+  } catch {
+    list.innerHTML = renderDemoBattles();
+  }
+}
+
+function renderDemoBattles() {
+  const demos = [
+    { a: { name: 'kingkwadz', score: 14200, emoji: '👑' }, b: { name: 'dj_blaze', score: 8900, emoji: '🎧' }, viewers: 3204, status: 'LIVE' },
+    { a: { name: 'sara_vibes', score: 22100, emoji: '🌙' }, b: { name: 'live_queen', score: 19800, emoji: '💎' }, viewers: 5500, status: 'LIVE' },
+    { a: { name: 'battle_goat', score: 5000, emoji: '🐐' }, b: { name: 'nova_x', score: 5000, emoji: '🚀' }, viewers: 890, status: 'Starting soon' },
+  ];
+  return demos.map(b => {
+    const total = b.a.score + b.b.score || 1;
+    const pct = Math.round(b.a.score / total * 100);
+    return `
+      <div class="battle-card" onclick="joinBattle()">
+        <div class="battle-vs">
+          <div class="battle-creator">
+            <div class="battle-avatar" style="background:linear-gradient(135deg,${colorFor(b.a.name)},#9b59ff)">${b.a.emoji}</div>
+            <div class="battle-creator-name">${b.a.name}</div>
+            <div class="battle-score">${b.a.score.toLocaleString()}🪙</div>
+          </div>
+          <div class="vs-badge">VS</div>
+          <div class="battle-creator">
+            <div class="battle-avatar" style="background:linear-gradient(135deg,${colorFor(b.b.name)},#ff8800)">${b.b.emoji}</div>
+            <div class="battle-creator-name">${b.b.name}</div>
+            <div class="battle-score">${b.b.score.toLocaleString()}🪙</div>
+          </div>
+        </div>
+        <div class="battle-bar">
+          <div class="battle-bar-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="battle-footer">
+          <span>${b.status === 'LIVE' ? '<span class="live-badge">● LIVE</span>' : b.status}</span>
+          <span>👁 ${b.viewers.toLocaleString()} watching</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderBattleCard(b) { return renderDemoBattles(); }
+
+function joinBattle() {
+  showToast('⚔️ Joining battle room...');
+  // Opens live room for a battle stream
+  joinDemoLive('battle_room', '⚔️ Battle Live', 2103);
+}
+
+async function challengeCreator() {
+  const username = prompt('Enter creator username to challenge:');
+  if (!username) return;
+  showToast(`⚔️ Challenge sent to @${username}!`);
+  if (socket) {
+    socket.emit('battle_challenge', {
+      to_username: username,
+      from_username: currentUser?.username
+    });
+  }
+}
+
+// ════════════════════════════════════════════
+// DMs
+// ════════════════════════════════════════════
+
+async function loadConversations() {
+  const list = document.getElementById('dm-list');
+  try {
+    const res = await fetch(`${API}/api/messages/conversations`, { headers: authHeaders() });
+    const data = await res.json();
+    const convs = data.conversations || data || [];
+
+    if (!convs.length) {
+      list.innerHTML = `
+        <div style="text-align:center;padding:60px 24px;color:var(--muted)">
+          <div style="font-size:2.5rem;margin-bottom:12px">💬</div>
+          <div style="font-weight:600">No messages yet</div>
+          <div style="font-size:0.8rem;margin-top:6px">Follow creators to start chatting</div>
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = convs.map(c => renderDMItem(c)).join('');
+  } catch {
+    list.innerHTML = renderDemoDMs();
+  }
+}
+
+function renderDMItem(c) {
+  const name = c.other_username || c.username || 'User';
+  const color = colorFor(name);
+  const unread = c.unread_count || 0;
+  return `
+    <div class="dm-item" onclick="openDMChat(${c.other_user_id || c.user_id},'${name}',${c.conversation_id || c.id})">
+      <div class="dm-avatar" style="background:linear-gradient(135deg,${color},#9b59ff)">
+        ${initials(name)}
+        ${c.is_online ? '<div class="online-dot"></div>' : ''}
+      </div>
+      <div class="dm-body">
+        <div class="dm-name">${name}</div>
+        <div class="dm-preview">${c.last_message || 'Say hello!'}</div>
+      </div>
+      <div class="dm-meta">
+        <div class="dm-time">${c.last_message_at ? timeAgo(c.last_message_at) : ''}</div>
+        ${unread ? `<div class="unread-badge">${unread}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderDemoDMs() {
+  const demos = [
+    { id: 1, name: 'sara_vibes', preview: 'Let\'s collab on the next stream 🔥', time: '2m', unread: 2, online: true },
+    { id: 2, name: 'kingkwadz', preview: 'Empire update: 57 agents live 👑', time: '15m', unread: 0, online: true },
+    { id: 3, name: 'dj_blaze', preview: 'GG on the battle last night', time: '1h', unread: 1, online: false },
+  ];
+  return demos.map(d => `
+    <div class="dm-item" onclick="openDemoDM('${d.name}')">
+      <div class="dm-avatar" style="background:linear-gradient(135deg,${colorFor(d.name)},#9b59ff)">
+        ${initials(d.name)}
+        ${d.online ? '<div class="online-dot"></div>' : ''}
+      </div>
+      <div class="dm-body">
+        <div class="dm-name">${d.name}</div>
+        <div class="dm-preview">${d.preview}</div>
+      </div>
+      <div class="dm-meta">
+        <div class="dm-time">${d.time}</div>
+        ${d.unread ? `<div class="unread-badge">${d.unread}</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function filterDMs(query) {
+  document.querySelectorAll('.dm-item').forEach(item => {
+    const name = item.querySelector('.dm-name')?.textContent.toLowerCase() || '';
+    item.style.display = name.includes(query.toLowerCase()) ? '' : 'none';
+  });
+}
+
+function openDemoDM(name) {
+  openDMChat(-1, name, -1);
+  // Populate demo messages
+  const msgs = document.getElementById('dm-messages');
+  msgs.innerHTML = `
+    <div class="msg-bubble theirs">Hey! Loved your last stream 🔥<div class="msg-time">2:14 PM</div></div>
+    <div class="msg-bubble mine">Thanks! Let's collab sometime<div class="msg-time">2:16 PM</div></div>
+    <div class="msg-bubble theirs">100% — battle tonight?<div class="msg-time">2:17 PM</div></div>
+  `;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function openDMChat(userId, username, convId) {
+  currentConversationId = userId;
+  currentConversationUser = { username, conv_id: convId };
+  document.getElementById('dm-chat-name').textContent = username;
+  document.getElementById('dm-chat-avatar').textContent = initials(username);
+  document.getElementById('dm-chat-avatar').style.background = `linear-gradient(135deg,${colorFor(username)},#9b59ff)`;
+  document.getElementById('dm-messages').innerHTML = '';
+  document.getElementById('dm-chat').classList.add('open');
+
+  if (userId > 0) loadMessages(convId);
+}
+
+async function loadMessages(convId) {
+  try {
+    const res = await fetch(`${API}/api/messages/${convId}`, { headers: authHeaders() });
+    const data = await res.json();
+    const messages = data.messages || data || [];
+    const container = document.getElementById('dm-messages');
+    container.innerHTML = messages.map(m => renderMessage(m)).join('');
+    container.scrollTop = container.scrollHeight;
+  } catch {}
+}
+
+function renderMessage(m) {
+  const mine = m.sender_id === currentUser?.id;
+  return `
+    <div class="msg-bubble ${mine ? 'mine' : 'theirs'}">
+      ${m.content || m.message}
+      <div class="msg-time">${timeAgo(m.created_at)}</div>
+    </div>`;
+}
+
+function appendMessage(m, mine = true) {
+  const container = document.getElementById('dm-messages');
+  const el = document.createElement('div');
+  el.className = `msg-bubble ${mine ? 'mine' : 'theirs'}`;
+  el.innerHTML = `${m.content || m.message}<div class="msg-time">now</div>`;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendDM() {
+  const input = document.getElementById('dm-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  appendMessage({ content: msg }, true);
+
+  if (currentConversationId > 0) {
+    try {
+      await fetch(`${API}/api/messages/send`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          recipient_id: currentConversationId,
+          content: msg
+        })
+      });
+    } catch {}
+
+    if (socket) {
+      socket.emit('dm_send', {
+        recipient_id: currentConversationId,
+        content: msg,
+        sender_username: currentUser?.username
+      });
+    }
+  }
+}
+
+function onDMTyping() {
+  if (!socket || currentConversationId <= 0) return;
+  socket.emit('dm_typing', { recipient_id: currentConversationId });
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    socket.emit('dm_stop_typing', { recipient_id: currentConversationId });
+  }, 2000);
+}
+
+function showTyping() {
+  const el = document.getElementById('typing-indicator');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function updateOnlineStatus(userId, online) {
+  // Update DM list indicators
+}
+
+function closeDMChat() {
+  document.getElementById('dm-chat').classList.remove('open');
+  currentConversationId = null;
+  currentConversationUser = null;
+}
+
+// ════════════════════════════════════════════
+// CALLS
+// ════════════════════════════════════════════
+
+function startVoiceCall() {
+  openCallScreen(currentConversationUser?.username, currentConversationId, 'voice');
+  if (socket && currentConversationId > 0) {
+    socket.emit('call_initiate', {
+      recipient_id: currentConversationId,
+      type: 'voice',
+      from_username: currentUser?.username
+    });
+  }
+}
+
+function startVideoCall() {
+  openCallScreen(currentConversationUser?.username, currentConversationId, 'video');
+  if (socket && currentConversationId > 0) {
+    socket.emit('call_initiate', {
+      recipient_id: currentConversationId,
+      type: 'video',
+      from_username: currentUser?.username
+    });
+  }
+  // Enable camera for video call
+  if (callState.type === 'video') {
+    document.getElementById('call-local-video').textContent = '📷';
+  }
+}
+
+function openCallScreen(name, userId, type = 'voice') {
+  callState = { active: true, muted: false, camOff: false, type };
+  document.getElementById('call-name').textContent = name || 'User';
+  document.getElementById('call-remote-avatar').textContent = initials(name);
+  document.getElementById('call-remote-avatar').style.background = `linear-gradient(135deg,${colorFor(name)},#9b59ff)`;
+  document.getElementById('call-status').textContent = 'Calling...';
+  document.getElementById('call-local-video').style.display = type === 'video' ? 'flex' : 'none';
+  document.getElementById('call-screen').classList.add('open');
+
+  // Simulate connection after 2s (real WebRTC would connect here)
+  setTimeout(() => {
+    if (callState.active) document.getElementById('call-status').textContent = 'Connected · 0:00';
+    startCallTimer();
+  }, 2000);
+}
+
+let callTimer = null;
+let callSeconds = 0;
+
+function startCallTimer() {
+  callSeconds = 0;
+  callTimer = setInterval(() => {
+    callSeconds++;
+    const m = Math.floor(callSeconds / 60);
+    const s = callSeconds % 60;
+    const el = document.getElementById('call-status');
+    if (el && callState.active) el.textContent = `Connected · ${m}:${s.toString().padStart(2,'0')}`;
+  }, 1000);
+}
+
+function toggleMute() {
+  callState.muted = !callState.muted;
+  document.getElementById('mute-btn').textContent = callState.muted ? '🔇' : '🎤';
+  showToast(callState.muted ? '🔇 Muted' : '🎤 Unmuted');
+}
+
+function toggleCam() {
+  callState.camOff = !callState.camOff;
+  document.getElementById('cam-btn').textContent = callState.camOff ? '🚫' : '📹';
+  showToast(callState.camOff ? 'Camera off' : 'Camera on');
+}
+
+function openUpload() { document.getElementById('upload-modal').classList.add('open'); }
+
+function closeUpload() { document.getElementById('upload-modal').classList.remove('open'); }
+
+function handleFileSelect(input) {
+  if (input.files[0]) {
+    const name = input.files[0].name;
+    document.querySelector('.upload-area p').innerHTML = `✅ ${name}<br><small style="color:var(--muted)">Ready to upload</small>`;
+  }
+}
+
+async function uploadVideo() {
+  const fileInput = document.getElementById('file-input');
+  const caption = document.getElementById('upload-caption').value;
+
+  if (!fileInput.files[0]) { showToast('Select a video first'); return; }
+
+  const formData = new FormData();
+  formData.append('video', fileInput.files[0]);
+  if (caption) formData.append('description', caption);
+
+  try {
+    const res = await fetch(`${API}/api/videos/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    showToast('🎬 Video uploaded!');
+    closeUpload();
+    loadFeed();
+  } catch (err) {
+    showToast('Upload failed: ' + err.message);
+  }
+}
+
+// ════════════════════════════════════════════
+// PROFILE
+// ════════════════════════════════════════════
+
+function editProfile() { showToast('✏️ Profile editor coming soon!'); }
+
+// ════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════
+(async () => {
+  const handledGoogle = await handleGoogleAuthRedirect();
+  if (!handledGoogle) checkExistingSession();
+})();
 </script>
 
 <!-- PROGRESSIVE JACKPOT SCREEN -->

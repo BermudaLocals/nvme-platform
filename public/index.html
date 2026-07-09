@@ -268,6 +268,7 @@ footer{
     <a href="#features">Features</a>
     <a href="#games">Games</a>
     <a href="#creators">Creators</a>
+    <a href="/merch.html">Merch</a>
   </div>
   <div class="nav-cta-wrap">
     <button class="btn-ghost" onclick="location.href='/app.html'">Sign In</button>
@@ -280,14 +281,14 @@ footer{
   <div class="hero-bg"></div>
   <div class="hero-grid"></div>
   <div class="hero-content">
-    <div class="hero-badge">🔴 5 creators live now</div>
+    <div class="hero-badge"><span style="color:var(--pink);font-weight:800;font-size:.7rem;">● LIVE</span>&nbsp; 5 creators streaming now</div>
     <img src="/img/icon-512.png" alt="NVME" class="hero-logo-img" onerror="this.style.display='none'">
     <h1 class="hero-title">NVME</h1>
     <p class="hero-tagline">Create · Stream · Battle</p>
     <p class="hero-sub">The creator platform with no limits. Go live, battle creators, send real gifts, earn real money. No follower gates. No restrictions.</p>
     <div class="hero-btns">
-      <button class="btn-hero-primary" onclick="location.href='/app.html'">🚀 Start Creating Free</button>
-      <button class="btn-hero-ghost" onclick="location.href='/app.html'">Sign In →</button>
+      <button class="btn-hero-primary" onclick="location.href='/app.html'">Start Creating Free</button>
+      <button class="btn-hero-ghost" onclick="location.href='/app.html'">Sign In</button>
     </div>
     <div class="hero-stats">
       <div class="stat"><div class="stat-num">100+</div><div class="stat-label">Gift Types</div></div>
@@ -306,8 +307,8 @@ footer{
       <h3>Live Right Now</h3>
       <p>Creators are streaming, battling, and earning — join them</p>
     </div>
-    <div class="live-viewers">👁️ 1,240 watching</div>
-    <button class="btn-primary" onclick="location.href='/app.html'">Watch Live →</button>
+    <div class="live-viewers" id="liveCount"> 1,240 watching</div>
+    <button class="btn-primary" onclick="location.href='/app.html'">Watch Live</button>
   </div>
 </div>
 
@@ -320,37 +321,37 @@ footer{
   </div>
   <div class="features-grid reveal">
     <div class="feature-card">
-      <div class="feature-icon">🔴</div>
+      <div class="feature-icon"></div>
       <h3>Go Live Instantly</h3>
       <p>No 1,000 follower minimum. No approval needed. Tap and you're streaming to the world.</p>
       <span class="feature-tag">No gate</span>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">⚔️</div>
+      <div class="feature-icon"></div>
       <h3>Creator Battles</h3>
       <p>Two creators. One stream. The audience decides with gifts. Real split-screen WebRTC battles.</p>
       <span class="feature-tag">Real-time</span>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🎁</div>
+      <div class="feature-icon"></div>
       <h3>Gift Economy</h3>
       <p>100+ animated gifts. Every gift moves real coins instantly from fan wallet to creator earnings.</p>
       <span class="feature-tag">Instant payout</span>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">💰</div>
+      <div class="feature-icon"></div>
       <h3>Earn From Day 1</h3>
       <p>Creators cash out real money via PayPal. No monthly minimums. No platform delays.</p>
       <span class="feature-tag">PayPal direct</span>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">📱</div>
+      <div class="feature-icon"></div>
       <h3>Install as App</h3>
       <p>Add NVME to your home screen. Full PWA — works like a native app on any phone.</p>
       <span class="feature-tag">PWA ready</span>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🔓</div>
+      <div class="feature-icon"></div>
       <h3>Less Restrictions</h3>
       <p>Creator freedom is the mission. Content that gets banned everywhere else has a home on NVME.</p>
       <span class="feature-tag">Creator first</span>
@@ -406,7 +407,7 @@ footer{
       <div class="game-info">
         <h3>Crown & Anchor</h3>
         <p>Bermuda's classic dice game. Match your symbol across 3 dice. Triple match pays 6:1.</p>
-        <button class="game-btn">Play Now →</button>
+        <button class="game-btn">Play Now &rarr;</button>
       </div>
     </div>
     <div class="game-card" onclick="location.href='/app.html'">
@@ -414,7 +415,7 @@ footer{
       <div class="game-info">
         <h3>Progressive Jackpot</h3>
         <p>50 coins per ticket. 1 in 500 odds. The entire pool goes to one winner — could be you.</p>
-        <button class="game-btn">Enter Jackpot →</button>
+        <button class="game-btn">Enter Jackpot &rarr;</button>
       </div>
     </div>
   </div>
@@ -425,8 +426,8 @@ footer{
   <h2 class="reveal">Ready to go live?</h2>
   <p class="reveal">Join thousands of creators earning real money with zero restrictions.</p>
   <div class="reveal" style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
-    <button class="btn-hero-primary" onclick="location.href='/app.html'">🚀 Create Free Account</button>
-    <button class="btn-hero-ghost" onclick="location.href='/app.html'">Sign In →</button>
+    <button class="btn-hero-primary" onclick="location.href='/app.html'"> Create Free Account</button>
+    <button class="btn-hero-ghost" onclick="location.href='/app.html'">Sign In</button>
   </div>
 </div>
 
@@ -441,6 +442,7 @@ footer{
     <a href="#features">Features</a>
     <a href="#games">Games</a>
     <a href="#creators">Creators</a>
+    <a href="/merch.html">Merch</a>
   </div>
   <div class="footer-copy">© 2026 NVME · Dollar Double Empire · All rights reserved</div>
 </footer>
@@ -458,7 +460,7 @@ setInterval(() => {
   viewers += Math.floor(Math.random() * 10) - 4;
   viewers = Math.max(800, Math.min(2000, viewers));
   const el = document.querySelector('.live-viewers');
-  if(el) el.textContent = '👁️ ' + viewers.toLocaleString() + ' watching';
+  if(el) el.textContent = ' ' + viewers.toLocaleString() + ' watching';
 }, 3000);
 
 // Load real jackpot amount

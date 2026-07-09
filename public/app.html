@@ -895,6 +895,20 @@ if(typeof socket !== 'undefined' && socket) {
 </div>
 
 <script>
+// ═══════════════════════════════════════
+// GOOGLE OAUTH TOKEN CAPTURE — runs first
+// ═══════════════════════════════════════
+(function() {
+  try {
+    const _p = new URLSearchParams(window.location.search);
+    const _t = _p.get('token');
+    if (_t && _t.length > 20) {
+      localStorage.setItem('nvme_token', _t);
+      window.history.replaceState({}, document.title, '/app.html');
+    }
+  } catch(e) {}
+})();
+
 const API = '';
 let currentUser = null;
 let manusBalance = 0;
@@ -968,21 +982,25 @@ function doLogout(){
   document.getElementById('moreNav').style.display='none';
 }
 async function checkAuth(){
-  // Check URL for token (from OAuth redirect)
-  const params = new URLSearchParams(window.location.search);
-  const urlToken = params.get('token');
-  if(urlToken){
-    localStorage.setItem('nvme_token', urlToken);
-    window.history.replaceState({}, '', '/app.html');
-  }
+  // Token already captured synchronously at script top
   const token = localStorage.getItem('nvme_token');
   if(!token) return;
   try{
-    const r = await fetch(API+'/api/auth/me',{headers:{'Authorization':'Bearer '+token}});
-    if(!r.ok){ localStorage.removeItem('nvme_token'); return; }
+    const r = await fetch(API+'/api/auth/me',{
+      headers:{'Authorization':'Bearer '+token},
+      signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined
+    });
+    if(r.status === 401 || r.status === 403){
+      // Only remove token if server explicitly rejects it
+      localStorage.removeItem('nvme_token'); return;
+    }
+    if(!r.ok) return; // Network/server error — keep token, try again next load
     const d = await r.json();
     enterApp(d.user || d);
-  } catch(e){}
+  } catch(e){
+    // Network error — DO NOT remove token, user may just be offline
+    console.warn('[checkAuth] Network error, keeping token:', e.message);
+  }
 }
 function enterApp(user){
   currentUser = user;
@@ -1404,6 +1422,12 @@ function loginWithGoogle() {
 
 async function handleGoogleAuthRedirect() {
   const params = new URLSearchParams(window.location.search);
+  // Handle both ?token=JWT (our server) and legacy ?auth=success (backup code)
+  const urlToken = params.get('token');
+  if (urlToken && urlToken.length > 20) {
+    // Already handled by synchronous capture at top — just return true
+    return true;
+  }
   const authStatus = params.get('auth');
   if (!authStatus) return false;
 

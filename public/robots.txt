@@ -1,0 +1,24 @@
+User-agent: *
+Allow: /
+Allow: /app.html
+Allow: /merch.html
+Disallow: /api/
+Disallow: /auth/
+Disallow: /uploads/
+
+# Major crawlers
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+Sitemap: https://nvme.live/sitemap.xml

@@ -923,7 +923,7 @@ async function doSignUp(){
   if(pass.length<8) return showAuthError('Password must be at least 8 characters');
   showAuthError('Creating your account...');
   try{
-    const r = await fetch(API+'/api/auth/signup',{
+    const r = await fetch(API+'/api/auth/register',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({username,email,password:pass})

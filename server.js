@@ -85,6 +85,87 @@ const avatarUpload = multer({
 const fs = require('fs');
 if(!fs.existsSync('public/uploads/avatars')) fs.mkdirSync('public/uploads/avatars', { recursive: true });
 
+// ── Sticker Storage ─────────────────────────────────────────────────────────
+const stickerStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'public/uploads/stickers/'),
+  filename: (req, file, cb) => cb(null, Date.now() + '-' + Math.random().toString(36).slice(2) + path.extname(file.originalname))
+});
+const stickerUpload = multer({
+  storage: stickerStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+  fileFilter: (req, file, cb) => {
+    if (/image\/(png|gif|webp|jpeg)/.test(file.mimetype)) cb(null, true);
+    else cb(new Error('Only PNG, GIF, WEBP, JPG allowed'));
+  }
+});
+if (!fs.existsSync('public/uploads/stickers')) fs.mkdirSync('public/uploads/stickers', { recursive: true });
+
+// Default empire sticker pack
+const DEFAULT_STICKERS = [
+  { id: 'def_1', url: null, emoji: '👑', name: 'Crown', is_default: true },
+  { id: 'def_2', url: null, emoji: '💰', name: 'Money', is_default: true },
+  { id: 'def_3', url: null, emoji: '🔥', name: 'Fire', is_default: true },
+  { id: 'def_4', url: null, emoji: '💎', name: 'Diamond', is_default: true },
+  { id: 'def_5', url: null, emoji: '🚀', name: 'Rocket', is_default: true },
+  { id: 'def_6', url: null, emoji: '⭐', name: 'Star', is_default: true },
+  { id: 'def_7', url: null, emoji: '🎯', name: 'Target', is_default: true },
+  { id: 'def_8', url: null, emoji: '💜', name: 'Heart', is_default: true },
+  { id: 'def_9', url: null, emoji: '🎬', name: 'Clapper', is_default: true },
+  { id: 'def_10', url: null, emoji: '🏆', name: 'Trophy', is_default: true },
+  { id: 'def_11', url: null, emoji: '⚡', name: 'Lightning', is_default: true },
+  { id: 'def_12', url: null, emoji: '🎵', name: 'Music', is_default: true },
+];
+
+// POST /api/stickers/upload — upload custom sticker
+app.post('/api/stickers/upload', authMiddleware, stickerUpload.single('sticker'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
+    const stickerUrl = '/uploads/stickers/' + req.file.filename;
+    const name = req.body.name || 'Custom Sticker';
+    // Save to DB
+    await db.query(
+      `INSERT INTO stickers (user_id, url, name) VALUES ($1, $2, $3)
+       ON CONFLICT DO NOTHING`,
+      [req.user.id, stickerUrl, name]
+    ).catch(async () => {
+      // Table might not exist yet — create it
+      await db.query(`CREATE TABLE IF NOT EXISTS stickers (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        url TEXT NOT NULL,
+        name TEXT DEFAULT 'Custom',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`);
+      await db.query(`INSERT INTO stickers (user_id, url, name) VALUES ($1, $2, $3)`, [req.user.id, stickerUrl, name]);
+    });
+    res.json({ ok: true, url: stickerUrl, name });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// GET /api/stickers — get user stickers + default pack
+app.get('/api/stickers', authMiddleware, async (req, res) => {
+  try {
+    let userStickers = [];
+    try {
+      const result = await db.query(
+        `SELECT id, url, name, created_at FROM stickers WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+        [req.user.id]
+      );
+      userStickers = result.rows.map(s => ({ ...s, is_default: false }));
+    } catch(e) { /* table not created yet */ }
+    res.json({ ok: true, stickers: [...DEFAULT_STICKERS, ...userStickers] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// DELETE /api/stickers/:id — delete custom sticker
+app.delete('/api/stickers/:id', authMiddleware, async (req, res) => {
+  try {
+    await db.query(`DELETE FROM stickers WHERE id=$1 AND user_id=$2`, [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+
 // POST /api/profile/avatar — upload profile photo
 app.post('/api/profile/avatar', authMiddleware, avatarUpload.single('avatar'), async (req, res) => {
   try {
@@ -655,6 +736,37 @@ app.get('/auth/google/callback',
     res.redirect(`/app.html?token=${token}&user=${encodeURIComponent(JSON.stringify({ id:req.user.id, email:req.user.email, username:req.user.username }))}`);
   }
 );
+
+
+// POST /api/wallet/deduct — deduct coins for platform features
+app.post('/api/wallet/deduct', authMiddleware, async (req, res) => {
+  try {
+    const { amount, reason } = req.body;
+    if (!amount || amount <= 0) return res.status(400).json({ ok: false, error: 'Invalid amount' });
+    // Check current balance
+    const result = await db.query(`SELECT coins FROM users WHERE id=$1`, [req.user.id]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'User not found' });
+    const current = result.rows[0].coins || 0;
+    if (current < amount) return res.status(402).json({ ok: false, error: 'Insufficient coins', balance: current });
+    // Deduct
+    const updated = await db.query(
+      `UPDATE users SET coins = coins - $1 WHERE id=$2 RETURNING coins`,
+      [amount, req.user.id]
+    );
+    const newBal = updated.rows[0].coins;
+    console.log(`[coins] ${req.user.email} spent ${amount} on ${reason} — balance: ${newBal}`);
+    res.json({ ok: true, balance: newBal, spent: amount, reason });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// GET /api/wallet/balance — get current coin balance
+app.get('/api/wallet/balance', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.query(`SELECT coins FROM users WHERE id=$1`, [req.user.id]);
+    const balance = result.rows[0]?.coins || 0;
+    res.json({ ok: true, balance });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 app.get('/health', (req, res) => res.json({
   app: 'nvme.live',

@@ -383,6 +383,25 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 button{-webkit-appearance:none;appearance:none}
 .auth-error{color:#ff2e5b;font-size:.85rem;text-align:center;min-height:1.2rem;padding:.25rem 0;transition:color .2s}
 .auth-error.show{display:block !important}
+
+/* ── CAMERA FILTERS ──────────────────────────────────────────────── */
+.filter-bar{display:flex;gap:0.5rem;padding:0.5rem;overflow-x:auto;scrollbar-width:none;background:rgba(0,0,0,0.5);border-radius:12px;margin:0.5rem}
+.filter-bar::-webkit-scrollbar{display:none}
+.filter-chip{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:6px 10px;border-radius:10px;border:2px solid transparent;transition:all .2s;min-width:60px}
+.filter-chip.active{border-color:var(--purple);background:rgba(124,92,252,.2)}
+.filter-chip .fpreview{width:44px;height:44px;border-radius:8px;background:#333;display:flex;align-items:center;justify-content:center;font-size:1.2rem;overflow:hidden}
+.filter-chip span{font-size:0.65rem;color:#aaa}
+.filter-chip.active span{color:var(--purple)}
+
+/* ── STICKER PICKER ──────────────────────────────────────────────── */
+.sticker-panel{position:absolute;bottom:60px;left:0;right:0;background:rgba(12,5,30,.97);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:1rem;max-height:280px;overflow-y:auto;z-index:500;display:none}
+.sticker-panel.open{display:block}
+.sticker-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:0.75rem}
+.sticker-item{width:48px;height:48px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:1.6rem;cursor:pointer;transition:transform .15s;border:2px solid transparent}
+.sticker-item:hover,.sticker-item:active{transform:scale(1.2);border-color:var(--purple)}
+.sticker-item img{width:100%;height:100%;object-fit:cover;border-radius:8px}
+.sticker-upload-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(124,92,252,.15);border:1px dashed var(--purple);border-radius:10px;color:var(--purple);font-size:0.85rem;cursor:pointer;width:100%;justify-content:center;margin-top:4px}
+
 </style>
 <script src="/socket.io/socket.io.js">
 // ===== PROGRESSIVE JACKPOT =====
@@ -710,7 +729,38 @@ if(typeof socket !== 'undefined' && socket) {
     <input class="upload-input" type="text" id="uploadTitle" placeholder="Give your video a title...">
     <textarea class="upload-input" id="uploadCaption" rows="3" style="resize:none" placeholder="Write a caption... #tags"></textarea>
     <div style="display:flex;gap:0.5rem">
-      <button class="upload-btn" style="flex:1" onclick="goLive()">🔴 Go Live</button>
+      
+<!-- CAMERA FILTERS -->
+<div id="cameraFilterBar" class="filter-bar" style="display:none">
+  <div class="filter-chip active" onclick="applyFilter('none',this)">
+    <div class="fpreview">📷</div><span>Normal</span>
+  </div>
+  <div class="filter-chip" onclick="applyFilter('beauty',this)">
+    <div class="fpreview" style="filter:brightness(1.1) saturate(1.2)">✨</div><span>Beauty</span>
+  </div>
+  <div class="filter-chip" onclick="applyFilter('bw',this)">
+    <div class="fpreview" style="filter:grayscale(1)">⬛</div><span>B&W</span>
+  </div>
+  <div class="filter-chip" onclick="applyFilter('vintage',this)">
+    <div class="fpreview" style="filter:sepia(.7) saturate(1.4)">🎞️</div><span>Vintage</span>
+  </div>
+  <div class="filter-chip" onclick="applyFilter('neon',this)">
+    <div class="fpreview" style="filter:hue-rotate(90deg) saturate(2)">💜</div><span>Neon</span>
+  </div>
+  <div class="filter-chip" onclick="applyFilter('warm',this)">
+    <div class="fpreview" style="filter:sepia(.3) saturate(1.5) brightness(1.05)">🌅</div><span>Warm</span>
+  </div>
+  <div class="filter-chip" onclick="applyFilter('cool',this)">
+    <div class="fpreview" style="filter:hue-rotate(190deg) saturate(1.3) brightness(1.1)">❄️</div><span>Cool</span>
+  </div>
+  <div class="filter-chip" onclick="applyFilter('dramatic',this)">
+    <div class="fpreview" style="filter:contrast(1.5) brightness(.9) saturate(.8)">🎭</div><span>Dramatic</span>
+  </div>
+  <div class="filter-chip" onclick="applyFilter('golden',this)">
+    <div class="fpreview" style="filter:sepia(.5) hue-rotate(-20deg) saturate(1.8)">🥇</div><span>Golden</span>
+  </div>
+</div>
+<button class="upload-btn" style="flex:1" onclick="goLive()">🔴 Go Live</button>
       <button class="upload-btn" style="flex:1;background:linear-gradient(135deg,var(--purple),var(--blue))" onclick="submitUpload()">Post Video</button>
     </div>
   </div>
@@ -1097,6 +1147,16 @@ async function requestPayout(){
   alert('Payout requests require minimum 1,000 coins. Visit your profile settings.');
 }
 function goLive(){
+  // Coin gate: 300 coins required to go live
+  const bal = parseInt(localStorage.getItem('nvme_coins') || '0');
+  if(bal < 300) {
+    showToast('You need 300 coins to go live 🎥 — tap Wallet to top up');
+    showScreen('wallet');
+    return;
+  }
+  // Deduct 300 coins
+  deductCoins(300, 'Go Live');
+  showFilterBar(true);
   // Show live setup screen first
   showScreen('upload');
   // Switch to the Go Live tab
@@ -1178,6 +1238,187 @@ function triggerUpload(){
 function handleVideoSelect(e){
   const f = e.target.files[0];
   if(f) document.getElementById('uploadTitle').placeholder = f.name;
+}
+
+
+// ── CAMERA FILTERS ────────────────────────────────────────────────
+const FILTERS = {
+  none:      '',
+  beauty:    'brightness(1.1) saturate(1.2) contrast(1.05)',
+  bw:        'grayscale(1) contrast(1.1)',
+  vintage:   'sepia(0.7) saturate(1.4) brightness(0.95)',
+  neon:      'hue-rotate(90deg) saturate(2) brightness(1.05)',
+  warm:      'sepia(0.3) saturate(1.5) brightness(1.05)',
+  cool:      'hue-rotate(190deg) saturate(1.3) brightness(1.1)',
+  dramatic:  'contrast(1.5) brightness(0.9) saturate(0.8)',
+  golden:    'sepia(0.5) hue-rotate(-20deg) saturate(1.8) brightness(1.05)',
+};
+let activeFilter = 'none';
+
+function applyFilter(name, el) {
+  activeFilter = name;
+  const video = document.getElementById('livePreview') || document.querySelector('video');
+  if (video) video.style.filter = FILTERS[name] || '';
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  showToast('Filter: ' + name.charAt(0).toUpperCase() + name.slice(1));
+}
+
+// Show filter bar when camera is active
+function showFilterBar(show) {
+  const bar = document.getElementById('cameraFilterBar');
+  if (bar) bar.style.display = show ? 'flex' : 'none';
+}
+
+// ── STICKER SYSTEM ─────────────────────────────────────────────────
+let stickerCache = null;
+
+async function loadStickers() {
+  if (stickerCache) return stickerCache;
+  try {
+    const r = await fetch(API + '/api/stickers', { headers: authHeaders() });
+    const d = await r.json();
+    if (d.ok) { stickerCache = d.stickers; return stickerCache; }
+  } catch(e) {}
+  // Fallback to default emoji stickers
+  return [
+    {id:'d1',emoji:'👑',name:'Crown',is_default:true},
+    {id:'d2',emoji:'💰',name:'Money',is_default:true},
+    {id:'d3',emoji:'🔥',name:'Fire',is_default:true},
+    {id:'d4',emoji:'💎',name:'Diamond',is_default:true},
+    {id:'d5',emoji:'🚀',name:'Rocket',is_default:true},
+    {id:'d6',emoji:'⭐',name:'Star',is_default:true},
+    {id:'d7',emoji:'🎯',name:'Target',is_default:true},
+    {id:'d8',emoji:'💜',name:'Heart',is_default:true},
+    {id:'d9',emoji:'🎬',name:'Clapper',is_default:true},
+    {id:'d10',emoji:'🏆',name:'Trophy',is_default:true},
+    {id:'d11',emoji:'⚡',name:'Lightning',is_default:true},
+    {id:'d12',emoji:'🎵',name:'Music',is_default:true},
+  ];
+}
+
+async function toggleStickerPanel(context) {
+  const panelId = context + '-sticker-panel';
+  let panel = document.getElementById(panelId);
+  if (!panel) {
+    // Create panel dynamically
+    panel = document.createElement('div');
+    panel.id = panelId;
+    panel.className = 'sticker-panel';
+    const inputEl = document.getElementById(context === 'dm' ? 'dm-input' : 'live-chat-input');
+    if (inputEl && inputEl.parentElement) inputEl.parentElement.appendChild(panel);
+  }
+  if (panel.classList.contains('open')) {
+    panel.classList.remove('open');
+    return;
+  }
+  // Load and render stickers
+  const stickers = await loadStickers();
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:0.85rem;color:#aaa">Stickers</span>
+      <label class="sticker-upload-btn" style="width:auto;margin:0">
+        + Upload Sticker
+        <input type="file" accept="image/png,image/gif,image/webp" style="display:none" onchange="uploadSticker(event,'${context}')">
+      </label>
+    </div>
+    <div class="sticker-grid">
+      ${stickers.map(s => s.url
+        ? `<div class="sticker-item" onclick="sendSticker('${s.url}','${context}')"><img src="${s.url}" alt="${s.name}"></div>`
+        : `<div class="sticker-item" onclick="sendSticker('${s.emoji}','${context}')">${s.emoji}</div>`
+      ).join('')}
+    </div>
+  `;
+  panel.classList.add('open');
+}
+
+function sendSticker(stickerOrEmoji, context) {
+  // Close panel
+  const panelId = context + '-sticker-panel';
+  const panel = document.getElementById(panelId);
+  if (panel) panel.classList.remove('open');
+
+  if (context === 'dm') {
+    // Send sticker as DM message
+    const isUrl = stickerOrEmoji.startsWith('/');
+    const msg = isUrl ? `<img src="${stickerOrEmoji}" style="max-width:80px;border-radius:8px">` : stickerOrEmoji;
+    appendMessage({ text: msg, sender: 'me', isSticker: true });
+    // Send via socket if available
+    if (typeof socket !== 'undefined' && socket && currentDMUser) {
+      socket.emit('dm', { to: currentDMUser, text: stickerOrEmoji, type: 'sticker' });
+    }
+  } else {
+    // Send as live chat message
+    appendLiveChat({ user: currentUser?.username || 'You', text: stickerOrEmoji, isSticker: true });
+    if (typeof socket !== 'undefined' && socket) {
+      socket.emit('live-chat', { text: stickerOrEmoji, type: 'sticker' });
+    }
+  }
+  showToast('Sticker sent!');
+}
+
+async function uploadSticker(event, context) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { showToast('Sticker must be under 2MB'); return; }
+
+  showToast('Uploading sticker...');
+  const fd = new FormData();
+  fd.append('sticker', file);
+  fd.append('name', file.name.replace(/\.[^.]+$/, ''));
+
+  try {
+    const r = await fetch(API + '/api/stickers/upload', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('nvme_token') },
+      body: fd
+    });
+    const d = await r.json();
+    if (d.ok) {
+      showToast('Sticker uploaded! ✅');
+      stickerCache = null; // Invalidate cache
+      toggleStickerPanel(context); // Reopen to show new sticker
+      setTimeout(() => toggleStickerPanel(context), 100);
+    } else {
+      showToast(d.error || 'Upload failed');
+    }
+  } catch(e) {
+    showToast('Upload error: ' + e.message);
+  }
+}
+
+
+function deductCoins(amount, reason) {
+  const current = parseInt(localStorage.getItem('nvme_coins') || '0');
+  const newBal = Math.max(0, current - amount);
+  localStorage.setItem('nvme_coins', newBal);
+  // Update UI balance display
+  const balEl = document.getElementById('coinBalance');
+  if(balEl) balEl.textContent = newBal;
+  // Log to server async (non-blocking)
+  fetch(API + '/api/wallet/deduct', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ amount, reason })
+  }).then(r => r.json()).then(d => {
+    if(d.balance !== undefined) {
+      localStorage.setItem('nvme_coins', d.balance);
+      if(balEl) balEl.textContent = d.balance;
+    }
+  }).catch(() => {});
+}
+
+function checkCoinBalance() {
+  // Fetch current balance from server and cache locally
+  fetch(API + '/api/wallet/balance', { headers: authHeaders() })
+    .then(r => r.json())
+    .then(d => {
+      if(d.balance !== undefined) {
+        localStorage.setItem('nvme_coins', d.balance);
+        const balEl = document.getElementById('coinBalance');
+        if(balEl) balEl.textContent = d.balance;
+      }
+    }).catch(() => {});
 }
 
 // ---- STATIC DEMO DATA (shown while API loads) ----
@@ -1999,7 +2240,20 @@ function joinDemoLive(username, title, viewers, isHost = false) {
   joinLiveStream({ id: 'demo', username, title, viewer_count: viewers, isHost });
 }
 
-function joinLiveStream(stream) {
+
+function joinLiveStream(streamId, hostUsername) {
+  // Coin gate: 100 coins required to join with audio
+  const bal = parseInt(localStorage.getItem('nvme_coins') || '0');
+  if(bal < 100) {
+    showToast('You need 100 coins to join a live stream 🎧 — tap Wallet to top up');
+    showScreen('wallet');
+    return;
+  }
+  deductCoins(100, 'Join Live (Audio)');
+  joinLiveStream_original(streamId, hostUsername);
+}
+
+function joinLiveStream_original(stream) {
   currentLiveStream = stream;
   document.getElementById('live-creator-name').textContent = stream.username || 'Creator';
   document.getElementById('live-viewer-count').textContent = `${stream.viewer_count || 0} viewers`;

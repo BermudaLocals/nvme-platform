@@ -1676,6 +1676,20 @@ app.post('/api/upload', authMiddleware, upload.single('video'), async (req, res)
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── Founder Bonus (one-time 10K coins for founder) ────────────────
+app.post('/api/wallet/founder-bonus', authMiddleware, async (req,res) => {
+  try {
+    const { rows } = await db.query('SELECT email, balance_credits FROM users WHERE id=$1',[req.user.id]);
+    if(!rows.length) return res.status(404).json({error:'not found'});
+    const founderEmails = ['dollardoublemarketing@gmail.com','digitalking@empire.com'];
+    if(!founderEmails.includes(rows[0].email)) return res.status(403).json({error:'Founders only'});
+    if(rows[0].balance_credits >= 1000) return res.json({ok:true,message:'Already has coins',balance:rows[0].balance_credits});
+    await db.query('UPDATE users SET balance_credits=10000 WHERE id=$1',[req.user.id]);
+    res.json({ok:true,message:'10,000 founder coins added!',balance:10000});
+  } catch(e){res.status(500).json({error:e.message});}
+});
+
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[nvme.live] ONLINE :${PORT} | Empire: Dollar Double Empire`);
   });

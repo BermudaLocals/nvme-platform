@@ -20,6 +20,47 @@ const http = require('http');
 const { Server: IOServer } = require('socket.io');
 const server = http.createServer(app);
 const io = new IOServer(server, { cors: { origin: '*', credentials: true } });
+// ============ PROGRESSIVE JACKPOT ============
+// GET jackpot pool (public)
+app.get('/api/jackpot', async (req, res) => {
+  try {
+    const r = await db.query('SELECT pool, total_entries, last_winner_username, last_won_at FROM jackpot_pool WHERE id=1');
+    const jp = r.rows[0] || { pool: 25000, total_entries: 0 };
+    res.json({ ok: true, pool: jp.pool, entries: jp.total_entries, lastWinner: jp.last_winner_username, lastWonAt: jp.last_won_at });
+  } catch(e) { res.json({ ok: true, pool: 25000, entries: 0, lastWinner: null }); }
+});
+
+// POST enter jackpot — 50 coins per ticket, 1:500 chance
+app.post('/api/jackpot/enter', authMiddleware, async (req, res) => {
+  const TICKET = 50;
+  const ODDS = 500;
+  const SEED = 25000;
+  try {
+    const u = await db.query('SELECT balance_credits, username FROM users WHERE id=$1', [req.user.id]);
+    const user = u.rows[0];
+    if (!user || user.balance_credits < TICKET)
+      return res.status(400).json({ ok: false, error: `Need ${TICKET} coins to enter` });
+    // Deduct ticket cost
+    await db.query('UPDATE users SET balance_credits = balance_credits - $1 WHERE id=$2', [TICKET, req.user.id]);
+    // 50% of ticket seeds the pool
+    await db.query('UPDATE jackpot_pool SET pool = pool + $1, total_entries = total_entries + 1 WHERE id=1', [Math.floor(TICKET * 0.5)]);
+    // Roll for jackpot
+    const won = Math.floor(Math.random() * ODDS) === 0;
+    if (won) {
+      const jp = await db.query('SELECT pool FROM jackpot_pool WHERE id=1');
+      const prize = jp.rows[0].pool;
+      await db.query('UPDATE users SET balance_credits = balance_credits + $1 WHERE id=$2', [prize, req.user.id]);
+      await db.query('UPDATE jackpot_pool SET pool=$1, last_winner_username=$2, last_won_at=NOW(), total_paid=total_paid+$3 WHERE id=1',
+        [SEED, user.username, prize]);
+      return res.json({ ok: true, won: true, prize, newBalance: user.balance_credits - TICKET + prize,
+        message: `🎉 JACKPOT! You won ${prize.toLocaleString()} coins!` });
+    }
+    const jp2 = await db.query('SELECT pool FROM jackpot_pool WHERE id=1');
+    res.json({ ok: true, won: false, pool: jp2.rows[0].pool, newBalance: user.balance_credits - TICKET,
+      message: `No win. Jackpot now ${jp2.rows[0].pool.toLocaleString()} coins!` });
+  } catch(e) { console.error('Jackpot error:', e.message); res.status(500).json({ ok: false, error: e.message }); }
+});
+
 const PORT = process.env.PORT || 3090;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -1648,6 +1689,9 @@ app.post('/api/games/roll', authMiddleware, async (req, res) => {
     const winAmount = netChange > 0 ? netChange : 0;
     // Update balance
     await db.query('UPDATE users SET balance_credits = balance_credits + $1 WHERE id=$2', [netChange, req.user.id]);
+    // 5% of each bet seeds the progressive jackpot
+    const jackpotSeed = Math.floor(betAmount * 0.05);
+    await db.query('UPDATE jackpot_pool SET pool = pool + $1, total_entries = total_entries + 1 WHERE id=1', [jackpotSeed]);
     const newBalance = balance + netChange;
     res.json({ ok: true, dice, matches, won: matches > 0, winAmount, netChange, newBalance: Math.max(0, newBalance) });
   } catch(e) { res.status(500).json({ error: e.message }); }

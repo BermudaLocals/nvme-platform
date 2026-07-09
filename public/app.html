@@ -742,6 +742,28 @@ if(typeof socket !== 'undefined' && socket) {
       <div class="p2p-pill">Crypto</div>
     </div>
   </div>
+
+  <!-- CRYPTO WALLET SECTION -->
+  <div class="p2p-section" id="cryptoSection" style="margin-top:1rem">
+    <div class="p2p-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>ETH Wallet</span>
+      <span id="ethUsdVal" style="font-size:0.85rem;color:#a78bfa;font-weight:600">Loading...</span>
+    </div>
+    <div id="ethAddressBox" style="background:rgba(124,92,252,0.1);border:1px solid rgba(124,92,252,0.3);border-radius:12px;padding:0.8rem;margin-top:0.6rem">
+      <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">Your ETH Deposit Address</div>
+      <div id="ethAddress" style="font-size:0.72rem;color:#e2e8f0;word-break:break-all;font-family:monospace">Tap load to generate</div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.6rem">
+        <button onclick="loadCryptoWallet()" style="flex:1;background:var(--purple);color:white;border:none;border-radius:8px;padding:0.4rem;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:Outfit,sans-serif">Load Wallet</button>
+        <button onclick="copyEthAddress()" id="copyBtn" style="flex:1;background:rgba(255,255,255,0.1);color:white;border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:0.4rem;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:Outfit,sans-serif">Copy</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem">
+      <div class="p2p-pill" onclick="loadCryptoWallet()">Refresh</div>
+      <div class="p2p-pill" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#fbbf24">BTC Soon</div>
+      <div class="p2p-pill" style="background:rgba(52,211,153,0.15);border-color:rgba(52,211,153,0.4);color:#34d399">USDT Soon</div>
+    </div>
+    <div id="ethTxList" style="margin-top:0.6rem;font-size:0.75rem;color:var(--muted)"></div>
+  </div>
 </div>
 
 <!-- CROWN & ANCHOR GAME -->
@@ -2385,6 +2407,68 @@ function editProfile() { showToast('✏️ Profile editor coming soon!'); }
 // INIT
 // ════════════════════════════════════════════
 // NOTE: backup IIFE removed — current app's initApp() handles startup via checkAuth()
+
+// === CRYPTO WALLET ===
+async function loadCryptoWallet() {
+  const box = document.getElementById('ethAddress');
+  const usdVal = document.getElementById('ethUsdVal');
+  if(box) box.textContent = 'Loading...';
+  try {
+    const [addrRes, balRes] = await Promise.all([
+      fetch('/api/wallet/crypto/address', { headers: authHeaders() }),
+      fetch('/api/wallet/crypto/balance', { headers: authHeaders() })
+    ]);
+    const addr = await addrRes.json();
+    const bal = await balRes.json();
+    if(addr.ok && box) {
+      box.textContent = addr.address;
+      document.getElementById('copyBtn').dataset.addr = addr.address;
+    }
+    if(bal.ok && usdVal) {
+      usdVal.textContent = bal.eth + ' ETH ($' + bal.usd + ')';
+    }
+    loadEthTxs();
+  } catch(e) {
+    if(box) box.textContent = 'Error loading wallet';
+  }
+}
+
+async function loadEthTxs() {
+  try {
+    const res = await fetch('/api/wallet/crypto/transactions', { headers: authHeaders() });
+    const d = await res.json();
+    const el = document.getElementById('ethTxList');
+    if(!el || !d.txs || !d.txs.length) {
+      if(el) el.innerHTML = '<div style="color:var(--muted);font-size:0.75rem;padding:0.4rem 0">No ETH transactions yet</div>';
+      return;
+    }
+    el.innerHTML = d.txs.slice(0,5).map(tx => {
+      const val = tx.value ? parseFloat(tx.value).toFixed(5) : '?';
+      const hash = tx.hash ? tx.hash.substring(0,12) + '...' : '';
+      return `<div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+        <span>${hash}</span>
+        <span style="color:#34d399">+${val} ETH</span>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+function copyEthAddress() {
+  const btn = document.getElementById('copyBtn');
+  const addr = btn?.dataset?.addr || document.getElementById('ethAddress')?.textContent;
+  if(!addr || addr === 'Tap load to generate' || addr === 'Loading...') return;
+  navigator.clipboard.writeText(addr).then(() => {
+    if(btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = addr;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    if(btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+  });
+}
 </script>
 
 <!-- PROGRESSIVE JACKPOT SCREEN -->

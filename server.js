@@ -2063,12 +2063,178 @@ app.post('/api/wallet/founder-bonus', authMiddleware, async (req,res) => {
   } catch(e){res.status(500).json({error:e.message});}
 });
 
+
+// ============================================================
+// NVME NATIVE CRYPTO WALLET ROUTES
+// Ethereum HD wallet via Alchemy API
+// ============================================================
+const cryptoWallet = require('./modules/crypto-wallet');
+
+// Auto-create crypto_wallets table
+db.query(`
+  CREATE TABLE IF NOT EXISTS crypto_wallets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    eth_address VARCHAR(42) NOT NULL,
+    wallet_index INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+`).catch(e => console.log('crypto_wallets table ready'));
+
+// GET /api/wallet/crypto/address - get or create user ETH deposit address
+app.get('/api/wallet/crypto/address', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Check if user already has a wallet
+    let result = await db.query('SELECT eth_address, wallet_index FROM crypto_wallets WHERE user_id = $1', [userId]);
+    if (result.rows.length > 0) {
+      const bal = await cryptoWallet.getEthBalance(result.rows[0].eth_address);
+      return res.json({ ok: true, address: result.rows[0].eth_address, balance: bal });
+    }
+    // Generate new address — use count of existing wallets as index
+    const countRes = await db.query('SELECT COUNT(*) FROM crypto_wallets');
+    const walletIndex = parseInt(countRes.rows[0].count) || 0;
+    const ethAddress = cryptoWallet.getUserWalletAddress(walletIndex);
+    if (!ethAddress) throw new Error('Wallet generation failed');
+    await db.query(
+      'INSERT INTO crypto_wallets (user_id, eth_address, wallet_index) VALUES ($1, $2, $3)',
+      [userId, ethAddress, walletIndex]
+    );
+    const bal = await cryptoWallet.getEthBalance(ethAddress);
+    res.json({ ok: true, address: ethAddress, balance: bal, new: true });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/wallet/crypto/balance - get ETH balance + USD value
+app.get('/api/wallet/crypto/balance', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.query('SELECT eth_address FROM crypto_wallets WHERE user_id = $1', [req.user.id]);
+    if (!result.rows.length) return res.json({ ok: true, eth: '0.000000', usd: 0, address: null });
+    const address = result.rows[0].eth_address;
+    const [bal, ethPrice] = await Promise.all([
+      cryptoWallet.getEthBalance(address),
+      cryptoWallet.getEthPrice()
+    ]);
+    const usd = (parseFloat(bal.eth) * ethPrice).toFixed(2);
+    res.json({ ok: true, eth: bal.eth, usd, address, ethPrice });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/wallet/crypto/transactions - recent ETH transactions
+app.get('/api/wallet/crypto/transactions', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.query('SELECT eth_address FROM crypto_wallets WHERE user_id = $1', [req.user.id]);
+    if (!result.rows.length) return res.json({ ok: true, txs: [] });
+    const txs = await cryptoWallet.getRecentTxs(result.rows[0].eth_address, 10);
+    res.json({ ok: true, txs });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/wallet/crypto/eth-price - current ETH price in USD
+app.get('/api/wallet/crypto/eth-price', async (req, res) => {
+  try {
+    const price = await cryptoWallet.getEthPrice();
+    res.json({ ok: true, price, symbol: 'ETH', currency: 'USD' });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[nvme.live] ONLINE :${PORT} | Empire: Dollar Double Empire`);
   });
 }).catch(e => {
   console.error('[nvme.live] DB init failed:', e.message);
-  server.listen(PORT, '0.0.0.0', () => {
+  
+// ============================================================
+// NVME NATIVE CRYPTO WALLET ROUTES
+// Ethereum HD wallet via Alchemy API
+// ============================================================
+const cryptoWallet = require('./modules/crypto-wallet');
+
+// Auto-create crypto_wallets table
+db.query(`
+  CREATE TABLE IF NOT EXISTS crypto_wallets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    eth_address VARCHAR(42) NOT NULL,
+    wallet_index INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+`).catch(e => console.log('crypto_wallets table ready'));
+
+// GET /api/wallet/crypto/address - get or create user ETH deposit address
+app.get('/api/wallet/crypto/address', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Check if user already has a wallet
+    let result = await db.query('SELECT eth_address, wallet_index FROM crypto_wallets WHERE user_id = $1', [userId]);
+    if (result.rows.length > 0) {
+      const bal = await cryptoWallet.getEthBalance(result.rows[0].eth_address);
+      return res.json({ ok: true, address: result.rows[0].eth_address, balance: bal });
+    }
+    // Generate new address — use count of existing wallets as index
+    const countRes = await db.query('SELECT COUNT(*) FROM crypto_wallets');
+    const walletIndex = parseInt(countRes.rows[0].count) || 0;
+    const ethAddress = cryptoWallet.getUserWalletAddress(walletIndex);
+    if (!ethAddress) throw new Error('Wallet generation failed');
+    await db.query(
+      'INSERT INTO crypto_wallets (user_id, eth_address, wallet_index) VALUES ($1, $2, $3)',
+      [userId, ethAddress, walletIndex]
+    );
+    const bal = await cryptoWallet.getEthBalance(ethAddress);
+    res.json({ ok: true, address: ethAddress, balance: bal, new: true });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/wallet/crypto/balance - get ETH balance + USD value
+app.get('/api/wallet/crypto/balance', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.query('SELECT eth_address FROM crypto_wallets WHERE user_id = $1', [req.user.id]);
+    if (!result.rows.length) return res.json({ ok: true, eth: '0.000000', usd: 0, address: null });
+    const address = result.rows[0].eth_address;
+    const [bal, ethPrice] = await Promise.all([
+      cryptoWallet.getEthBalance(address),
+      cryptoWallet.getEthPrice()
+    ]);
+    const usd = (parseFloat(bal.eth) * ethPrice).toFixed(2);
+    res.json({ ok: true, eth: bal.eth, usd, address, ethPrice });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/wallet/crypto/transactions - recent ETH transactions
+app.get('/api/wallet/crypto/transactions', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.query('SELECT eth_address FROM crypto_wallets WHERE user_id = $1', [req.user.id]);
+    if (!result.rows.length) return res.json({ ok: true, txs: [] });
+    const txs = await cryptoWallet.getRecentTxs(result.rows[0].eth_address, 10);
+    res.json({ ok: true, txs });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/wallet/crypto/eth-price - current ETH price in USD
+app.get('/api/wallet/crypto/eth-price', async (req, res) => {
+  try {
+    const price = await cryptoWallet.getEthPrice();
+    res.json({ ok: true, price, symbol: 'ETH', currency: 'USD' });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`[nvme.live] ONLINE :${PORT} (no DB — check DATABASE_URL)`);
   });
 });

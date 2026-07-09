@@ -24,7 +24,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 /* TOP NAV */
 .topnav{position:fixed;top:0;left:0;right:0;height:var(--nav);display:flex;align-items:center;justify-content:space-between;padding:0 1rem;z-index:200;background:rgba(5,5,13,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
-.logo{font-family:'Outfit',sans-serif;font-weight:900;font-size:1.5rem;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:0.06em}
+.logo{font-family:'Outfit',sans-serif;font-weight:900;font-size:1.1rem;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:0.08em}
 .nav-icons{display:flex;gap:0.75rem;align-items:center}
 .nav-icon{width:36px;height:36px;border-radius:50%;background:var(--s2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;transition:all .2s}
 .nav-icon:active{transform:scale(0.9)}
@@ -535,8 +535,8 @@ if(typeof socket !== 'undefined' && socket) {
 
 <!-- AUTH OVERLAY -->
 <div class="auth-overlay" id="authOverlay">
-  <div class="auth-logo-wrap">
-    <img src="/img/icon-512.png" alt="NVME" style="width:110px;height:110px;border-radius:24px;margin-bottom:1.2rem;box-shadow:0 12px 40px rgba(124,92,252,0.55)" onerror="this.style.display='none'">
+  <div class="auth-logo-wrap" style="text-align:center;display:flex;flex-direction:column;align-items:center;">
+    <img src="/img/icon-512.png" alt="NVME" style="width:140px;height:140px;border-radius:28px;margin:0 auto 1.5rem;display:block;box-shadow:0 16px 56px rgba(124,92,252,0.65)" onerror="this.style.display='none'">
     <div class="auth-tagline">CREATE · STREAM · BATTLE</div>
   </div>
   <div class="auth-card">
@@ -573,7 +573,7 @@ if(typeof socket !== 'undefined' && socket) {
 
 <!-- TOP NAV -->
 <nav class="topnav" id="topNav" style="display:none">
-  <div style="display:flex;align-items:center;gap:0.6rem"><img src="/img/icon-192.png" alt="NVME" style="width:36px;height:36px;border-radius:9px;box-shadow:0 2px 12px rgba(124,92,252,0.4)" onerror="this.style.display='none'"><div class="logo" style="font-size:1.4rem;letter-spacing:0.04em;">NVME</div></div>
+  <div style="display:flex;align-items:center;gap:0.6rem"><img src="/img/icon-192.png" alt="NVME" style="width:40px;height:40px;border-radius:10px;box-shadow:0 2px 14px rgba(124,92,252,0.45)" onerror="this.style.display='none'"><div class="logo" style="font-size:1.4rem;letter-spacing:0.04em;">NVME</div></div>
   <div style="display:flex;align-items:center;gap:0.5rem">
     <div class="wallet-pill" onclick="showScreen('wallet')">
       🪙 <span id="manus-bal">0</span>

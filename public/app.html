@@ -367,6 +367,17 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .ios-step-text{font-size:.85rem;color:rgba(255,255,255,.8);line-height:1.4}
 .ios-step-text strong{color:#fff}
 .ios-close-btn{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);padding:12px;border-radius:12px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.9rem}
+
+@keyframes logoPulse{
+  0%,100%{transform:scale(1);filter:drop-shadow(0 0 18px rgba(124,58,237,.6))}
+  50%{transform:scale(1.06);filter:drop-shadow(0 0 36px rgba(255,46,91,.7))}
+}
+@keyframes navLogoPulse{
+  0%,100%{transform:scale(1);filter:drop-shadow(0 0 8px rgba(124,58,237,.5))}
+  50%{transform:scale(1.08);filter:drop-shadow(0 0 18px rgba(255,46,91,.6))}
+}
+.logo-pulse{animation:logoPulse 3s ease-in-out infinite}
+.nav-logo-pulse{animation:navLogoPulse 3s ease-in-out infinite}
 </style>
 <script src="/socket.io/socket.io.js">
 // ===== PROGRESSIVE JACKPOT =====
@@ -616,7 +627,7 @@ if(typeof socket !== 'undefined' && socket) {
 <!-- AUTH OVERLAY -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-logo-wrap" style="text-align:center;display:flex;flex-direction:column;align-items:center;">
-    <img src="/img/icon-512.png" alt="NVME" style="width:140px;height:140px;border-radius:28px;margin:0 auto 1.5rem;display:block;box-shadow:0 16px 56px rgba(124,92,252,0.65)" onerror="this.style.display='none'">
+    <img src="/img/icon-512.png" alt="NVME" class="logo-pulse" style="width:160px;height:160px;border-radius:32px;margin:0 auto 1.5rem;display:block;" onerror="this.style.display='none'">
     <div class="auth-tagline">CREATE · STREAM · BATTLE</div>
   </div>
   <div class="auth-card">
@@ -653,7 +664,7 @@ if(typeof socket !== 'undefined' && socket) {
 
 <!-- TOP NAV -->
 <nav class="topnav" id="topNav" style="display:none">
-  <div style="display:flex;align-items:center;gap:0.6rem"><img src="/img/icon-192.png" alt="NVME" style="width:40px;height:40px;border-radius:10px;box-shadow:0 2px 14px rgba(124,92,252,0.45)" onerror="this.style.display='none'"><div class="logo" style="font-size:1.4rem;letter-spacing:0.04em;">NVME</div></div>
+  <div style="display:flex;align-items:center;gap:0.6rem"><img src="/img/icon-192.png" alt="NVME" class="nav-logo-pulse" style="width:46px;height:46px;border-radius:12px;" onerror="this.style.display='none'"></div>
   <div style="display:flex;align-items:center;gap:0.5rem">
     <div class="wallet-pill" onclick="showScreen('wallet')">
       🪙 <span id="manus-bal">0</span>

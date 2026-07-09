@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#05050d">
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" href="/img/icon-192.png"><link rel="apple-touch-icon" href="/img/icon-512.png"><title>nvme.live — Create. Stream. Battle.</title>
+<link rel="icon" href="/img/icon-192.png"><link rel="apple-touch-icon" href="/img/icon-512.png"><title>NVME — Create. Stream. Battle.</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -24,7 +24,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 /* TOP NAV */
 .topnav{position:fixed;top:0;left:0;right:0;height:var(--nav);display:flex;align-items:center;justify-content:space-between;padding:0 1rem;z-index:200;background:rgba(5,5,13,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
-.logo{font-family:'Outfit',sans-serif;font-weight:900;font-size:1.3rem;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.02em}
+.logo{font-family:'Outfit',sans-serif;font-weight:900;font-size:1.5rem;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:0.06em}
 .nav-icons{display:flex;gap:0.75rem;align-items:center}
 .nav-icon{width:36px;height:36px;border-radius:50%;background:var(--s2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;transition:all .2s}
 .nav-icon:active{transform:scale(0.9)}
@@ -229,7 +229,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .auth-overlay{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem}
 .auth-overlay.hidden{display:none}
 .auth-logo-wrap{text-align:center;margin-bottom:2rem}
-.auth-logo-big{font-family:'Outfit',sans-serif;font-weight:900;font-size:2.5rem;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.03em}
+.auth-logo-big{font-family:'Outfit',sans-serif;font-weight:900;font-size:3rem;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:0.1em;display:none}
 .auth-tagline{font-size:0.9rem;color:var(--muted);margin-top:0.3rem}
 .auth-card{width:100%;max-width:380px;background:var(--s1);border:1px solid var(--border);border-radius:24px;padding:1.75rem;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
 .auth-tabs{display:flex;background:var(--s2);border-radius:12px;padding:4px;margin-bottom:1.5rem}
@@ -315,7 +315,7 @@ const _origShowScreen = typeof showScreen === 'function' ? showScreen : null;
 <!-- AUTH OVERLAY -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-logo-wrap">
-    <img src="/img/icon-512.png" alt="nvme.live" style="width:88px;height:88px;border-radius:20px;margin-bottom:1rem;box-shadow:0 8px 32px rgba(124,92,252,0.45)" onerror="this.style.display='none'"><div class="auth-logo-big">nvme.live</div>
+    <img src="/img/icon-512.png" alt="NVME" style="width:110px;height:110px;border-radius:24px;margin-bottom:1.2rem;box-shadow:0 12px 40px rgba(124,92,252,0.55)" onerror="this.style.display='none'">
     <div class="auth-tagline">CREATE · STREAM · BATTLE</div>
   </div>
   <div class="auth-card">
@@ -352,7 +352,7 @@ const _origShowScreen = typeof showScreen === 'function' ? showScreen : null;
 
 <!-- TOP NAV -->
 <nav class="topnav" id="topNav" style="display:none">
-  <div style="display:flex;align-items:center;gap:0.5rem"><img src="/img/icon-192.png" alt="" style="width:28px;height:28px;border-radius:7px" onerror="this.style.display='none'"><div class="logo">nvme<span style="-webkit-text-fill-color:rgba(255,255,255,0.9)">.live</span></div></div>
+  <div style="display:flex;align-items:center;gap:0.6rem"><img src="/img/icon-192.png" alt="NVME" style="width:36px;height:36px;border-radius:9px;box-shadow:0 2px 12px rgba(124,92,252,0.4)" onerror="this.style.display='none'"><div class="logo" style="font-size:1.4rem;letter-spacing:0.04em;">NVME</div></div>
   <div style="display:flex;align-items:center;gap:0.5rem">
     <div class="wallet-pill" onclick="showScreen('wallet')">
       🪙 <span id="manus-bal">0</span>
@@ -506,7 +506,7 @@ const _origShowScreen = typeof showScreen === 'function' ? showScreen : null;
       <div class="stat"><div class="stat-num" id="statFollowers">0</div><div class="stat-label">Followers</div></div>
       <div class="stat"><div class="stat-num" id="statEarned">$0</div><div class="stat-label">Earned</div></div>
     </div>
-    <div class="profile-bio" id="profileBio">Welcome to nvme.live 🚀</div>
+    <div class="profile-bio" id="profileBio">Welcome to NVME 🚀</div>
   </div>
   <button class="edit-profile-btn">✏️ Edit Profile</button>
   <button class="logout-btn" onclick="doLogout()">🚪 Sign Out</button>
@@ -748,7 +748,7 @@ const demoFeeds=[
   {emoji:'🎵',user:'luna_void',name:'LUNA VOID',caption:'New track dropping Friday 🎵 Lo-fi vibes for late night sessions #lofi',coins:120,likes:'8.9K',comments:'441',shares:'1.1K',music:'Luna Void - Midnight Code'},
 ];
 const demoChats=[
-  {emoji:'🦁',name:'Kush Agent',preview:'Task completed: nvme.live deployed ✅',time:'now',unread:3,online:true,color:'#7c5cfc'},
+  {emoji:'🦁',name:'Kush Agent',preview:'Task completed: NVME deployed ✅',time:'now',unread:3,online:true,color:'#7c5cfc'},
   {emoji:'💼',name:'Empire HQ',preview:'Revenue update: $847 this week',time:'2m',unread:1,online:true,color:'#ff3d7f'},
   {emoji:'🎵',name:'Luna Void',preview:'Track ready for review 🎵',time:'1h',unread:2,online:true,color:'#ffc940'},
   {emoji:'💰',name:'SwiftPay',preview:'Payment received: $297.00',time:'3h',unread:0,online:false,color:'#00f5a0'},
@@ -764,7 +764,7 @@ const demoVideos=[
   {emoji:'💡',title:'How to build an AI business with $0 in 2026',meta:'Empire HQ · 234K views · 2 days ago',duration:'12:34'},
   {emoji:'⚓',title:'Crown & Anchor strategy — win every time',meta:'BermudaLocals · 89K views · 1 week ago',duration:'8:12'},
   {emoji:'🤖',title:'Agent Zero full setup tutorial — build your AI empire',meta:'Kush Agent · 156K views · 3 days ago',duration:'24:07'},
-  {emoji:'💰',title:'$2,000 in 7 days — creator economy on nvme.live',meta:'Empire HQ · 312K views · 5 days ago',duration:'18:45'},
+  {emoji:'💰',title:'$2,000 in 7 days — creator economy on NVME',meta:'Empire HQ · 312K views · 5 days ago',duration:'18:45'},
   {emoji:'🎵',title:'Lo-fi beats for coding — 2 hour mix',meta:'LUNA VOID · 45K views · 2 weeks ago',duration:'2:03:14'},
 ];
 const explores=['🏝️','💰','🤖','🎵','⚓','❤️','🏄','💎','🌺','🎭','🚀','👑','🌊','🦁','💻','🎪','🏋️','🌙'];

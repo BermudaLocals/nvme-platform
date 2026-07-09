@@ -286,7 +286,7 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-    const { rows } = await pool.query('SELECT * FROM users WHERE email=$1', [email.toLowerCase().trim()]);
+    const { rows } = await db.query('SELECT * FROM users WHERE email=$1', [email.toLowerCase().trim()]);
     if (!rows.length) return res.status(401).json({ error: 'invalid credentials' });
     const user = rows[0];
     const hash = user.password_hash || user.password;
@@ -299,7 +299,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, email, username, plan, created_at FROM users WHERE id=$1', [req.user.id]);
+    const { rows } = await db.query('SELECT id, email, username, plan, created_at FROM users WHERE id=$1', [req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'user not found' });
     res.json({ ok: true, user: rows[0] });
   } catch (e) { res.status(500).json({ error: e.message }); }

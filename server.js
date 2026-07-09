@@ -740,13 +740,23 @@ async function initDB() {
 // ── Routes: Health ───────────────────────────────────────────
 
 // ── GOOGLE OAUTH ROUTES ──────────────────────────────────────────────────────
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/?auth=failed' }),
+  passport.authenticate('google', { failureRedirect: '/?auth=failed', session: false }),
   (req, res) => {
-    const token = signToken({ id: req.user.id, email: req.user.email });
-    // Redirect to frontend with token in query param; frontend stores it
-    res.redirect(`/app.html?token=${token}&user=${encodeURIComponent(JSON.stringify({ id:req.user.id, email:req.user.email, username:req.user.username }))}`);
+    try {
+      if (!req.user) return res.redirect('/?auth=failed&reason=no_user');
+      const token = signToken({ id: req.user.id, email: req.user.email });
+      const userPayload = encodeURIComponent(JSON.stringify({
+        id: req.user.id,
+        email: req.user.email,
+        username: req.user.username
+      }));
+      return res.redirect('/app.html?token=' + token + '&user=' + userPayload);
+    } catch(e) {
+      console.error('[OAuth callback error]', e.message);
+      return res.redirect('/?auth=failed&reason=server_error');
+    }
   }
 );
 

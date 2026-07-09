@@ -738,9 +738,9 @@ if(typeof socket !== 'undefined' && socket) {
   <div class="upload-area" onclick="triggerUpload()">
     <div class="upload-icon">📹</div>
     <div class="upload-title">Tap to upload video</div>
-    <div class="upload-sub">MP4, MOV up to 100MB</div>
+    <div class="upload-sub">MP4, MOV, WAV, MP3 up to 100MB</div>
   </div>
-  <input type="file" id="videoFileInput" accept="video/*" style="display:none" onchange="handleVideoSelect(event)">
+  <input type="file" id="videoFileInput" accept="video/*,audio/*" style="display:none" onchange="handleVideoSelect(event)">
   <div class="upload-form">
     <input class="upload-input" type="text" id="uploadTitle" placeholder="Give your video a title...">
     <textarea class="upload-input" id="uploadCaption" rows="3" style="resize:none" placeholder="Write a caption... #tags"></textarea>
@@ -834,7 +834,8 @@ if(typeof socket !== 'undefined' && socket) {
 
 <!-- CROWN & ANCHOR GAME -->
 <div class="screen" id="game-screen">
-  <div class="game-header"><h2>⚓ Crown & Anchor</h2><div style="font-size:0.8rem;color:var(--muted);margin-top:0.3rem">Bermuda-native dice game · Pick your symbol · Roll to win</div></div>
+  <div class="game-header"><h2>⚓ Crown & Anchor</h2><div style="font-size:0.8rem;color:var(--muted);margin-top:0.3rem">Bermuda-native dice game · Pick your symbol · Roll to win</div>
+  <div style="text-align:center;margin-top:0.5rem;font-size:1.1rem;font-weight:700;color:#ffc940;">🪙 <span id="gameBalance">0</span> coins</div></div>
   <div class="dice-board">
     <div class="die" onclick="selectDie(this,'👑')">👑</div>
     <div class="die" onclick="selectDie(this,'⚓')">⚓</div>
@@ -1151,12 +1152,12 @@ async function loadWalletBalance(){
     document.getElementById('walletUSD').textContent = (coins*0.01).toFixed(2);
   } catch(e){}
 }
-function updateBalanceTo(newBal){ manusBalance=Math.max(0,newBal); document.getElementById('manus-bal').textContent=manusBalance.toLocaleString(); document.getElementById('walletCoins').textContent=manusBalance.toLocaleString(); document.getElementById('walletUSD').textContent=(manusBalance*0.01).toFixed(2); }
+function updateBalanceTo(newBal){ manusBalance=Math.max(0,newBal); var _mb=document.getElementById('manus-bal'); var _wc=document.getElementById('walletCoins'); var _wu=document.getElementById('walletUSD'); var _gb=document.getElementById('gameBalance'); if(_mb)_mb.textContent=manusBalance.toLocaleString(); if(_wc)_wc.textContent=manusBalance.toLocaleString(); if(_wu)_wu.textContent=(manusBalance*0.01).toFixed(2); if(_gb)_gb.textContent=manusBalance.toLocaleString(); localStorage.setItem('nvme_coins',manusBalance); }
 function updateBalance(delta){
   manusBalance = Math.max(0, manusBalance+delta);
-  document.getElementById('manus-bal').textContent = manusBalance.toLocaleString();
-  document.getElementById('walletCoins').textContent = manusBalance.toLocaleString();
-  document.getElementById('walletUSD').textContent = (manusBalance*0.01).toFixed(2);
+  var _mb2=document.getElementById('manus-bal'); var _wc2=document.getElementById('walletCoins'); var _wu2=document.getElementById('walletUSD'); var _gb2=document.getElementById('gameBalance');
+  if(_mb2)_mb2.textContent=manusBalance.toLocaleString(); if(_wc2)_wc2.textContent=manusBalance.toLocaleString(); if(_wu2)_wu2.textContent=(manusBalance*0.01).toFixed(2); if(_gb2)_gb2.textContent=manusBalance.toLocaleString();
+  localStorage.setItem('nvme_coins',manusBalance);
 }
 async function openPayPal(){
   window.open('https://paypal.me/DollarDoubleEmpire','_blank');
@@ -1574,6 +1575,7 @@ function showScreen(name){
   const screen=document.getElementById(name+'-screen');
   if(screen) screen.classList.add('active');
   if(name==='jackpot' && typeof loadJackpot==='function') loadJackpot();
+  if((name==='game'||name==='wallet'||name==='jackpot') && typeof loadWalletBalance==='function') loadWalletBalance();
   const map={feed:0,explore:1,msg:3,profile:4};
   const botItems=document.querySelectorAll('.bot-item');
   if(map[name]!==undefined) botItems[map[name]].classList.add('active');
@@ -1588,7 +1590,7 @@ function selectDie(el,sym){
 }
 function setBet(val){document.getElementById('betAmount').value=val}
 async function rollDice(){
-  if(!selectedDie) return alert('Pick a symbol first! Tap one of the dice above.');
+  if(!selectedDie) return showToast('Tap a symbol above first — 👑 ⚓ ❤️ 💎 ♣️ ⚡');
   const bet=parseInt(document.getElementById('betAmount').value)||50;
   const dice=document.querySelectorAll('.die');
   dice.forEach(d=>d.classList.add('rolling'));

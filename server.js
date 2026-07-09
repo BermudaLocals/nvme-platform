@@ -48,10 +48,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           const email = profile.emails?.[0]?.value;
           const username = profile.displayName?.replace(/\s+/g, '_').toLowerCase() || 'user_' + profile.id;
           const avatar = profile.photos?.[0]?.value || null;
-          let result = await db.query('SELECT * FROM users WHERE email=$1', [email]);
+          let result = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
           let user;
           if (result.rows.length === 0) {
-            const r = await db.query(
+            const r = await pool.query(
               'INSERT INTO users (id,email,username,password_hash,avatar_url,created_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING *',
               [uuidv4(), email, username, 'GOOGLE_OAUTH', avatar]
             );
@@ -62,8 +62,15 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
               await db.query('UPDATE users SET avatar_url=$1 WHERE id=$2', [avatar, user.id]);
               user.avatar_url = avatar;
             }
+            // Fix null username for existing users
+            if (!user.username) {
+              const fixedUsername = profile.displayName?.replace(/\s+/g, '_').toLowerCase() || 'user_' + profile.id;
+              await db.query('UPDATE users SET username=$1 WHERE id=$2', [fixedUsername, user.id]);
+              user.username = fixedUsername;
+            }
           }
-          return done(null, { id: user.id, email: user.email, username: user.username });
+          const displayName = user.username || user.email.split('@')[0].replace(/[^a-z0-9_]/gi, '_');
+          return done(null, { id: user.id, email: user.email, username: displayName });
         } catch (err) {
           console.error('[GoogleOAuth] Callback error:', err.stack);
           return done(null, false);
@@ -72,6 +79,36 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     )
   );
 }
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback'
+  }, async (accessToken, refreshToken, profile, done) => {
+    try {
+      const email = profile.emails?.[0]?.value;
+      const username = profile.displayName?.replace(/\s+/g,'_').toLowerCase() || 'user_' + profile.id;
+      const avatar = profile.photos?.[0]?.value || null;
+      let result = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
+      let user;
+      if (result.rows.length === 0) {
+        const r = await pool.query(
+          'INSERT INTO users (id,email,username,password_hash,avatar_url,created_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING *',
+          [uuidv4(), email, username, 'GOOGLE_OAUTH', avatar]
+        );
+        user = r.rows[0];
+      } else {
+        user = result.rows[0];
+        if (avatar && !user.avatar_url) {
+          await pool.query('UPDATE users SET avatar_url=$1 WHERE id=$2',[avatar,user.id]);
+          user.avatar_url = avatar;
+        }
+      }
+      return done(null, { id: user.id, email: user.email, username: user.username });
+    } catch(e) { return done(e); }
+  }));
+}
+
 // ── Production env guardrails (resilient) ────────────────────
 if (IS_PROD) {
   const required = ['DATABASE_URL', 'JWT_SECRET'];
@@ -246,14 +283,12 @@ app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'em
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/?auth=failed' }),
   (req, res) => {
-    if (!req.user) return res.redirect('/?auth=failed');
     const token = signToken({ id: req.user.id, email: req.user.email });
     // Redirect to frontend with token in query param; frontend stores it
     res.redirect(`/?token=${token}&user=${encodeURIComponent(JSON.stringify({ id:req.user.id, email:req.user.email, username:req.user.username }))}`);
   }
 );
 
-app.get('/app.html', (req, res) => res.redirect('/'));
 app.get('/health', (req, res) => res.json({
   app: 'nvme.live',
   status: 'ONLINE',
@@ -605,6 +640,17 @@ app.get('/', (req, res) => {
   .comment-input-row input{flex:1;padding:.65rem 1rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);outline:none}
   .comment-input-row input:focus{border-color:var(--accent)}
   @media(max-width:640px){.hero{padding:4rem 1.5rem 3rem}.hero-cta{flex-direction:column;align-items:center}nav{padding:1rem}}
+
+  /* TikTok/Instagram style bottom navigation */
+  .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:rgba(7,7,13,.97);border-top:1px solid var(--border);z-index:200;align-items:center;justify-content:space-around;padding-bottom:env(safe-area-inset-bottom)}
+  .bottom-nav.visible{display:flex}
+  .bnav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;color:var(--muted);cursor:pointer;padding:.4rem .6rem;border-radius:8px;transition:color .2s;min-width:52px;font-size:.65rem;font-weight:600;text-decoration:none}
+  .bnav-btn:hover,.bnav-btn.active{color:var(--text)}
+  .bnav-btn svg,.bnav-btn .bicon{font-size:1.4rem;line-height:1}
+  .bnav-btn.create-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-radius:12px;padding:.45rem .8rem;margin-top:-8px;box-shadow:0 4px 15px rgba(233,30,140,.4)}
+  .bnav-btn.create-btn:hover{opacity:.9;transform:scale(1.05)}
+  body.app-mode{padding-bottom:60px}
+
 </style>
 </head>
 <body>
@@ -616,10 +662,29 @@ app.get('/', (req, res) => {
     <a class="btn btn-outline" href="#" onclick="openModal('login')">Log In</a>
     <a class="btn btn-primary" href="#" onclick="openModal('register')">Get Started</a>
   </div>
-  <div class="nav-links" id="navLoggedIn" style="display:none">
-    <span id="navUsername" style="color:var(--text);font-weight:600"></span>
-    <a class="btn btn-outline" href="#" onclick="doLogout()">Logout</a>
+  <div id="navLoggedIn" style="display:none;align-items:center;gap:.75rem">
+    <span id="navUsername" style="color:var(--accent);font-weight:700;font-size:.95rem;cursor:pointer" onclick="openProfile()"></span>
+    <button onclick="doLogout()" style="background:none;border:1px solid rgba(233,30,140,.4);color:var(--muted);padding:.3rem .8rem;border-radius:20px;font-size:.8rem;cursor:pointer">Logout</button>
   </div>
+</nav>
+
+<!-- TikTok/Instagram/Clapper style bottom navigation (visible when logged in) -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bnav-btn active" id="bnavHome" onclick="bnavGo('home')">
+    <span class="bicon">🏠</span>Home
+  </button>
+  <button class="bnav-btn" id="bnavExplore" onclick="bnavGo('explore')">
+    <span class="bicon">🔍</span>Explore
+  </button>
+  <button class="bnav-btn create-btn" id="bnavCreate" onclick="openUploadModal()">
+    <span class="bicon">＋</span>Create
+  </button>
+  <a class="bnav-btn" id="bnavShop" href="/shop">
+    <span class="bicon">🎁</span>Shop
+  </a>
+  <button class="bnav-btn" id="bnavProfile" onclick="openProfile()">
+    <span class="bicon">👤</span>Profile
+  </button>
 </nav>
 
 <!-- Feed View (logged-in) -->
@@ -791,11 +856,31 @@ function openModal(tab) { document.getElementById('authModal').classList.add('ac
 function closeModal() { document.getElementById('authModal').classList.remove('active'); }
 function closeModalOutside(e) { if (e.target.id === 'authModal') closeModal(); }
 function switchTab(tab) {
-  document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
-  document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
-  document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
-  document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
-  document.getElementById('msgBox').className = 'msg';
+  // Handle feed/live nav tabs
+  if (tab === 'feed') { document.getElementById('feedView').scrollTop = 0; return; }
+  if (tab === 'live') { window.location.href = '/shop#live'; return; }
+  // Handle auth modal tabs
+  const lf = document.getElementById('loginForm');
+  const rf = document.getElementById('registerForm');
+  if (lf) lf.style.display = tab === 'login' ? 'block' : 'none';
+  if (rf) rf.style.display = tab === 'register' ? 'block' : 'none';
+  const tl = document.getElementById('tabLogin');
+  const tr = document.getElementById('tabRegister');
+  if (tl) tl.classList.toggle('active', tab === 'login');
+  if (tr) tr.classList.toggle('active', tab === 'register');
+  const mb = document.getElementById('msgBox');
+  if (mb) mb.className = 'msg';
+}
+function openUploadModal() {
+  if (!currentUser) { openModal('login'); return; }
+  const msg = 'Upload coming soon! For now, share your video URL in your profile.
+Contact: dollardoublemarketing@gmail.com';
+  alert(msg);
+}
+function openProfile() {
+  if (!currentUser) return;
+  const slug = currentUser.username || currentUser.email?.split('@')[0];
+  window.location.href = '/profile/' + slug;
 }
 function showMsg(msg, type) {
   const el = document.getElementById('msgBox');
@@ -843,10 +928,18 @@ function enterLoggedInState(user) {
   currentUser = user;
   document.getElementById('navLoggedOut').style.display = 'none';
   document.getElementById('navLoggedIn').style.display = 'flex';
-  document.getElementById('navUsername').textContent = '@' + user.username;
+  document.getElementById('navUsername').textContent = '@' + (user.username || user.email?.split('@')[0] || 'creator');
   document.getElementById('landingView').style.display = 'none';
   document.getElementById('feedView').classList.add('active');
+  // Show TikTok-style bottom nav
+  const bn = document.getElementById('bottomNav');
+  if (bn) { bn.classList.add('visible'); document.body.classList.add('app-mode'); }
   loadFeed();
+}
+function bnavGo(tab) {
+  document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
+  if (tab === 'home') { document.getElementById('bnavHome').classList.add('active'); document.getElementById('feedView').scrollTop = 0; }
+  if (tab === 'explore') { document.getElementById('bnavExplore').classList.add('active'); }
 }
 
 function enterLoggedOutState() {
@@ -855,6 +948,9 @@ function enterLoggedOutState() {
   document.getElementById('navLoggedIn').style.display = 'none';
   document.getElementById('landingView').style.display = 'block';
   document.getElementById('feedView').classList.remove('active');
+  // Hide bottom nav
+  const bn = document.getElementById('bottomNav');
+  if (bn) { bn.classList.remove('visible'); document.body.classList.remove('app-mode'); }
   closeComments();
 }
 
@@ -1408,7 +1504,7 @@ app.post('/api/credits/create-order', authMiddleware, async (req, res) => {
   const pkg = CREDIT_PACKAGES.find(p => p.id === packageId);
   if (!pkg) return res.status(400).json({ error: 'invalid package' });
   try {
-    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${(process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET)}`).toString('base64');
+    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
     const tokenRes = await fetch('https://api-m.paypal.com/v1/oauth2/token', {
       method: 'POST',
       headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1435,7 +1531,7 @@ app.post('/api/credits/capture-order', authMiddleware, async (req, res) => {
   const pkg = CREDIT_PACKAGES.find(p => p.id === packageId);
   if (!pkg) return res.status(400).json({ error: 'invalid package' });
   try {
-    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${(process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SECRET)}`).toString('base64');
+    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
     const tokenRes = await fetch('https://api-m.paypal.com/v1/oauth2/token', {
       method: 'POST',
       headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },

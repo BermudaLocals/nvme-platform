@@ -2006,11 +2006,6 @@ async function sendLiveGift(name, emoji, cost) {
     console.error('[gift] send failed:', err);
   }
 }
-    `<div class="gift-chip" onclick="sendLiveGift('${g.name}','${g.emoji}',${g.cost})">
-      ${g.emoji} <span>${g.name}</span> <span style="color:var(--gold)">${g.cost}🪙</span>
-    </div>`
-  ).join('');
-}
 
 function sendGiftToUser(username) {
   showToast(`🎁 Gifting ${username} — open their stream to send gifts!`);

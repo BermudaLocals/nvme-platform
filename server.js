@@ -179,7 +179,7 @@ app.post('/api/profile/avatar', authMiddleware, avatarUpload.single('avatar'), a
 // PUT /api/profile — update display name, bio, username
 app.put('/api/profile', authMiddleware, async (req, res) => {
   try {
-    const { display_name, bio, username } = req.body;
+    const { display_name, bio, username, profile_link, avatar_url } = req.body;
     // Validate username if provided
     if(username) {
       if(!/^[a-zA-Z0-9_]{3,30}$/.test(username))
@@ -196,10 +196,15 @@ app.put('/api/profile', authMiddleware, async (req, res) => {
     if(display_name !== undefined) { updates.push(`display_name=$${idx++}`); values.push(display_name.slice(0,50)); }
     if(bio !== undefined) { updates.push(`bio=$${idx++}`); values.push(bio.slice(0,160)); }
     if(username !== undefined) { updates.push(`username=$${idx++}`); values.push(username); }
+    if(profile_link !== undefined) { updates.push(`profile_link=$${idx++}`); values.push(profile_link.slice(0,200)); }
+    if(avatar_url !== undefined && avatar_url.startsWith('data:image')) {
+      // Base64 avatar — store directly in DB (Railway-safe, no disk needed)
+      updates.push(`avatar_url=$${idx++}`); values.push(avatar_url);
+    }
     if(updates.length === 0) return res.status(400).json({ ok: false, error: 'Nothing to update' });
     values.push(req.user.id);
     const result = await db.query(
-      `UPDATE users SET ${updates.join(',')} WHERE id=$${idx} RETURNING id,username,display_name,bio,avatar_url`,
+      `UPDATE users SET ${updates.join(',')} WHERE id=$${idx} RETURNING id,username,display_name,bio,avatar_url,profile_link`,
       values
     );
     res.json({ ok: true, user: result.rows[0] });
@@ -626,6 +631,13 @@ async function initDB() {
       plan TEXT DEFAULT 'free',
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    -- Add profile columns if missing (safe migrations)
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_link TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER DEFAULT 500;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_credits INTEGER DEFAULT 500;
     CREATE TABLE IF NOT EXISTS videos (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID REFERENCES users(id) ON DELETE CASCADE,

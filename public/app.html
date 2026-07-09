@@ -471,6 +471,8 @@ function openProfileEdit() {
   document.getElementById('peditDisplayName').value = currentUser.display_name || currentUser.username || '';
   document.getElementById('peditUsername').value = currentUser.username || '';
   document.getElementById('peditBio').value = currentUser.bio || '';
+  var _plink = document.getElementById('peditLink');
+  if(_plink) _plink.value = currentUser.profile_link || '';
   const img = document.getElementById('peditAvatarPreview');
   img.src = currentUser.avatar_url || '/img/icon-192.png';
   updateCounts();
@@ -500,45 +502,59 @@ function previewAvatar(event) {
 }
 async function saveProfile() {
   const btn = document.querySelector('.pedit-save');
+  if(!btn) return;
   btn.textContent = 'Saving...'; btn.disabled = true;
   try {
-    // 1. Upload avatar if new file selected
-    const fileInput = document.getElementById('peditFileInput');
-    if(fileInput.files[0]) {
-      const formData = new FormData();
-      formData.append('avatar', fileInput.files[0]);
-      const r = await fetch(API+'/api/profile/avatar', { method:'POST', headers:{ 'Authorization':'Bearer '+localStorage.getItem('nvme_token') }, body: formData });
-      const d = await r.json();
-      if(d.ok) {
-        currentUser.avatar_url = d.avatar_url;
-        document.getElementById('profileAvatar').innerHTML = '<img src="'+d.avatar_url+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
-      }
+    // 1. Convert avatar to base64 — Railway-safe (no ephemeral disk)
+    let avatarB64 = null;
+    const fi = document.getElementById('peditFileInput');
+    if(fi && fi.files[0]) {
+      avatarB64 = await new Promise(function(res){
+        var fr = new FileReader();
+        fr.onload = function(e){ res(e.target.result); };
+        fr.readAsDataURL(fi.files[0]);
+      });
+      // Instant preview
+      var pav = document.getElementById('profileAvatar');
+      if(pav) pav.innerHTML = '<img src="'+avatarB64+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+      var prev = document.getElementById('peditAvatarPreview');
+      if(prev) prev.src = avatarB64;
     }
-    // 2. Update profile fields
-    const body = {
-      display_name: document.getElementById('peditDisplayName').value,
-      username: document.getElementById('peditUsername').value,
-      bio: document.getElementById('peditBio').value
+    // 2. Build update body — all fields including link
+    var linkEl = document.getElementById('peditLink');
+    var body = {
+      display_name: (document.getElementById('peditDisplayName')||{value:''}).value.trim(),
+      username: (document.getElementById('peditUsername')||{value:''}).value.trim(),
+      bio: (document.getElementById('peditBio')||{value:''}).value.trim(),
+      profile_link: linkEl ? linkEl.value.trim() : ''
     };
-    const r2 = await fetch(API+'/api/profile', { method:'PUT', headers: authHeaders(), body: JSON.stringify(body) });
-    const d2 = await r2.json();
+    if(avatarB64) body.avatar_url = avatarB64;
+    // 3. Send to API
+    var r2 = await fetch(API+'/api/profile', { method:'PUT', headers: authHeaders(), body: JSON.stringify(body) });
+    var d2 = await r2.json();
     if(d2.ok) {
-      // Update currentUser
       Object.assign(currentUser, d2.user);
-      // Update profile screen
-      const usernameEl = document.getElementById('profileUsername');
-      if(usernameEl) usernameEl.textContent = '@' + (d2.user.username || currentUser.username);
-      const bioEl = document.getElementById('profileBio');
-      if(bioEl) bioEl.textContent = d2.user.bio || 'Welcome to NVME';
-      // Update top nav username
-      const navUser = document.getElementById('navUsername');
-      if(navUser) navUser.textContent = '@' + d2.user.username;
+      // Persist to localStorage
+      try { localStorage.setItem('nvme_user', JSON.stringify(currentUser)); } catch(e){}
+      // Refresh profile screen fields
+      var nameEl = document.getElementById('profileName');
+      if(nameEl) nameEl.textContent = d2.user.display_name || d2.user.username;
+      var handleEl = document.getElementById('profileHandle');
+      if(handleEl) handleEl.textContent = '@' + d2.user.username;
+      var bioEl = document.getElementById('profileBio');
+      if(bioEl) bioEl.textContent = d2.user.bio || '';
+      var plEl = document.getElementById('profileLink');
+      if(plEl && d2.user.profile_link) {
+        plEl.href = d2.user.profile_link;
+        plEl.textContent = '\uD83D\uDD17 ' + d2.user.profile_link.replace(/https?:\/\//, '');
+        plEl.style.display = 'block';
+      }
       document.getElementById('peditModal').classList.remove('active');
-      typeof showNotif === 'function' && showNotif('Profile updated!');
+      showToast('Profile updated! \u2705');
     } else {
-      alert(d2.error || 'Update failed');
+      showToast(d2.error || 'Update failed — try again');
     }
-  } catch(e) { alert('Network error: ' + e.message); }
+  } catch(e) { showToast('Network error: ' + e.message); }
   finally { btn.textContent = 'Save Changes'; btn.disabled = false; }
 }
 
@@ -896,6 +912,7 @@ if(typeof socket !== 'undefined' && socket) {
       <div class="stat"><div class="stat-num" id="statEarned">$0</div><div class="stat-label">Earned</div></div>
     </div>
     <div class="profile-bio" id="profileBio">Welcome to NVME 🚀</div>
+    <a id="profileLink" href="#" target="_blank" style="font-size:.82rem;color:var(--purple);display:none;margin-top:.3rem;text-decoration:none;font-weight:600;">🔗 Link</a>
   </div>
   <button class="edit-profile-btn" onclick="openProfileEdit()">✏️ Edit Profile</button>
   <button class="logout-btn" onclick="doLogout()">🚪 Sign Out</button>
@@ -2973,6 +2990,10 @@ function copyEthAddress() {
       <label>Bio</label>
       <textarea class="pedit-input" id="peditBio" maxlength="160" rows="3" placeholder="Tell the world who you are..."></textarea>
       <div class="pedit-counter"><span id="peditBioCount">0</span>/160</div>
+    </div>
+    <div class="pedit-field">
+      <label>Website / Link</label>
+      <input class="pedit-input" id="peditLink" type="url" maxlength="200" placeholder="https://yoursite.com">
     </div>
     <button class="pedit-save" onclick="saveProfile()">Save Changes</button>
     <button class="pedit-cancel" onclick="document.getElementById('peditModal').classList.remove('active')">Cancel</button>

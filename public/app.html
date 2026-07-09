@@ -4,6 +4,62 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#05050d">
+<script>
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+
+// ===== PWA INSTALL =====
+let deferredPrompt = null;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+const isInStandaloneMode = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase());
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if(!isInStandaloneMode && !localStorage.getItem('nvme_pwa_dismissed')) {
+    setTimeout(() => showPWABanner(), 3000);
+  }
+});
+
+function showPWABanner() {
+  const banner = document.getElementById('pwaBanner');
+  if(banner) banner.classList.add('show');
+}
+
+function triggerInstall() {
+  if(isIOS) {
+    document.getElementById('iosSheet').classList.add('show');
+    document.getElementById('pwaBanner').classList.remove('show');
+    return;
+  }
+  if(deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(r => {
+      if(r.outcome === 'accepted') {
+        localStorage.setItem('nvme_pwa_dismissed', '1');
+        document.getElementById('pwaBanner').classList.remove('show');
+      }
+      deferredPrompt = null;
+    });
+  }
+}
+
+function dismissPWA() {
+  localStorage.setItem('nvme_pwa_dismissed', '1');
+  document.getElementById('pwaBanner').classList.remove('show');
+}
+
+// Show iOS banner after delay if on iOS, not installed, not dismissed
+if(isIOS && isMobile && !isInStandaloneMode && !localStorage.getItem('nvme_pwa_dismissed')) {
+  setTimeout(() => {
+    const banner = document.getElementById('pwaBanner');
+    if(banner) {
+      banner.classList.add('show');
+      document.getElementById('pwaInstallBtn').textContent = 'Add to Home';
+    }
+  }, 4000);
+}
+</script>
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/img/icon-192.png"><link rel="apple-touch-icon" href="/img/icon-512.png"><title>NVME — Create. Stream. Battle.</title>
 <style>
@@ -287,6 +343,30 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .guest-search-input{flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:8px 12px;border-radius:10px;font-family:'Outfit',sans-serif;font-size:.85rem;outline:none}
 .guest-search-input:focus{border-color:var(--purple)}
 .guest-search-btn{background:var(--purple);border:none;color:#fff;padding:8px 14px;border-radius:10px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.8rem;font-weight:700;white-space:nowrap}
+
+/* PWA Install Banner */
+.pwa-banner{position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:.75rem 1rem calc(.75rem + env(safe-area-inset-bottom));background:linear-gradient(135deg,rgba(12,5,30,.98),rgba(18,5,25,.98));border-top:1px solid rgba(124,58,237,.4);backdrop-filter:blur(20px);transform:translateY(100%);transition:transform .4s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;gap:.75rem}
+.pwa-banner.show{transform:translateY(0)}
+.pwa-banner-icon{width:52px;height:52px;border-radius:13px;flex-shrink:0;box-shadow:0 4px 16px rgba(124,58,237,.5)}
+.pwa-banner-text{flex:1;min-width:0}
+.pwa-banner-title{font-weight:800;font-size:.95rem;color:#fff;margin-bottom:2px}
+.pwa-banner-sub{font-size:.75rem;color:rgba(255,255,255,.55);line-height:1.4}
+.pwa-banner-btns{display:flex;flex-direction:column;gap:.4rem;flex-shrink:0}
+.pwa-install-btn{background:linear-gradient(135deg,#7c3aed,#ff2e5b);border:none;color:#fff;padding:8px 16px;border-radius:10px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.82rem;font-weight:800;white-space:nowrap;line-height:1}
+.pwa-dismiss-btn{background:transparent;border:none;color:rgba(255,255,255,.3);padding:4px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.72rem;text-align:center}
+/* iOS instruction sheet */
+.ios-sheet{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);backdrop-filter:blur(12px);display:none;align-items:flex-end;justify-content:center}
+.ios-sheet.show{display:flex}
+.ios-sheet-box{background:#1a1a2e;border:1px solid rgba(124,58,237,.3);border-radius:24px 24px 0 0;padding:1.5rem 1.5rem calc(1.5rem + env(safe-area-inset-bottom));width:100%;max-width:480px}
+.ios-sheet-handle{width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 1.25rem}
+.ios-sheet-title{font-size:1.1rem;font-weight:800;margin-bottom:.5rem;text-align:center}
+.ios-sheet-sub{color:rgba(255,255,255,.5);font-size:.85rem;text-align:center;margin-bottom:1.25rem;line-height:1.5}
+.ios-steps{display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.25rem}
+.ios-step{display:flex;align-items:center;gap:.75rem;background:rgba(255,255,255,.04);border-radius:12px;padding:.75rem}
+.ios-step-num{width:28px;height:28px;background:linear-gradient(135deg,#7c3aed,#ff2e5b);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0}
+.ios-step-text{font-size:.85rem;color:rgba(255,255,255,.8);line-height:1.4}
+.ios-step-text strong{color:#fff}
+.ios-close-btn{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);padding:12px;border-radius:12px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.9rem}
 </style>
 <script src="/socket.io/socket.io.js">
 // ===== PROGRESSIVE JACKPOT =====
@@ -1370,6 +1450,34 @@ checkAuth();
       <button onclick="acceptGuestInvite()" style="background:#fff;color:#7c3aed;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:800;font-size:.82rem;">Join</button>
       <button onclick="document.getElementById('guestInviteNotif').style.display='none';" style="background:rgba(255,255,255,.2);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:.82rem;">Decline</button>
     </div>
+  </div>
+</div>
+
+<!-- PWA INSTALL BANNER -->
+<div class="pwa-banner" id="pwaBanner">
+  <img class="pwa-banner-icon" src="/img/icon-192.png" alt="NVME">
+  <div class="pwa-banner-text">
+    <div class="pwa-banner-title">Get the NVME App</div>
+    <div class="pwa-banner-sub">Faster. No browser bar. Works offline. Built for your phone.</div>
+  </div>
+  <div class="pwa-banner-btns">
+    <button class="pwa-install-btn" id="pwaInstallBtn" onclick="triggerInstall()">Install Free</button>
+    <button class="pwa-dismiss-btn" onclick="dismissPWA()">Not now</button>
+  </div>
+</div>
+
+<!-- iOS INSTALL SHEET -->
+<div class="ios-sheet" id="iosSheet" onclick="this.classList.remove('show')"> 
+  <div class="ios-sheet-box" onclick="event.stopPropagation()">
+    <div class="ios-sheet-handle"></div>
+    <div class="ios-sheet-title">Add NVME to Home Screen</div>
+    <div class="ios-sheet-sub">Install for the full app experience — no browser, full screen, offline access.</div>
+    <div class="ios-steps">
+      <div class="ios-step"><div class="ios-step-num">1</div><div class="ios-step-text">Tap the <strong>Share button</strong> at the bottom of Safari</div></div>
+      <div class="ios-step"><div class="ios-step-num">2</div><div class="ios-step-text">Scroll down and tap <strong>"Add to Home Screen"</strong></div></div>
+      <div class="ios-step"><div class="ios-step-num">3</div><div class="ios-step-text">Tap <strong>"Add"</strong> in the top right corner</div></div>
+    </div>
+    <button class="ios-close-btn" onclick="document.getElementById('iosSheet').classList.remove('show')">Got it</button>
   </div>
 </div>
 </body>

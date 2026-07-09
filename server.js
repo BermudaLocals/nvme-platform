@@ -1596,3 +1596,114 @@ initDB().then(() => {
     console.log(`[nvme.live] ONLINE :${PORT} (no DB — check DATABASE_URL)`);
   });
 });
+
+
+// ── ROUTE ALIASES (app.html compatibility) ─────────────────────────────────
+// /api/auth/signup → /api/auth/register
+app.post('/api/auth/signup', async (req, res, next) => { req.url = '/api/auth/register'; next('route'); });
+app.post('/api/auth/signup', async (req, res) => {
+  const { email, password, username } = req.body;
+  if (!email || !password || !username) return res.status(400).json({ error: 'email, password and username required' });
+  try {
+    const exists = await db.query('SELECT id FROM users WHERE email=$1 OR username=$2', [email, username]);
+    if (exists.rows.length) return res.status(409).json({ error: 'Email or username already taken' });
+    const bcrypt = require('bcryptjs');
+    const hash = await bcrypt.hash(password, 10);
+    const { v4: uuidv4 } = require('uuid');
+    const r = await db.query(
+      'INSERT INTO users (id,email,username,password_hash,created_at) VALUES ($1,$2,$3,$4,NOW()) RETURNING id,email,username,plan',
+      [uuidv4(), email.toLowerCase().trim(), username.trim(), hash]
+    );
+    const user = r.rows[0];
+    const token = require('jsonwebtoken').sign({ id: user.id, email: user.email }, process.env.JWT_SECRET || 'nvme-secret', { expiresIn: '30d' });
+    res.json({ ok: true, token, user });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// /api/auth/logout
+app.post('/api/auth/logout', (req, res) => { res.json({ ok: true }); });
+
+// /api/wallet/balance → /api/credits/balance
+app.get('/api/wallet/balance', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT balance_credits FROM users WHERE id=$1', [req.user.id]);
+    res.json({ balance: rows[0]?.balance_credits || 0, credits: rows[0]?.balance_credits || 0 });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// /api/live/streams → alias for /api/streams/live
+app.get('/api/live/streams', async (req, res) => {
+  try {
+    const { rows } = await db.query("SELECT * FROM live_streams WHERE is_active=true ORDER BY viewer_count DESC LIMIT 20");
+    res.json({ streams: rows, live: rows });
+  } catch(e) { res.json({ streams: [], live: [] }); }
+});
+
+// /api/videos/feed → alias for /api/feed
+app.get('/api/videos/feed', async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT v.*,u.username,u.avatar_url FROM videos v JOIN users u ON v.user_id=u.id ORDER BY v.created_at DESC LIMIT 20');
+    res.json({ videos: rows, items: rows });
+  } catch(e) { res.json({ videos: [], items: [] }); }
+});
+
+// /api/messages/conversations
+app.get('/api/messages/conversations', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT c.*,u.username,u.avatar_url FROM conversations c JOIN users u ON (c.user1_id=u.id OR c.user2_id=u.id) WHERE (c.user1_id=$1 OR c.user2_id=$1) AND u.id!=$1 ORDER BY c.updated_at DESC LIMIT 30',
+      [req.user.id]
+    );
+    res.json({ conversations: rows });
+  } catch(e) { res.json({ conversations: [] }); }
+});
+
+// /api/messages/:convId
+app.get('/api/messages/:convId', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT m.*,u.username,u.avatar_url FROM messages m JOIN users u ON m.sender_id=u.id WHERE m.conversation_id=$1 ORDER BY m.created_at ASC LIMIT 100',
+      [req.params.convId]
+    );
+    res.json({ messages: rows });
+  } catch(e) { res.json({ messages: [] }); }
+});
+
+// /api/messages/send
+app.post('/api/messages/send', authMiddleware, async (req, res) => {
+  const { conversation_id, content } = req.body;
+  try {
+    const { rows } = await db.query(
+      'INSERT INTO messages (id,conversation_id,sender_id,content,created_at) VALUES (gen_random_uuid(),$1,$2,$3,NOW()) RETURNING *',
+      [conversation_id, req.user.id, content]
+    );
+    res.json({ ok: true, message: rows[0] });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// /api/live/start
+app.post('/api/live/start', authMiddleware, async (req, res) => {
+  const { title } = req.body;
+  try {
+    const streamKey = require('crypto').randomBytes(16).toString('hex');
+    const { rows } = await db.query(
+      'INSERT INTO live_streams (id,user_id,title,stream_key,is_active,created_at) VALUES (gen_random_uuid(),$1,$2,$3,true,NOW()) RETURNING *',
+      [req.user.id, title || 'Live Stream', streamKey]
+    );
+    res.json({ ok: true, stream: rows[0], streamKey, rtmpUrl: `rtmp://nvme.live/live/${streamKey}` });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// /api/videos/upload (stub — returns presigned-style response)
+app.post('/api/videos/upload', authMiddleware, async (req, res) => {
+  const { title, description, video_url } = req.body;
+  if (!video_url) return res.status(400).json({ error: 'video_url required' });
+  try {
+    const { rows } = await db.query(
+      'INSERT INTO videos (id,user_id,title,description,video_url,created_at) VALUES (gen_random_uuid(),$1,$2,$3,$4,NOW()) RETURNING *',
+      [req.user.id, title||'Untitled', description||'', video_url]
+    );
+    res.json({ ok: true, video: rows[0] });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+// ── END ROUTE ALIASES ────────────────────────────────────────────────────────

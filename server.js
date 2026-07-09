@@ -333,8 +333,8 @@ app.get('/shop', (req, res) => {
 app.put('/api/profile/privacy', authMiddleware, async (req, res) => {
   try {
     const { is_private } = req.body;
-    await db.query('UPDATE users SET is_private=$1 WHERE id=$2', [grep -n follow_requests|is_private server.js | head -5is_private, req.user.id]);
-    res.json({ ok: true, is_private: grep -n follow_requests|is_private server.js | head -5is_private });
+    await db.query('UPDATE users SET is_private=$1 WHERE id=$2', [is_private, req.user.id]);
+    res.json({ ok: true, is_private: is_private });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -486,6 +486,21 @@ app.get('/api/users/:username', async (req, res) => {
 app.get('/u/:username', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'frontend', 'profile-view.html'));
 });
+
+// Never cache app.html — preserves OAuth ?token= query params
+const serveApp = (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(require('path').join(__dirname, 'public', 'app.html'));
+};
+app.get('/app.html', serveApp);
+app.get('/app', serveApp);
+// Pretty routes for full-page experiences
+app.get('/live', (req, res) => res.sendFile(require('path').join(__dirname, 'public', 'live.html')));
+app.get('/creator', (req, res) => res.sendFile(require('path').join(__dirname, 'public', 'creator.html')));
+app.get('/messages', (req, res) => res.sendFile(require('path').join(__dirname, 'public', 'messages.html')));
+app.get('/merch', (req, res) => res.sendFile(require('path').join(__dirname, 'public', 'merch.html')));
 
 app.use(require('express').static(require('path').join(__dirname, 'public')));
 

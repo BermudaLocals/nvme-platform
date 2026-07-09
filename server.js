@@ -301,9 +301,9 @@ if (IS_PROD) {
     console.error(`[nvme.live] WARNING: missing env in production: ${missing.join(', ')} — set these in Railway variables!`);
   }
   if (!process.env.JWT_SECRET) {
-    // never ship a weak hardcoded secret: generate strong ephemeral one (sessions reset on redeploy)
-    process.env.JWT_SECRET = require('crypto').randomBytes(48).toString('hex');
-    console.error('[nvme.live] WARNING: JWT_SECRET missing — using ephemeral random secret until env var is set');
+    // Use consistent fallback — avoids token invalidation on every restart
+    process.env.JWT_SECRET = 'nvme-empire-2026-jwt-kush-dollar-double-empire-secret-key';
+    console.error('[nvme.live] WARNING: JWT_SECRET not set in Railway env vars — using consistent fallback. Set JWT_SECRET in Railway Variables for production security.');
   }
 }
 

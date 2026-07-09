@@ -48,10 +48,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           const email = profile.emails?.[0]?.value;
           const username = profile.displayName?.replace(/\s+/g, '_').toLowerCase() || 'user_' + profile.id;
           const avatar = profile.photos?.[0]?.value || null;
-          let result = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
+          let result = await db.query('SELECT * FROM users WHERE email=$1', [email]);
           let user;
           if (result.rows.length === 0) {
-            const r = await pool.query(
+            const r = await db.query(
               'INSERT INTO users (id,email,username,password_hash,avatar_url,created_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING *',
               [uuidv4(), email, username, 'GOOGLE_OAUTH', avatar]
             );
@@ -59,7 +59,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           } else {
             user = result.rows[0];
             if (avatar && !user.avatar_url) {
-              await pool.query('UPDATE users SET avatar_url=$1 WHERE id=$2', [avatar, user.id]);
+              await db.query('UPDATE users SET avatar_url=$1 WHERE id=$2', [avatar, user.id]);
               user.avatar_url = avatar;
             }
           }

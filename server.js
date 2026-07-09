@@ -313,7 +313,15 @@ try {
     sessionStore = new RedisStore({ client: redisClient, prefix: 'nvme:sess:' });
     console.log('[Session] Redis store connected');
   }
-} catch(e) { console.log('[Session] Redis unavailable, using MemoryStore:', e.message); }
+} catch(e) { console.log('[Session] Redis unavailable:', e.message); }
+// Fallback: pg session store if DATABASE_URL set and no Redis
+if (!sessionStore && process.env.DATABASE_URL) {
+  try {
+    const pgSession = require('connect-pg-simple')(session);
+    sessionStore = new pgSession({ conString: process.env.DATABASE_URL, tableName: 'nvme_sessions', createTableIfMissing: true });
+    console.log('[Session] PostgreSQL session store active');
+  } catch(e2) { console.log('[Session] PG session fallback failed:', e2.message); }
+}
 app.use(session({
   store: sessionStore,
   secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'nvme-session-secret',
@@ -2278,7 +2286,8 @@ server.listen(PORT, '0.0.0.0', () => {
   });
 }).catch(e => {
   console.error('[nvme.live] DB init failed:', e.message);
-  
+});
+
 // ============================================================
 // NVME NATIVE CRYPTO WALLET ROUTES
 // Ethereum HD wallet via Alchemy API
@@ -2296,75 +2305,6 @@ db.query(`
   );
 `).catch(e => console.log('crypto_wallets table ready'));
 
-// GET /api/wallet/crypto/address - get or create user ETH deposit address
-app.get('/api/wallet/crypto/address', authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    // Check if user already has a wallet
-    let result = await db.query('SELECT eth_address, wallet_index FROM crypto_wallets WHERE user_id = $1', [userId]);
-    if (result.rows.length > 0) {
-      const bal = await cryptoWallet.getEthBalance(result.rows[0].eth_address);
-      return res.json({ ok: true, address: result.rows[0].eth_address, balance: bal });
-    }
-    // Generate new address — use count of existing wallets as index
-    const countRes = await db.query('SELECT COUNT(*) FROM crypto_wallets');
-    const walletIndex = parseInt(countRes.rows[0].count) || 0;
-    const ethAddress = cryptoWallet.getUserWalletAddress(walletIndex);
-    if (!ethAddress) throw new Error('Wallet generation failed');
-    await db.query(
-      'INSERT INTO crypto_wallets (user_id, eth_address, wallet_index) VALUES ($1, $2, $3)',
-      [userId, ethAddress, walletIndex]
-    );
-    const bal = await cryptoWallet.getEthBalance(ethAddress);
-    res.json({ ok: true, address: ethAddress, balance: bal, new: true });
-  } catch(e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
-// GET /api/wallet/crypto/balance - get ETH balance + USD value
-app.get('/api/wallet/crypto/balance', authMiddleware, async (req, res) => {
-  try {
-    const result = await db.query('SELECT eth_address FROM crypto_wallets WHERE user_id = $1', [req.user.id]);
-    if (!result.rows.length) return res.json({ ok: true, eth: '0.000000', usd: 0, address: null });
-    const address = result.rows[0].eth_address;
-    const [bal, ethPrice] = await Promise.all([
-      cryptoWallet.getEthBalance(address),
-      cryptoWallet.getEthPrice()
-    ]);
-    const usd = (parseFloat(bal.eth) * ethPrice).toFixed(2);
-    res.json({ ok: true, eth: bal.eth, usd, address, ethPrice });
-  } catch(e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
-// GET /api/wallet/crypto/transactions - recent ETH transactions
-app.get('/api/wallet/crypto/transactions', authMiddleware, async (req, res) => {
-  try {
-    const result = await db.query('SELECT eth_address FROM crypto_wallets WHERE user_id = $1', [req.user.id]);
-    if (!result.rows.length) return res.json({ ok: true, txs: [] });
-    const txs = await cryptoWallet.getRecentTxs(result.rows[0].eth_address, 10);
-    res.json({ ok: true, txs });
-  } catch(e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
-// GET /api/wallet/crypto/eth-price - current ETH price in USD
-app.get('/api/wallet/crypto/eth-price', async (req, res) => {
-  try {
-    const price = await cryptoWallet.getEthPrice();
-    res.json({ ok: true, price, symbol: 'ETH', currency: 'USD' });
-  } catch(e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[nvme.live] ONLINE :${PORT} (no DB — check DATABASE_URL)`);
-  });
-});
 
 
 // ── ROUTE ALIASES (app.html compatibility) ─────────────────────────────────
@@ -2392,13 +2332,6 @@ app.post('/api/auth/signup', async (req, res) => {
 // /api/auth/logout
 app.post('/api/auth/logout', (req, res) => { res.json({ ok: true }); });
 
-// /api/wallet/balance → /api/credits/balance
-app.get('/api/wallet/balance', authMiddleware, async (req, res) => {
-  try {
-    const { rows } = await db.query('SELECT balance_credits FROM users WHERE id=$1', [req.user.id]);
-    res.json({ balance: rows[0]?.balance_credits || 0, credits: rows[0]?.balance_credits || 0 });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
 
 // /api/live/streams → alias for /api/streams/live
 app.get('/api/live/streams', async (req, res) => {

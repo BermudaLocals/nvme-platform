@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>NVME Merch — Official Store</title>
+<meta name="description" content="Official NVME merchandise. Creator-grade apparel and accessories.">
+<link rel="icon" href="/img/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Outfit',sans-serif;background:#050508;color:#fff;overflow-x:hidden}
+:root{--purple:#7c3aed;--pink:#ff2e5b;--gold:#f59e0b;--bg:#050508;--card:#0d0d18;--border:rgba(255,255,255,0.08)}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0a0a14}::-webkit-scrollbar-thumb{background:#7c3aed;border-radius:4px}
+
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:64px;background:rgba(5,5,8,0.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-logo img{width:36px;height:36px;border-radius:9px}
+.nav-logo-text{font-weight:900;font-size:1.5rem;letter-spacing:.08em;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-links{display:flex;gap:2rem;align-items:center}
+.nav-links a{color:rgba(255,255,255,.7);text-decoration:none;font-size:.9rem;font-weight:500;transition:color .2s}
+.nav-links a:hover{color:#fff}
+.btn-primary{background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;padding:9px 22px;border-radius:8px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.9rem;font-weight:700;text-decoration:none;display:inline-block}
+
+/* HERO */
+.merch-hero{padding:120px 2rem 60px;text-align:center;position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(124,58,237,.12) 0%,transparent 60%)}
+.merch-hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:800px;height:500px;background:radial-gradient(ellipse,rgba(124,58,237,.2) 0%,transparent 70%);pointer-events:none}
+.merch-hero h1{font-size:clamp(3rem,10vw,6rem);font-weight:900;letter-spacing:.06em;background:linear-gradient(135deg,#fff 30%,var(--purple) 70%,var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:.5rem;position:relative}
+.merch-hero p{color:rgba(255,255,255,.5);font-size:1.05rem;max-width:480px;margin:0 auto 2rem;position:relative}
+.merch-hero-meta{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-bottom:2rem}
+.meta-item{font-size:.8rem;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.12em;font-weight:600}
+
+/* FILTER BAR */
+.filter-bar{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;padding:1.5rem 2rem;border-bottom:1px solid var(--border);position:sticky;top:64px;background:rgba(5,5,8,.95);backdrop-filter:blur(20px);z-index:50}
+.filter-btn{background:transparent;border:1px solid var(--border);color:rgba(255,255,255,.5);padding:8px 20px;border-radius:100px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:600;transition:all .2s}
+.filter-btn.active,.filter-btn:hover{background:var(--purple);border-color:var(--purple);color:#fff}
+
+/* PRODUCT GRID */
+.product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.5rem;padding:2.5rem 2rem;max-width:1300px;margin:0 auto}
+
+.product-card{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;cursor:pointer;transition:transform .25s,border-color .25s;position:relative}
+.product-card:hover{transform:translateY(-6px);border-color:rgba(124,58,237,.5)}
+
+.product-img-wrap{position:relative;aspect-ratio:4/5;overflow:hidden;background:#0a0a14}
+.product-img-wrap img{width:100%;height:100%;object-fit:cover;transition:transform .4s ease}
+.product-card:hover .product-img-wrap img{transform:scale(1.04)}
+
+.product-badge{position:absolute;top:14px;left:14px;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 12px;font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff}
+.product-badge.new{background:rgba(124,58,237,.6);border-color:rgba(124,58,237,.8)}
+.product-badge.sold-out{background:rgba(0,0,0,.8)}
+
+.product-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(5,5,8,.9) 0%,transparent 50%);pointer-events:none}
+
+.product-quick-add{position:absolute;bottom:14px;left:14px;right:14px;background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;padding:13px;border-radius:12px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.9rem;font-weight:800;opacity:0;transform:translateY(8px);transition:all .25s;letter-spacing:.04em}
+.product-card:hover .product-quick-add{opacity:1;transform:translateY(0)}
+
+.product-info{padding:1.25rem}
+.product-name{font-size:1rem;font-weight:800;margin-bottom:.25rem;letter-spacing:.01em}
+.product-desc{color:rgba(255,255,255,.4);font-size:.82rem;margin-bottom:.75rem;line-height:1.5}
+.product-footer{display:flex;align-items:center;justify-content:space-between}
+.product-price{font-size:1.15rem;font-weight:900;background:linear-gradient(135deg,var(--gold),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.product-colors{display:flex;gap:6px}
+.color-dot{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.15);cursor:pointer;transition:transform .15s}
+.color-dot:hover{transform:scale(1.2)}
+
+/* FEATURED BANNER */
+.featured-banner{margin:2rem;border-radius:24px;overflow:hidden;position:relative;min-height:400px;display:flex;align-items:center}
+.featured-banner img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top}
+.featured-banner-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,5,8,.95) 40%,rgba(5,5,8,.3) 100%)}
+.featured-banner-content{position:relative;z-index:1;padding:3rem;max-width:500px}
+.featured-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.2em;color:var(--purple);font-weight:700;margin-bottom:.75rem}
+.featured-title{font-size:clamp(1.8rem,5vw,2.8rem);font-weight:900;line-height:1.1;margin-bottom:.75rem}
+.featured-sub{color:rgba(255,255,255,.55);font-size:.95rem;margin-bottom:1.5rem;line-height:1.6}
+.featured-price{font-size:1.4rem;font-weight:900;color:var(--gold);margin-bottom:1.25rem}
+.btn-featured{background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;padding:14px 32px;border-radius:12px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:1rem;font-weight:800;transition:all .2s;letter-spacing:.02em}
+.btn-featured:hover{opacity:.9;transform:translateY(-2px);box-shadow:0 8px 30px rgba(124,58,237,.4)}
+
+/* NOTIFY MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+.modal-overlay.active{display:flex}
+.modal-box{background:#0f0f1a;border:1px solid rgba(124,58,237,.3);border-radius:24px;padding:2.5rem;width:100%;max-width:440px;margin:1rem}
+.modal-box h3{font-size:1.4rem;font-weight:900;margin-bottom:.5rem}
+.modal-box p{color:rgba(255,255,255,.5);font-size:.9rem;margin-bottom:1.5rem;line-height:1.6}
+.modal-input{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#fff;padding:14px 16px;border-radius:12px;font-family:'Outfit',sans-serif;font-size:1rem;margin-bottom:1rem;outline:none;transition:border-color .2s}
+.modal-input:focus{border-color:var(--purple)}
+.modal-btn{width:100%;background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;padding:14px;border-radius:12px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:1rem;font-weight:800;margin-bottom:.75rem}
+.modal-close{width:100%;background:transparent;border:1px solid var(--border);color:rgba(255,255,255,.4);padding:12px;border-radius:12px;cursor:pointer;font-family:'Outfit',sans-serif;font-size:.9rem}
+.modal-product-preview{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;background:rgba(255,255,255,.04);border-radius:12px;padding:.75rem}
+.modal-product-preview img{width:60px;height:60px;border-radius:8px;object-fit:cover}
+.modal-product-info .name{font-weight:700;font-size:.95rem}
+.modal-product-info .price{color:var(--gold);font-size:.9rem;font-weight:700}
+
+/* SECTION TITLE */
+.shop-section{padding:3rem 2rem 1rem;max-width:1300px;margin:0 auto}
+.shop-section-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.2em;color:var(--purple);font-weight:700;margin-bottom:.5rem}
+.shop-section-title{font-size:clamp(1.5rem,4vw,2.2rem);font-weight:900;margin-bottom:.5rem}
+.shop-section-sub{color:rgba(255,255,255,.4);font-size:.9rem}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:3rem 2rem;text-align:center;margin-top:4rem}
+footer a{color:rgba(255,255,255,.3);text-decoration:none;font-size:.85rem;margin:0 1rem}
+footer a:hover{color:#fff}
+.footer-copy{color:rgba(255,255,255,.2);font-size:.78rem;margin-top:1rem}
+
+.reveal{opacity:0;transform:translateY(24px);transition:all .5s ease}
+.reveal.visible{opacity:1;transform:translateY(0)}
+
+@media(max-width:640px){
+  nav{padding:0 1rem}
+  .nav-links{display:none}
+  .product-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem;padding:1.5rem 1rem}
+  .featured-banner{margin:1rem;min-height:300px}
+  .featured-banner-content{padding:1.5rem}
+  .filter-bar{padding:1rem;gap:.5rem}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/">
+    <img src="/img/icon-192.png" alt="NVME" onerror="this.style.display='none'">
+    <span class="nav-logo-text">NVME</span>
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/app.html">App</a>
+    <a href="/merch.html" style="color:#fff;">Merch</a>
+  </div>
+  <a class="btn-primary" href="/app.html">Open App</a>
+</nav>
+
+<!-- HERO -->
+<div class="merch-hero">
+  <h1>MERCH</h1>
+  <p>Official NVME creator apparel. Wear the platform. Built for creators who move different.</p>
+  <div class="merch-hero-meta">
+    <span class="meta-item">Free shipping over $75</span>
+    <span class="meta-item">Limited drops</span>
+    <span class="meta-item">Creator exclusive pieces</span>
+  </div>
+</div>
+
+<!-- FILTER BAR -->
+<div class="filter-bar">
+  <button class="filter-btn active" onclick="filterProducts('all',this)">All</button>
+  <button class="filter-btn" onclick="filterProducts('tops',this)">Tops</button>
+  <button class="filter-btn" onclick="filterProducts('hoodies',this)">Hoodies</button>
+  <button class="filter-btn" onclick="filterProducts('accessories',this)">Accessories</button>
+  <button class="filter-btn" onclick="filterProducts('limited',this)">Limited</button>
+</div>
+
+<!-- FEATURED BANNER -->
+<div class="featured-banner reveal" style="margin-top:2rem;">
+  <img src="https://images.unsplash.com/photo-1556821840-3a63f15732ce?w=1400&q=80" alt="NVME Signature Hoodie">
+  <div class="featured-banner-overlay"></div>
+  <div class="featured-banner-content">
+    <div class="featured-label">New Drop</div>
+    <h2 class="featured-title">NVME Signature Heavyweight Hoodie</h2>
+    <p class="featured-sub">400GSM French terry. Embroidered NVME wordmark. Oversized silhouette. Limited to 200 units.</p>
+    <div class="featured-price">$89.00</div>
+    <button class="btn-featured" onclick="openNotify('NVME Signature Heavyweight Hoodie','$89.00','https://images.unsplash.com/photo-1556821840-3a63f15732ce?w=120&q=80')">Notify Me When Live</button>
+  </div>
+</div>
+
+<!-- NEW DROPS SECTION -->
+<div class="shop-section reveal">
+  <div class="shop-section-label">Latest</div>
+  <h2 class="shop-section-title">New Drops</h2>
+  <p class="shop-section-sub">Fresh pieces just added to the store</p>
+</div>
+
+<div class="product-grid" id="productGrid">
+
+  <!-- Product 1 -->
+  <div class="product-card" data-category="hoodies">
+    <div class="product-img-wrap">
+      <img src="https://images.unsplash.com/photo-1556821840-3a63f15732ce?w=600&q=80" alt="NVME Signature Hoodie" loading="lazy">
+      <div class="product-overlay"></div>
+      <span class="product-badge new">New</span>
+      <button class="product-quick-add" onclick="openNotify('NVME Signature Hoodie','$89.00','https://images.unsplash.com/photo-1556821840-3a63f15732ce?w=120&q=80')">Notify Me</button>
+    </div>
+    <div class="product-info">
+      <div class="product-name">NVME Signature Hoodie</div>
+      <div class="product-desc">400GSM heavyweight. Embroidered logo. Oversized fit.</div>
+      <div class="product-footer">
+        <span class="product-price">$89.00</span>
+        <div class="product-colors">
+          <div class="color-dot" style="background:#1a1a1a" title="Black"></div>
+          <div class="color-dot" style="background:#2d2d3a" title="Charcoal"></div>
+          <div class="color-dot" style="background:#4c1d95" title="Deep Purple"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product 2 -->
+  <div class="product-card" data-category="tops">
+    <div class="product-img-wrap">
+      <img src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600&q=80" alt="NVME Creator Tee" loading="lazy">
+      <div class="product-overlay"></div>
+      <span class="product-badge new">Drop 01</span>
+      <button class="product-quick-add" onclick="openNotify('NVME Creator Tee','$42.00','https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=120&q=80')">Notify Me</button>
+    </div>
+    <div class="product-info">
+      <div class="product-name">NVME Creator Tee</div>
+      <div class="product-desc">Heavyweight cotton. Screen-printed NVME arc logo on chest.</div>
+      <div class="product-footer">
+        <span class="product-price">$42.00</span>
+        <div class="product-colors">
+          <div class="color-dot" style="background:#1a1a1a" title="Black"></div>
+          <div class="color-dot" style="background:#f5f5f5;border-color:rgba(255,255,255,.3)" title="White"></div>
+          <div class="color-dot" style="background:#7c3aed" title="Purple"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product 3 -->
+  <div class="product-card" data-category="accessories limited">
+    <div class="product-img-wrap">
+      <img src="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=600&q=80" alt="NVME Snapback" loading="lazy">
+      <div class="product-overlay"></div>
+      <span class="product-badge" style="background:rgba(245,158,11,.6);border-color:rgba(245,158,11,.8)">Limited</span>
+      <button class="product-quick-add" onclick="openNotify('NVME Snapback Cap','$48.00','https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=120&q=80')">Notify Me</button>
+    </div>
+    <div class="product-info">
+      <div class="product-name">NVME Snapback Cap</div>
+      <div class="product-desc">Structured 6-panel. Embroidered wordmark. One size fits all.</div>
+      <div class="product-footer">
+        <span class="product-price">$48.00</span>
+        <div class="product-colors">
+          <div class="color-dot" style="background:#1a1a1a" title="Black"></div>
+          <div class="color-dot" style="background:#2d1a4a" title="Dark Purple"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product 4 -->
+  <div class="product-card" data-category="tops">
+    <div class="product-img-wrap">
+      <img src="https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=600&q=80" alt="NVME Longline Tee" loading="lazy">
+      <div class="product-overlay"></div>
+      <button class="product-quick-add" onclick="openNotify('NVME Longline Oversized Tee','$55.00','https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=120&q=80')">Notify Me</button>
+    </div>
+    <div class="product-info">
+      <div class="product-name">NVME Longline Oversized Tee</div>
+      <div class="product-desc">Extended hem. Drop shoulder. NVME back graphic print.</div>
+      <div class="product-footer">
+        <span class="product-price">$55.00</span>
+        <div class="product-colors">
+          <div class="color-dot" style="background:#1a1a1a" title="Black"></div>
+          <div class="color-dot" style="background:#3b1a5a" title="Eggplant"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product 5 -->
+  <div class="product-card" data-category="accessories">
+    <div class="product-img-wrap">
+      <img src="https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=600&q=80" alt="NVME Phone Case" loading="lazy">
+      <div class="product-overlay"></div>
+      <button class="product-quick-add" onclick="openNotify('NVME Phone Case','$28.00','https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=120&q=80')">Notify Me</button>
+    </div>
+    <div class="product-info">
+      <div class="product-name">NVME Phone Case</div>
+      <div class="product-desc">MagSafe compatible. Matte finish. NVME logo engraved back.</div>
+      <div class="product-footer">
+        <span class="product-price">$28.00</span>
+        <div class="product-colors">
+          <div class="color-dot" style="background:#1a1a1a" title="Matte Black"></div>
+          <div class="color-dot" style="background:#f5f5f5;border-color:rgba(255,255,255,.3)" title="Clear"></div>
+          <div class="color-dot" style="background:#4c1d95" title="Purple"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product 6 -->
+  <div class="product-card" data-category="hoodies limited">
+    <div class="product-img-wrap">
+      <img src="https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=600&q=80" alt="NVME Creator Zip-Up" loading="lazy">
+      <div class="product-overlay"></div>
+      <span class="product-badge" style="background:rgba(245,158,11,.6);border-color:rgba(245,158,11,.8)">Limited</span>
+      <button class="product-quick-add" onclick="openNotify('NVME Creator Zip-Up','$110.00','https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=120&q=80')">Notify Me</button>
+    </div>
+    <div class="product-info">
+      <div class="product-name">NVME Creator Zip-Up</div>
+      <div class="product-desc">Full-zip heavyweight fleece. YKK zipper. Chenille NVME patch.</div>
+      <div class="product-footer">
+        <span class="product-price">$110.00</span>
+        <div class="product-colors">
+          <div class="color-dot" style="background:#1a1a1a" title="Black"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product 7 -->
+  <div class="product-card" data-category="accessories">
+    <div class="product-img-wrap">
+      <img src="https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&q=80" alt="NVME Crew Socks" loading="lazy">
+      <div class="product-overlay"></div>
+      <button class="product-quick-add" onclick="openNotify('NVME Crew Socks — 3 Pack','$22.00','https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=120&q=80')">Notify Me</button>
+    </div>
+    <div class="product-info">
+      <div class="product-name">NVME Crew Socks — 3 Pack</div>
+      <div class="product-desc">Combed cotton. NVME jacquard knit on cuff. One size.</div>
+      <div class="product-footer">
+        <span class="product-price">$22.00</span>
+        <div class="product-colors">
+          <div class="color-dot" style="background:#1a1a1a" title="Black"></div>
+          <div class="color-dot" style="background:#f5f5f5;border-color:rgba(255,255,255,.3)" title="White"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product 8 -->
+  <div class="product-card" data-category="tops limited">
+    <div class="product-img-wrap">
+      <img src="https://images.unsplash.com/photo-1603252109303-2751441dd157?w=600&q=80" alt="NVME Battle Tee" loading="lazy">
+      <div class="product-overlay"></div>
+      <span class="product-badge" style="background:rgba(255,46,91,.5);border-color:rgba(255,46,91,.7)">Battle Series</span>
+      <button class="product-quick-add" onclick="openNotify('NVME x Battle Series Tee','$65.00','https://images.unsplash.com/photo-1603252109303-2751441dd157?w=120&q=80')">Notify Me</button>
+    </div>
+    <div class="product-info">
+      <div class="product-name">NVME x Battle Series Tee</div>
+      <div class="product-desc">Vintage wash. Battle Series graphics. Limited run of 100.</div>
+      <div class="product-footer">
+        <span class="product-price">$65.00</span>
+        <div class="product-colors">
+          <div class="color-dot" style="background:#2a1a1a" title="Washed Black"></div>
+          <div class="color-dot" style="background:#1a1a2a" title="Washed Navy"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- NOTIFY MODAL -->
+<div class="modal-overlay" id="notifyModal" onclick="closeModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-product-preview" id="modalPreview">
+      <img id="modalImg" src="" alt="">
+      <div class="modal-product-info">
+        <div class="name" id="modalName"></div>
+        <div class="price" id="modalPrice"></div>
+      </div>
+    </div>
+    <h3>Get Notified First</h3>
+    <p>Drop your email and we will hit you the moment this goes live. Creator account holders get 24hr early access.</p>
+    <input class="modal-input" type="email" id="notifyEmail" placeholder="your@email.com">
+    <button class="modal-btn" onclick="submitNotify()">Notify Me</button>
+    <button class="modal-close" onclick="document.getElementById('notifyModal').classList.remove('active')">Cancel</button>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <a href="/">Home</a>
+  <a href="/app.html">App</a>
+  <a href="/merch.html">Merch</a>
+  <div class="footer-copy">© 2026 NVME · Dollar Double Empire · Official Merchandise</div>
+</footer>
+
+<script>
+function filterProducts(cat, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.product-card').forEach(card => {
+    if (cat === 'all') { card.style.display = ''; return; }
+    const cats = (card.dataset.category || '').split(' ');
+    card.style.display = cats.includes(cat) ? '' : 'none';
+  });
+}
+
+function openNotify(name, price, img) {
+  document.getElementById('modalName').textContent = name;
+  document.getElementById('modalPrice').textContent = price;
+  document.getElementById('modalImg').src = img;
+  document.getElementById('notifyModal').classList.add('active');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('notifyModal'))
+    document.getElementById('notifyModal').classList.remove('active');
+}
+
+function submitNotify() {
+  const email = document.getElementById('notifyEmail').value;
+  if (!email || !email.includes('@')) { alert('Please enter a valid email'); return; }
+  document.querySelector('.modal-btn').textContent = 'Done! We will notify you.';
+  document.querySelector('.modal-btn').style.background = '#059669';
+  setTimeout(() => document.getElementById('notifyModal').classList.remove('active'), 1800);
+}
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.08 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

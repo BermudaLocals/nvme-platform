@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#05050d">
 <link rel="manifest" href="/manifest.json">
-<title>nvme.live — Create. Stream. Battle.</title>
+<link rel="icon" href="/img/icon-192.png"><link rel="apple-touch-icon" href="/img/icon-512.png"><title>nvme.live — Create. Stream. Battle.</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -255,7 +255,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 <!-- AUTH OVERLAY -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-logo-wrap">
-    <div class="auth-logo-big">nvme.live</div>
+    <img src="/img/icon-512.png" alt="nvme.live" style="width:88px;height:88px;border-radius:20px;margin-bottom:1rem;box-shadow:0 8px 32px rgba(124,92,252,0.45)" onerror="this.style.display='none'"><div class="auth-logo-big">nvme.live</div>
     <div class="auth-tagline">CREATE · STREAM · BATTLE</div>
   </div>
   <div class="auth-card">
@@ -292,7 +292,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
 <!-- TOP NAV -->
 <nav class="topnav" id="topNav" style="display:none">
-  <div class="logo">nvme<span style="-webkit-text-fill-color:rgba(255,255,255,0.9)">.live</span></div>
+  <div style="display:flex;align-items:center;gap:0.5rem"><img src="/img/icon-192.png" alt="" style="width:28px;height:28px;border-radius:7px" onerror="this.style.display='none'"><div class="logo">nvme<span style="-webkit-text-fill-color:rgba(255,255,255,0.9)">.live</span></div></div>
   <div style="display:flex;align-items:center;gap:0.5rem">
     <div class="wallet-pill" onclick="showScreen('wallet')">
       🪙 <span id="manus-bal">0</span>
@@ -438,7 +438,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 <!-- PROFILE SCREEN -->
 <div class="screen" id="profile-screen">
   <div class="profile-hero">
-    <div class="profile-avatar-img" id="profileAvatar">👑</div>
+    <div class="profile-avatar-img" id="profileAvatar"><img src="/img/icon-192.png" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none'"></div>
     <div class="profile-name" id="profileName">Loading...</div>
     <div class="profile-handle" id="profileHandle">@...</div>
     <div class="profile-stats">

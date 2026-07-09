@@ -627,7 +627,7 @@ if(typeof socket !== 'undefined' && socket) {
 <!-- AUTH OVERLAY -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-logo-wrap" style="text-align:center;display:flex;flex-direction:column;align-items:center;">
-    <img src="/img/icon-512.png" alt="NVME" class="logo-pulse" style="width:160px;height:160px;border-radius:32px;margin:0 auto 1.5rem;display:block;" onerror="this.style.display='none'">
+    <img src="/img/icon-512.png" alt="NVME" class="logo-pulse" style="width:160px;height:160px;border-radius:32px;margin:0 auto 1.5rem;display:block;cursor:pointer;" onclick="if(currentUser)showScreen('feed')" onerror="this.style.display='none'">
     <div class="auth-tagline">CREATE · STREAM · BATTLE</div>
   </div>
   <div class="auth-card">
@@ -664,7 +664,7 @@ if(typeof socket !== 'undefined' && socket) {
 
 <!-- TOP NAV -->
 <nav class="topnav" id="topNav" style="display:none">
-  <div style="display:flex;align-items:center;gap:0.6rem"><img src="/img/icon-192.png" alt="NVME" class="nav-logo-pulse" style="width:46px;height:46px;border-radius:12px;" onerror="this.style.display='none'"></div>
+  <div style="display:flex;align-items:center;gap:0.6rem;cursor:pointer" onclick="showScreen('feed')" title="Home"><img src="/img/icon-192.png" alt="NVME" class="nav-logo-pulse" style="width:46px;height:46px;border-radius:12px;" onerror="this.style.display='none'"></div>
   <div style="display:flex;align-items:center;gap:0.5rem">
     <div class="wallet-pill" onclick="showScreen('wallet')">
       🪙 <span id="manus-bal">0</span>

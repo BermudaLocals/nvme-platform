@@ -257,7 +257,7 @@ app.get('/auth/google/callback',
   (req, res) => {
     const token = signToken({ id: req.user.id, email: req.user.email });
     // Redirect to frontend with token in query param; frontend stores it
-    res.redirect(`/?token=${token}&user=${encodeURIComponent(JSON.stringify({ id:req.user.id, email:req.user.email, username:req.user.username }))}`);
+    res.redirect(`/app.html?token=${token}&user=${encodeURIComponent(JSON.stringify({ id:req.user.id, email:req.user.email, username:req.user.username }))}`);
   }
 );
 

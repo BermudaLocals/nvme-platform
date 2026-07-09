@@ -1042,6 +1042,7 @@ function enterApp(user){
   // Initialize socket.io for real-time features
   if(typeof io !== 'undefined'){
     const socketConn = io({ auth: { token: localStorage.getItem('nvme_token') } });
+    setTimeout(setupWebRTCListeners, 500);
     socketConn.on('connect', () => console.log('[Socket] Connected'));
     socketConn.on('receive_dm', (msg) => {
       console.log('[DM]', msg);
@@ -1096,8 +1097,13 @@ async function requestPayout(){
   alert('Payout requests require minimum 1,000 coins. Visit your profile settings.');
 }
 function goLive(){
-  window.location.href = '/app.html?screen=upload';
-  alert('Live streaming coming soon! 🔴');
+  // Show live setup screen first
+  showScreen('upload');
+  // Switch to the Go Live tab
+  setTimeout(() => {
+    const liveBtn = document.querySelector('.upload-btn[onclick*="goLive"]');
+    startGoLive();
+  }, 100);
 }
 async function submitUpload(){
   const title = document.getElementById('uploadTitle').value.trim();
@@ -1349,7 +1355,21 @@ function showCall(){
     else clearInterval(iv);
   },1000);
 }
-function endCall(){document.getElementById('callOverlay').classList.remove('show')}
+function endCall() {
+  callState.active = false;
+  // Stop local stream tracks
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  // Close peer connection
+  if (peerConnection) { peerConnection.close(); peerConnection = null; }
+  // Stop timer
+  if (callTimer) { clearInterval(callTimer); callTimer = null; }
+  // Hide call screen
+  const cs = document.getElementById('call-screen');
+  if (cs) cs.classList.remove('open');
+  const co = document.getElementById('callOverlay');
+  if (co) co.classList.remove('show');
+  showToast('Call ended');
+}
 
 // ---- DATING ----
 function swipeCard(action){
@@ -1943,6 +1963,10 @@ function joinLiveStream(stream) {
   currentLiveStream = stream;
   document.getElementById('live-creator-name').textContent = stream.username || 'Creator';
   document.getElementById('live-viewer-count').textContent = `${stream.viewer_count || 0} viewers`;
+  // Auto-activate camera if host
+  if (stream.isHost) {
+    activateHostCamera();
+  }
   const av = document.getElementById('stream-main-avatar');
   av.textContent = initials(stream.username);
   av.style.background = `linear-gradient(135deg, ${colorFor(stream.username)}, #9b59ff)`;
@@ -2288,7 +2312,7 @@ async function sendDM() {
 
   appendMessage({ content: msg }, true);
 
-  if (currentConversationId > 0) {
+  if (currentConversationId && currentConversationId !== -1 && currentConversationId !== 0) {
     try {
       await fetch(`${API}/api/messages/send`, {
         method: 'POST',
@@ -2365,20 +2389,76 @@ function startVideoCall() {
   }
 }
 
-function openCallScreen(name, userId, type = 'voice') {
-  callState = { active: true, muted: false, camOff: false, type };
+// WebRTC state
+let localStream = null;
+let peerConnection = null;
+const WEBRTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+
+async function openCallScreen(name, userId, type = 'voice') {
+  callState = { active: true, muted: false, camOff: false, type, remoteUserId: userId };
   document.getElementById('call-name').textContent = name || 'User';
   document.getElementById('call-remote-avatar').textContent = initials(name);
   document.getElementById('call-remote-avatar').style.background = `linear-gradient(135deg,${colorFor(name)},#9b59ff)`;
-  document.getElementById('call-status').textContent = 'Calling...';
+  document.getElementById('call-status').textContent = 'Connecting...';
   document.getElementById('call-local-video').style.display = type === 'video' ? 'flex' : 'none';
   document.getElementById('call-screen').classList.add('open');
 
-  // Simulate connection after 2s (real WebRTC would connect here)
-  setTimeout(() => {
-    if (callState.active) document.getElementById('call-status').textContent = 'Connected · 0:00';
+  try {
+    // Request camera/mic access
+    const constraints = type === 'video'
+      ? { video: { facingMode: 'user', width: 320, height: 240 }, audio: true }
+      : { video: false, audio: true };
+
+    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+    // Show local preview for video calls
+    if (type === 'video') {
+      const localVid = document.getElementById('call-local-video');
+      if (localVid) {
+        let vid = localVid.querySelector('video');
+        if (!vid) { vid = document.createElement('video'); vid.autoplay = true; vid.muted = true; vid.playsInline = true; vid.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:12px'; localVid.appendChild(vid); }
+        vid.srcObject = localStream;
+      }
+    }
+
+    // Setup WebRTC peer connection
+    peerConnection = new RTCPeerConnection(WEBRTC_CONFIG);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+    // Handle incoming remote stream
+    peerConnection.ontrack = (e) => {
+      const remoteVid = document.getElementById('call-remote-video') || document.getElementById('call-remote-avatar');
+      if (remoteVid && remoteVid.tagName === 'VIDEO') remoteVid.srcObject = e.streams[0];
+      document.getElementById('call-status').textContent = 'Connected · 0:00';
+      startCallTimer();
+    };
+
+    // ICE candidates via socket
+    peerConnection.onicecandidate = (e) => {
+      if (e.candidate && socket) {
+        socket.emit('vc_ice_candidate', { toUserId: userId, candidate: e.candidate });
+      }
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+      const state = peerConnection?.connectionState;
+      if (state === 'connected') { document.getElementById('call-status').textContent = 'Connected · 0:00'; startCallTimer(); }
+      if (state === 'disconnected' || state === 'failed') endCall();
+    };
+
+    // Create and send offer
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    if (socket) socket.emit('vc_offer', { toUserId: userId, offer, withVideo: type === 'video' });
+    document.getElementById('call-status').textContent = 'Ringing...';
+
+  } catch (err) {
+    console.error('[call] getUserMedia failed:', err);
+    // Fallback: show simulated call if no camera permission
+    document.getElementById('call-status').textContent = 'Connected (audio only)';
     startCallTimer();
-  }, 2000);
+    showToast(type === 'video' ? '📹 Camera access denied — voice only' : '🎤 Connected');
+  }
 }
 
 let callTimer = null;
@@ -2397,14 +2477,20 @@ function startCallTimer() {
 
 function toggleMute() {
   callState.muted = !callState.muted;
+  if (localStream) {
+    localStream.getAudioTracks().forEach(t => t.enabled = !callState.muted);
+  }
   document.getElementById('mute-btn').textContent = callState.muted ? '🔇' : '🎤';
   showToast(callState.muted ? '🔇 Muted' : '🎤 Unmuted');
 }
 
 function toggleCam() {
   callState.camOff = !callState.camOff;
+  if (localStream) {
+    localStream.getVideoTracks().forEach(t => t.enabled = !callState.camOff);
+  }
   document.getElementById('cam-btn').textContent = callState.camOff ? '🚫' : '📹';
-  showToast(callState.camOff ? 'Camera off' : 'Camera on');
+  showToast(callState.camOff ? '📹 Camera off' : '📹 Camera on');
 }
 
 function openUpload() { document.getElementById('upload-modal').classList.add('open'); }

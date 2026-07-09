@@ -318,7 +318,12 @@ try {
 if (!sessionStore && process.env.DATABASE_URL) {
   try {
     const pgSession = require('connect-pg-simple')(session);
-    sessionStore = new pgSession({ conString: process.env.DATABASE_URL, tableName: 'nvme_sessions', createTableIfMissing: true });
+    sessionStore = new pgSession({
+      conString: process.env.DATABASE_URL,
+      tableName: 'nvme_sessions',
+      createTableIfMissing: true,
+      errorLog: (e) => { if (!e.message?.includes('already exists')) console.error('[Session PG]', e.message); }
+    });
     console.log('[Session] PostgreSQL session store active');
   } catch(e2) { console.log('[Session] PG session fallback failed:', e2.message); }
 }

@@ -1641,8 +1641,11 @@ app.post('/api/games/roll', authMiddleware, async (req, res) => {
     // Roll 3 dice
     const dice = [symbols[Math.floor(Math.random()*6)], symbols[Math.floor(Math.random()*6)], symbols[Math.floor(Math.random()*6)]];
     const matches = dice.filter(d => d === symbol).length;
-    const winAmount = matches > 0 ? betAmount * matches : 0;
-    const netChange = winAmount - betAmount;
+    // Payout table: 16.9% house edge, 6:1 jackpot on triple
+    // 0 match: lose bet | 1 match: win 0.7x | 2 match: win 2x | 3 match: win 6x (jackpot)
+    const payoutMultiplier = matches === 0 ? -1 : matches === 1 ? 0.7 : matches === 2 ? 2 : 6;
+    const netChange = Math.round(betAmount * payoutMultiplier);
+    const winAmount = netChange > 0 ? netChange : 0;
     // Update balance
     await db.query('UPDATE users SET balance_credits = balance_credits + $1 WHERE id=$2', [netChange, req.user.id]);
     const newBalance = balance + netChange;

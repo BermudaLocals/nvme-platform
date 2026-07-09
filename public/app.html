@@ -920,10 +920,14 @@ async function loadRealFeed(){
     const r = await fetch(API+'/api/feed',{headers:authHeaders()});
     if(!r.ok) return;
     const videos = await r.json();
-    if(!Array.isArray(videos) || !videos.length) return;
+    // Handle both array and {ok:true, feed:[...]} response formats
+    const feedArr = Array.isArray(videos) ? videos : (videos && videos.feed ? videos.feed : null);
+    if(!feedArr || !feedArr.length) return;
+    const videos2 = feedArr;
     const c=document.getElementById('feedContainer');
+    const videosFinal = typeof videos2 !== 'undefined' ? videos2 : (Array.isArray(videos) ? videos : videos.feed);
     const syms=['🏝️','💰','🤖','🎵','⚓','❤️','🏄','💎'];
-    c.innerHTML=videos.map((v,i)=>`
+    c.innerHTML=videosFinal.map((v,i)=>`
       <div class="feed-item">
         <div class="feed-video-bg">${v.thumbnail||syms[i%syms.length]}</div>
         <div class="feed-overlay"></div>

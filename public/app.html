@@ -466,7 +466,7 @@ const _origShowScreen = typeof showScreen === 'function' ? showScreen : null;
 // ===== PROFILE EDIT =====
 function openProfileEdit() {
   const modal = document.getElementById('peditModal');
-  if(!currentUser) { showNotif && showNotif('Sign in first'); return; }
+  if(!currentUser) { var _s=localStorage.getItem('nvme_user'); if(_s){try{currentUser=JSON.parse(_s);}catch(e){}} if(!currentUser){ showToast('Loading profile...'); checkAuth(); return; } }
   // Pre-fill fields
   document.getElementById('peditDisplayName').value = currentUser.display_name || currentUser.username || '';
   document.getElementById('peditUsername').value = currentUser.username || '';
@@ -761,7 +761,7 @@ if(typeof socket !== 'undefined' && socket) {
   </div>
 </div>
 <button class="upload-btn" style="flex:1" onclick="goLive()">🔴 Go Live</button>
-      <button class="upload-btn" style="flex:1;background:linear-gradient(135deg,var(--purple),var(--blue))" onclick="submitUpload()">Post Video</button>
+      <button class="upload-btn" id="postVideoBtn" style="flex:1;background:linear-gradient(135deg,var(--purple),var(--blue))" onclick="submitUpload()">Post Video</button>
     </div>
   </div>
 </div>
@@ -1077,6 +1077,7 @@ async function checkAuth(){
 }
 function enterApp(user){
   currentUser = user;
+  try{localStorage.setItem('nvme_user',JSON.stringify(user));}catch(e){}
   document.getElementById('authOverlay').classList.add('hidden');
   document.getElementById('topNav').style.display='flex';
   document.getElementById('botNav').style.display='flex';
@@ -1169,7 +1170,7 @@ async function submitUpload(){
   const titleEl = document.getElementById('uploadTitle');
   const captionEl = document.getElementById('uploadCaption');
   const fileInput = document.getElementById('videoFileInput');
-  const postBtn = document.querySelector('.upload-btn[onclick*="submitUpload"]');
+  const postBtn = document.getElementById('postVideoBtn');
   const title = titleEl ? titleEl.value.trim() : '';
   const caption = captionEl ? captionEl.value.trim() : '';
 

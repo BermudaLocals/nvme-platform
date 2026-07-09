@@ -632,6 +632,8 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
     -- Add profile columns if missing (safe migrations)
+    -- Fix any videos with null URL (placeholder for text posts)
+    UPDATE videos SET url='https://nvme.live/placeholder.mp4' WHERE url IS NULL OR url='';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
@@ -2204,8 +2206,8 @@ app.post('/api/upload', authMiddleware, upload.single('video'), async (req, res)
     const title = req.body.title || req.file.originalname;
     const caption = req.body.caption || '';
     const { rows } = await db.query(
-      'INSERT INTO videos (id, user_id, title, description, video_url, created_at) VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW()) RETURNING *',
-      [req.user.id, title, caption, url]
+      'INSERT INTO videos (user_id, title, description, url, thumbnail) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [req.user.id, title, caption, url, '']
     );
     res.json({ ok: true, video: rows[0], url });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -2429,8 +2431,8 @@ app.post('/api/videos/upload', authMiddleware, async (req, res) => {
   if (!video_url) return res.status(400).json({ error: 'video_url required' });
   try {
     const { rows } = await db.query(
-      'INSERT INTO videos (id,user_id,title,description,video_url,created_at) VALUES (gen_random_uuid(),$1,$2,$3,$4,NOW()) RETURNING *',
-      [req.user.id, title||'Untitled', description||'', video_url]
+      'INSERT INTO videos (user_id,title,description,url,thumbnail) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [req.user.id, title||'Untitled', description||'', video_url, '']
     );
     res.json({ ok: true, video: rows[0] });
   } catch(e) { res.status(500).json({ error: e.message }); }

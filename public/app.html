@@ -1106,31 +1106,71 @@ function goLive(){
   }, 100);
 }
 async function submitUpload(){
-  const title = document.getElementById('uploadTitle').value.trim();
-  const caption = document.getElementById('uploadCaption').value.trim();
+  const titleEl = document.getElementById('uploadTitle');
+  const captionEl = document.getElementById('uploadCaption');
   const fileInput = document.getElementById('videoFileInput');
-  if(!title) return alert('Please add a title');
-  const file = fileInput.files[0];
-  if(!file) {
-    // Text post if no file
-    try{
-      const r = await fetch(API+'/api/videos',{method:'POST',headers:authHeaders(),body:JSON.stringify({title,description:caption,url:'https://nvme.live/placeholder.mp4',thumbnail:'📹'})});
-      const d = await r.json();
-      if(d.ok){ alert('Posted! ✅'); document.getElementById('uploadTitle').value=''; document.getElementById('uploadCaption').value=''; showScreen('feed'); }
-      else alert(d.error || 'Post failed');
-    }catch(e){ alert('Network error'); }
+  const postBtn = document.querySelector('.upload-btn[onclick*="submitUpload"]');
+  const title = titleEl ? titleEl.value.trim() : '';
+  const caption = captionEl ? captionEl.value.trim() : '';
+
+  if(!title) {
+    showToast('Please add a title for your post');
+    if(titleEl) titleEl.focus();
     return;
   }
-  const fd = new FormData();
-  fd.append('video', file);
-  fd.append('title', title);
-  fd.append('caption', caption);
-  try{
-    const r = await fetch(API+'/api/upload',{method:'POST',headers:{'Authorization':'Bearer '+localStorage.getItem('nvme_token')},body:fd});
-    const d = await r.json();
-    if(d.ok){ alert('Video posted! ✅'); showScreen('feed'); }
-    else alert(d.error || 'Upload failed');
-  }catch(e){ alert('Upload error: '+e.message); }
+
+  if(postBtn) { postBtn.textContent = 'Posting...'; postBtn.disabled = true; }
+
+  const file = fileInput ? fileInput.files[0] : null;
+
+  try {
+    if(!file) {
+      // Text/caption post — no video file needed
+      const emoji = ['📸','🎬','🔥','💫','🚀','⭐','👑','🎵'][Math.floor(Math.random()*8)];
+      const r = await fetch(API+'/api/videos', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          title,
+          description: caption,
+          url: 'https://nvme.live/placeholder.mp4',
+          thumbnail: emoji
+        })
+      });
+      const d = await r.json();
+      if(d.ok || d.id) {
+        showToast('Posted! Your content is live 🎉');
+        if(titleEl) titleEl.value = '';
+        if(captionEl) captionEl.value = '';
+        if(fileInput) fileInput.value = '';
+        setTimeout(() => showScreen('feed'), 800);
+      } else {
+        showToast(d.error || 'Post failed. Try again.');
+      }
+    } else {
+      // Video file upload
+      const fd = new FormData();
+      fd.append('video', file);
+      fd.append('title', title);
+      fd.append('caption', caption);
+      const r = await fetch(API+'/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('nvme_token') },
+        body: fd
+      });
+      const d = await r.json();
+      if(d.ok || d.id) {
+        showToast('Video uploaded! Going live on the feed 🎥');
+        setTimeout(() => showScreen('feed'), 800);
+      } else {
+        showToast(d.error || 'Upload failed. Check file size (max 100MB).');
+      }
+    }
+  } catch(e) {
+    showToast('Connection error. Check your internet and try again.');
+  } finally {
+    if(postBtn) { postBtn.textContent = 'Post Video'; postBtn.disabled = false; }
+  }
 }
 function triggerUpload(){
   document.getElementById('videoFileInput').click();

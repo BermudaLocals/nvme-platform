@@ -12,8 +12,6 @@ const { Pool } = require('pg');
 const passport = require('passport');
 const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const session = require('express-session');
-const connectRedis = require('connect-redis');
-const Redis = require('ioredis');
 
 const app = express();
 const http = require('http');
@@ -309,18 +307,9 @@ const PORT = process.env.PORT || 3090;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // ── SESSION (required for passport) ──────────────────────────────────────────
-// Redis session store with graceful MemoryStore fallback
+// Railway: PostgreSQL-only sessions (empire Redis must NOT be used on Railway)
 let sessionStore = undefined;
-try {
-  if (process.env.REDIS_URL) {
-    const redisClient = new Redis(process.env.REDIS_URL);
-    const RedisStore = connectRedis(session);
-    sessionStore = new RedisStore({ client: redisClient, prefix: 'nvme:sess:' });
-    console.log('[Session] Redis store connected');
-  }
-} catch(e) { console.log('[Session] Redis unavailable:', e.message); }
-// Fallback: pg session store if DATABASE_URL set and no Redis
-if (!sessionStore && process.env.DATABASE_URL) {
+if (process.env.DATABASE_URL) {
   try {
     const pgSession = require('connect-pg-simple')(session);
     sessionStore = new pgSession({

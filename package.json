@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@paypal/checkout-server-sdk": "^1.0.3",
+    "@supabase/supabase-js": "^2.110.2",
     "axios": "^1.18.1",
     "bcryptjs": "^2.4.3",
     "connect-pg-simple": "^10.0.0",

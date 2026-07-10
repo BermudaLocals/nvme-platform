@@ -2188,23 +2188,61 @@ app.post('/api/games/roll', authMiddleware, async (req, res) => {
 });
 
 
-// ── File Upload (CDN via local storage) ──────────────────────────
+// ── File Upload — Supabase Storage (persistent) with disk fallback ──
 const multer = require('multer');
 const path = require('path');
 const uploadDir = __dirname + '/public/uploads';
 require('fs').mkdirSync(uploadDir, { recursive: true });
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9.]/g,'_'))
-});
-const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
+
+// Use memory storage so we can pipe to Supabase if available
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 app.use('/uploads', require('express').static(uploadDir));
+
+// Supabase Storage client (wired when env vars are set)
+let supabaseStorage = null;
+try {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    const { createClient } = require('@supabase/supabase-js');
+    supabaseStorage = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    console.log('[Upload] Supabase Storage connected — videos survive deploys');
+  } else {
+    console.log('[Upload] No Supabase keys — using ephemeral disk (add SUPABASE_URL + SUPABASE_SERVICE_KEY to Railway)');
+  }
+} catch(e) { console.log('[Upload] Supabase init error:', e.message); }
+
 app.post('/api/upload', authMiddleware, upload.single('video'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const url = '/uploads/' + req.file.filename;
-    const title = req.body.title || req.file.originalname;
+    const title = req.body.title || (req.file ? req.file.originalname : 'Untitled');
     const caption = req.body.caption || '';
+    let url = req.body.video_url || null;
+
+    if (!url && req.file) {
+      if (supabaseStorage) {
+        // Upload to Supabase Storage — permanent, survives all Railway reboots
+        const bucket = 'nvme-videos';
+        const filename = Date.now() + '-' + req.file.originalname.replace(/[^a-zA-Z0-9.]/g,'_');
+        const { data, error } = await supabaseStorage.storage
+          .from(bucket)
+          .upload(filename, req.file.buffer, {
+            contentType: req.file.mimetype,
+            upsert: false
+          });
+        if (error) throw new Error('Supabase upload failed: ' + error.message);
+        const { data: publicData } = supabaseStorage.storage.from(bucket).getPublicUrl(filename);
+        url = publicData.publicUrl;
+        console.log('[Upload] Stored in Supabase:', url);
+      } else {
+        // Fallback: save to disk (ephemeral — wiped on Railway redeploy)
+        const filename = Date.now() + '-' + req.file.originalname.replace(/[^a-zA-Z0-9.]/g,'_');
+        const filepath = uploadDir + '/' + filename;
+        require('fs').writeFileSync(filepath, req.file.buffer);
+        url = '/uploads/' + filename;
+        console.log('[Upload] Stored on disk (ephemeral):', url);
+      }
+    }
+
+    if (!url) return res.status(400).json({ error: 'No file or video_url provided' });
+
     const { rows } = await db.query(
       'INSERT INTO videos (user_id, title, description, url, thumbnail) VALUES ($1,$2,$3,$4,$5) RETURNING *',
       [req.user.id, title, caption, url, '']

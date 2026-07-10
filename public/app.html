@@ -412,6 +412,19 @@ button{-webkit-appearance:none;appearance:none}
 .sticker-item img{width:100%;height:100%;object-fit:cover;border-radius:8px}
 .sticker-upload-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(124,92,252,.15);border:1px dashed var(--purple);border-radius:10px;color:var(--purple);font-size:0.85rem;cursor:pointer;width:100%;justify-content:center;margin-top:4px}
 
+.video-card{position:relative;width:100%;height:100%;flex:0 0 100%;scroll-snap-align:start;overflow:hidden;background:#000;}
+.video-thumb{position:absolute;inset:0;width:100%;height:100%;}
+.video-thumb video{width:100%;height:100%;object-fit:cover;}
+.video-overlay{position:absolute;bottom:0;left:0;right:0;padding:1rem 1rem 1.5rem;background:linear-gradient(transparent,rgba(0,0,0,0.85));z-index:2;}
+.video-overlay .creator-row{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem;}
+.video-overlay .video-title-overlay{font-weight:700;font-size:1rem;color:#fff;margin-bottom:.2rem;}
+.video-overlay .video-desc-overlay{font-size:.82rem;color:rgba(255,255,255,.8);margin-bottom:.6rem;line-height:1.4;}
+.video-side-btns{position:absolute;right:.75rem;bottom:5rem;display:flex;flex-direction:column;align-items:center;gap:1.25rem;z-index:3;}
+.side-btn{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:#fff;}
+.side-btn span{font-size:1.6rem;}
+.side-btn small{font-size:.68rem;color:rgba(255,255,255,.8);}
+.feed-container{display:flex;flex-direction:column;height:100%;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.feed-container::-webkit-scrollbar{display:none;}
 </style>
 <script src="/socket.io/socket.io.js">
 // ===== PROGRESSIVE JACKPOT =====
@@ -725,8 +738,8 @@ if(typeof socket !== 'undefined' && socket) {
 </nav>
 
 <!-- FEED SCREEN -->
-<div class="screen screen-full active" id="feed-screen">
-  <div class="feed-container" id="feedContainer"></div>
+<div class="screen screen-full active" id="feed-screen" style="padding:0;overflow:hidden;">
+  <div class="feed-container" id="feedContainer" style="height:100%;"></div>
 </div>
 
 <!-- MESSAGES SCREEN -->
@@ -2102,6 +2115,7 @@ async function loadFeed(type = 'forYou') {
     }
 
     list.innerHTML = videos.map(v => renderVideoCard(v)).join('');
+    initFeedObserver();
   } catch {
     list.innerHTML = renderDemoFeed();
   }
@@ -2113,36 +2127,56 @@ function renderVideoCard(v) {
   const initChar = initials(name);
   const likes = v.like_count || v.likes || 0;
   const comments = v.comment_count || v.comments || 0;
+  const hasVideo = v.url && v.url !== 'null' && v.url !== '' && v.url !== 'None';
 
   return `
-    <div class="video-card">
-      <div class="video-thumb" onclick="playVideo('${v.id}','${v.url||''}')" style="cursor:pointer;position:relative;overflow:hidden">
-        ${v.url && v.url !== 'null' && v.url !== '' ?
-          `<video id="vid_${v.id}" src="${v.url}" style="width:100%;height:100%;object-fit:cover;pointer-events:none" preload="metadata" playsinline muted loop></video>
-           <div class="play-overlay" id="pov_${v.id}"><div class="play-btn-big">▶</div></div>` :
-          `<span style="z-index:1;position:relative;font-size:3rem">${v.thumbnail || '🎬'}</span>
-           <div class="play-overlay"><div class="play-btn-big">▶</div></div>`
+    <div class="video-card" data-id="${v.id}" data-url="${v.url||''}">
+      <div class="video-thumb">
+        ${hasVideo
+          ? `<video id="vid_${v.id}" src="${v.url}" style="width:100%;height:100%;object-fit:cover;" preload="metadata" playsinline muted loop webkit-playsinline></video>`
+          : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#1a0a2e,#0a0a1a);display:flex;align-items:center;justify-content:center;font-size:5rem;">${v.thumbnail||'🎬'}</div>`
         }
       </div>
-      <div class="video-info">
-        <div class="video-meta">
-          <div class="avatar-sm" style="background:linear-gradient(135deg,${color},#9b59ff);pointer-events:none">${initChar}</div>
-          <div>
-            <div class="creator-name">${name}</div>
-            <div style="font-size:0.75rem;color:var(--muted)">${timeAgo(v.created_at)}</div>
-          </div>
+      <div class="video-side-btns">
+        <div class="side-btn" onclick="likeVideo('${v.id}',this)">
+          <span>❤️</span><small id="lc_${v.id}">${likes}</small>
         </div>
-        ${v.title ? `<div style="font-weight:700;font-size:.9rem;margin-bottom:.25rem;color:#fff;">${v.title}</div>` : ''}
-        ${v.description ? `<div class="video-desc">${v.description}</div>` : ''}
-        <div class="video-actions">
-          <button class="action-btn" onclick="likeVideo('${v.id}',this)">❤️ ${likes}</button>
-          <button class="action-btn" onclick="openComments('${v.id}')">💬 ${comments}</button>
-          <button class="action-btn" onclick="shareVideo('${v.id}')">↗️ Share</button>
-          <button class="action-btn" onclick="sendGiftToUser('${name}')">🎁 Gift</button>
-          <button class="action-btn follow-btn" onclick="followUser('${v.creator_id||v.user_id||v.id}','${name}',this)" style="background:linear-gradient(135deg,var(--purple),var(--pink));color:white;border:none;border-radius:20px;padding:0.3rem 0.8rem;font-size:0.75rem;font-weight:600;cursor:pointer;">+ Follow</button>
+        <div class="side-btn" onclick="openComments('${v.id}')">
+          <span>💬</span><small>${comments}</small>
+        </div>
+        <div class="side-btn" onclick="shareVideo('${v.id}')">
+          <span>↗️</span><small>Share</small>
+        </div>
+        <div class="side-btn" onclick="sendGiftToUser('${name}')">
+          <span>🎁</span><small>Gift</small>
         </div>
       </div>
+      <div class="video-overlay">
+        <div class="creator-row">
+          <div class="avatar-sm" style="background:linear-gradient(135deg,${color},#9b59ff);flex-shrink:0;">${initChar}</div>
+          <div><span style="font-weight:700;font-size:.9rem;">@${name}</span> <span style="font-size:.75rem;opacity:.7;">${timeAgo(v.created_at)}</span></div>
+          <button onclick="followUser('${v.creator_id||v.user_id||v.id}','${name}',this)" style="margin-left:auto;background:transparent;border:1.5px solid #fff;color:#fff;border-radius:20px;padding:.2rem .7rem;font-size:.75rem;font-weight:700;cursor:pointer;">+ Follow</button>
+        </div>
+        ${v.title ? `<div class="video-title-overlay">${v.title}</div>` : ''}
+        ${v.description ? `<div class="video-desc-overlay">${v.description}</div>` : ''}
+      </div>
     </div>`;
+}
+
+// TikTok IntersectionObserver — auto-play visible video, pause others
+function initFeedObserver(){
+  if(!('IntersectionObserver' in window)) return;
+  var obs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      var vid = e.target.querySelector('video');
+      if(!vid) return;
+      if(e.isIntersecting){ vid.play().catch(function(){}); }
+      else { vid.pause(); vid.currentTime=0; }
+    });
+  },{threshold:0.7});
+  document.querySelectorAll('#feedContainer .video-card').forEach(function(card){
+    obs.observe(card);
+  });
 }
 
 function renderDemoFeed() {

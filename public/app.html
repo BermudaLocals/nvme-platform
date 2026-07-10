@@ -993,11 +993,26 @@ if(typeof socket !== 'undefined' && socket) {
 // ═══════════════════════════════════════
 (function() {
   try {
-    const _p = new URLSearchParams(window.location.search);
-    const _t = _p.get('token');
+    // Read token from hash fragment (#token=...) — Samsung + all mobile safe
+    var _hash = window.location.hash;
+    var _hashToken = '';
+    if (_hash && _hash.indexOf('token=') !== -1) {
+      _hashToken = _hash.split('token=')[1].split('&')[0];
+    }
+    // Also check query string for backwards compat
+    var _p = new URLSearchParams(window.location.search);
+    var _t = _hashToken || _p.get('token') || '';
     if (_t && _t.length > 20) {
-      localStorage.setItem('nvme_token', _t);
-      window.history.replaceState({}, document.title, '/app.html');
+      try { localStorage.setItem('nvme_token', _t); } catch(e) {
+        // Samsung private mode — store in sessionStorage fallback
+        try { sessionStorage.setItem('nvme_token', _t); } catch(e2) {}
+      }
+      // Clean URL — remove hash and query params
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, '/app.html');
+      } else {
+        window.location.hash = '';
+      }
     }
   } catch(e) {}
 })();

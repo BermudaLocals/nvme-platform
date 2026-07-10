@@ -761,12 +761,9 @@ app.get('/auth/google/callback',
     try {
       if (!req.user) return res.redirect('/?auth=failed&reason=no_user');
       const token = signToken({ id: req.user.id, email: req.user.email });
-      const userPayload = encodeURIComponent(JSON.stringify({
-        id: req.user.id,
-        email: req.user.email,
-        username: req.user.username
-      }));
-      return res.redirect('/app.html?token=' + token + '&user=' + userPayload);
+      // Use hash fragment (#) — not intercepted by Service Workers or cached
+      // Fixes Samsung Internet + all mobile browsers — hash never sent to server
+      return res.redirect('/app.html#token=' + token);
     } catch(e) {
       console.error('[OAuth callback error]', e.message);
       return res.redirect('/?auth=failed&reason=server_error');

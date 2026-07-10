@@ -1229,10 +1229,16 @@ async function submitUpload(){
 
   try {
     if(!file) {
-      // Text/caption post — no video file needed
+      // Check for pasted URL first
       const pastedUrl = (document.getElementById('uploadVideoUrl')||{value:''}).value.trim();
+      if(!pastedUrl) {
+        // No file AND no URL — tell user to select a file
+        showToast('Tap the upload area first to select your video file 👆');
+        if(postBtn) { postBtn.textContent = 'Post Video'; postBtn.disabled = false; }
+        return;
+      }
       const emoji = ['📸','🎬','🔥','💫','🚀','⭐','👑','🎵'][Math.floor(Math.random()*8)];
-      const videoUrl = pastedUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+      const videoUrl = pastedUrl;
       const r = await fetch(API+'/api/videos', {
         method: 'POST',
         headers: authHeaders(),
@@ -1283,7 +1289,17 @@ function triggerUpload(){
 }
 function handleVideoSelect(e){
   const f = e.target.files[0];
-  if(f) document.getElementById('uploadTitle').placeholder = f.name;
+  if(!f) return;
+  // Show file selected in upload area
+  const area = document.querySelector('.upload-area');
+  if(area) {
+    const sizeMB = (f.size/1024/1024).toFixed(1);
+    area.innerHTML = `<div class="upload-icon">✅</div><div class="upload-title" style="color:#9b59ff">${f.name.slice(0,30)}...</div><div class="upload-sub">${sizeMB}MB selected — ready to post</div>`;
+  }
+  // Clean filename as title (remove extension + underscores)
+  const cleanTitle = f.name.replace(/\.[^.]+$/, '').replace(/[_\-]+/g, ' ').replace(/\s+/g,' ').trim();
+  const titleEl = document.getElementById('uploadTitle');
+  if(titleEl && !titleEl.value) titleEl.value = cleanTitle;
 }
 
 

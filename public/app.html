@@ -1799,10 +1799,102 @@ async function loadRealFeed(){
     console.log('[Feed] Loaded', videos.length, 'real videos');
   } catch(e){ console.log('[Feed] Using demo data'); }
 }
-async function likeVideo(e, videoId){
-  e.stopPropagation();
-  spawnCoin(e);
+async function likeVideo(videoId, el){
+  // Stop tap bubbling to video card (prevents pause trigger)
+  event && event.stopPropagation && event.stopPropagation();
+  // Animate heart
+  if(el) { el.style.transform='scale(1.5)'; setTimeout(()=>el.style.transform='scale(1)',300); }
+  // Coin burst
+  if(event) spawnCoin(event);
+  // Update count optimistically
+  const countEl = document.getElementById('lc_'+videoId);
+  if(countEl) countEl.textContent = parseInt(countEl.textContent||0)+1;
   try{ await fetch(API+'/api/videos/'+videoId+'/like',{method:'POST',headers:authHeaders()}); }catch(err){}
+}
+
+function openComments(videoId){
+  event && event.stopPropagation && event.stopPropagation();
+  // Build comment bottom sheet
+  var existing = document.getElementById('comment-sheet');
+  if(existing) existing.remove();
+  var sheet = document.createElement('div');
+  sheet.id = 'comment-sheet';
+  sheet.style.cssText = 'position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#1a0a2e;border-radius:20px 20px 0 0;z-index:999;padding:1rem;max-height:70vh;overflow-y:auto;';
+  sheet.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <span style="font-weight:700;font-size:1rem;">💬 Comments</span>
+      <span onclick="document.getElementById('comment-sheet').remove()" style="cursor:pointer;font-size:1.4rem;">✕</span>
+    </div>
+    <div id="comment-list-${videoId}" style="min-height:80px;color:rgba(255,255,255,.6);font-size:.85rem;padding:.5rem 0;">Loading comments...</div>
+    <div style="display:flex;gap:.5rem;margin-top:1rem;">
+      <input id="comment-input-${videoId}" type="text" placeholder="Add a comment..." style="flex:1;background:#0a0a1a;border:1px solid #333;border-radius:20px;padding:.5rem 1rem;color:#fff;font-size:.9rem;">
+      <button onclick="postComment('${videoId}')" style="background:#9b59ff;border:none;border-radius:20px;padding:.5rem 1rem;color:#fff;font-weight:700;cursor:pointer;">Post</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  // Load comments
+  fetch(API+'/api/videos/'+videoId+'/comments', {headers:authHeaders()})
+    .then(r=>r.json())
+    .then(d=>{
+      var list = document.getElementById('comment-list-'+videoId);
+      if(!list) return;
+      var comments = d.comments||d||[];
+      if(!comments.length){ list.textContent='No comments yet. Be first! 👆'; return; }
+      list.innerHTML = comments.map(c=>`<div style="padding:.5rem 0;border-bottom:1px solid #222;"><span style="font-weight:700;font-size:.8rem;">@${c.username||'user'}</span> <span style="font-size:.85rem;">${c.content||c.text||''}</span></div>`).join('');
+    }).catch(()=>{ var l=document.getElementById('comment-list-'+videoId); if(l) l.textContent='Be the first to comment! 👆'; });
+}
+
+async function postComment(videoId){
+  var input = document.getElementById('comment-input-'+videoId);
+  if(!input || !input.value.trim()) return;
+  var text = input.value.trim();
+  input.value = '';
+  try{
+    await fetch(API+'/api/videos/'+videoId+'/comments', {method:'POST',headers:authHeaders(),body:JSON.stringify({text:text})});
+    var list = document.getElementById('comment-list-'+videoId);
+    if(list){
+      var div = document.createElement('div');
+      div.style.cssText='padding:.5rem 0;border-bottom:1px solid #222;';
+      div.innerHTML = `<span style="font-weight:700;font-size:.8rem;">@${(currentUser&&currentUser.username)||'you'}</span> <span style="font-size:.85rem;">${text}</span>`;
+      list.appendChild(div);
+    }
+    showToast('Comment posted! 💬');
+  }catch(e){ showToast('Post failed'); }
+}
+
+function openGiftPanel(username, videoId){
+  event && event.stopPropagation && event.stopPropagation();
+  var existing = document.getElementById('gift-sheet');
+  if(existing) existing.remove();
+  var gifts = [['👑','Crown',500],['💎','Diamond',200],['🚀','Rocket',100],['❤️','Heart',50],['🔥','Fire',25],['⭐','Star',10]];
+  var sheet = document.createElement('div');
+  sheet.id = 'gift-sheet';
+  sheet.style.cssText = 'position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#1a0a2e;border-radius:20px 20px 0 0;z-index:999;padding:1rem;';
+  sheet.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <span style="font-weight:700;">🎁 Send Gift to @${username}</span>
+      <span onclick="document.getElementById('gift-sheet').remove()" style="cursor:pointer;font-size:1.4rem;">✕</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;">
+      ${gifts.map(([emoji,name,cost])=>`
+        <div onclick="sendGift('${username}','${videoId}','${emoji}',${cost})" style="background:#0a0a1a;border:1px solid #333;border-radius:12px;padding:.75rem;text-align:center;cursor:pointer;">
+          <div style="font-size:2rem;">${emoji}</div>
+          <div style="font-size:.75rem;font-weight:700;margin-top:.25rem;">${name}</div>
+          <div style="font-size:.7rem;color:#9b59ff;">${cost} coins</div>
+        </div>`).join('')}
+    </div>`;
+  document.body.appendChild(sheet);
+}
+
+async function sendGift(username, videoId, emoji, cost){
+  var bal = parseInt(localStorage.getItem('nvme_coins')||'0');
+  if(bal < cost){ showToast('Not enough coins! Top up in Wallet 💰'); return; }
+  document.getElementById('gift-sheet')&&document.getElementById('gift-sheet').remove();
+  try{
+    await fetch(API+'/api/wallet/deduct',{method:'POST',headers:authHeaders(),body:JSON.stringify({amount:cost,reason:'gift'})});
+    localStorage.setItem('nvme_coins', bal-cost);
+    floatGift(emoji);
+    showToast(`${emoji} Sent to @${username}!`);
+  }catch(e){ showToast('Gift failed — try again'); }
 }
 // ---- INIT ----
 checkAuth();
@@ -2174,16 +2266,16 @@ function renderVideoCard(v) {
       </div>
       <div id="mute_btn_${v.id}" onclick="event.stopPropagation();toggleMuteVid('${v.id}')" style="position:absolute;top:60px;right:14px;z-index:10;background:rgba(0,0,0,.55);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;cursor:pointer;">🔇</div>
       <div class="video-side-btns">
-        <div class="side-btn" onclick="likeVideo('${v.id}',this)">
+        <div class="side-btn" onclick="event.stopPropagation();likeVideo('${v.id}',this)">
           <span>❤️</span><small id="lc_${v.id}">${likes}</small>
         </div>
-        <div class="side-btn" onclick="openComments('${v.id}')">
+        <div class="side-btn" onclick="event.stopPropagation();openComments('${v.id}')">
           <span>💬</span><small>${comments}</small>
         </div>
-        <div class="side-btn" onclick="shareVideo('${v.id}')">
+        <div class="side-btn" onclick="event.stopPropagation();shareVideo('${v.id}')">
           <span>↗️</span><small>Share</small>
         </div>
-        <div class="side-btn" onclick="sendGiftToUser('${name}')">
+        <div class="side-btn" onclick="event.stopPropagation();openGiftPanel('${name}','${v.id}')">
           <span>🎁</span><small>Gift</small>
         </div>
       </div>

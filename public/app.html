@@ -767,6 +767,7 @@ if(typeof socket !== 'undefined' && socket) {
   <input type="file" id="videoFileInput" accept="video/*,audio/*" style="display:none" onchange="handleVideoSelect(event)">
   <div class="upload-form">
     <input class="upload-input" type="text" id="uploadTitle" placeholder="Give your video a title...">
+    <input class="upload-input" type="url" id="uploadVideoUrl" placeholder="Or paste a video URL (YouTube, MP4 link, etc.)" style="margin-bottom:.5rem;">
     <textarea class="upload-input" id="uploadCaption" rows="3" style="resize:none" placeholder="Write a caption... #tags"></textarea>
     <div style="display:flex;gap:0.5rem">
       
@@ -1229,14 +1230,16 @@ async function submitUpload(){
   try {
     if(!file) {
       // Text/caption post — no video file needed
+      const pastedUrl = (document.getElementById('uploadVideoUrl')||{value:''}).value.trim();
       const emoji = ['📸','🎬','🔥','💫','🚀','⭐','👑','🎵'][Math.floor(Math.random()*8)];
+      const videoUrl = pastedUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
       const r = await fetch(API+'/api/videos', {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
           title,
           description: caption,
-          url: 'https://nvme.live/placeholder.mp4',
+          url: videoUrl,
           thumbnail: emoji
         })
       });

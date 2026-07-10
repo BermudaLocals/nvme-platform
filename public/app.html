@@ -2118,7 +2118,7 @@ async function loadFeed(type = 'forYou') {
     }
 
     list.innerHTML = videos.map(v => renderVideoCard(v)).join('');
-    initFeedObserver();
+    setTimeout(() => initFeedObserver(), 150);
   } catch {
     list.innerHTML = renderDemoFeed();
   }
@@ -2136,7 +2136,7 @@ function renderVideoCard(v) {
     <div class="video-card" data-id="${v.id}" data-url="${v.url||''}">
       <div class="video-thumb">
         ${hasVideo
-          ? `<video id="vid_${v.id}" src="${v.url}" style="width:100%;height:100%;object-fit:cover;" preload="metadata" playsinline muted loop webkit-playsinline></video>`
+          ? `<video id="vid_${v.id}" src="${v.url}" style="width:100%;height:100%;object-fit:cover;" preload="auto" autoplay playsinline muted loop webkit-playsinline x5-playsinline></video>`
           : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#1a0a2e,#0a0a1a);display:flex;align-items:center;justify-content:center;font-size:5rem;">${v.thumbnail||'🎬'}</div>`
         }
       </div>

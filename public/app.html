@@ -2150,12 +2150,14 @@ function renderVideoCard(v) {
 
   return `
     <div class="video-card" data-id="${v.id}" data-url="${v.url||''}">
-      <div class="video-thumb">
+      <div class="video-thumb" onclick="togglePlayVid('${v.id}')">
         ${hasVideo
-          ? `<video id="vid_${v.id}" src="${v.url}" style="width:100%;height:100%;object-fit:cover;" preload="auto" autoplay playsinline muted loop webkit-playsinline x5-playsinline></video>`
+          ? `<video id="vid_${v.id}" src="${v.url}" style="width:100%;height:100%;object-fit:cover;" preload="auto" autoplay playsinline muted loop webkit-playsinline x5-playsinline></video>
+             <div id="play_icon_${v.id}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .3s;"><div style="background:rgba(0,0,0,.5);border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;font-size:2rem;">▶</div></div>`
           : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#1a0a2e,#0a0a1a);display:flex;align-items:center;justify-content:center;font-size:5rem;">${v.thumbnail||'🎬'}</div>`
         }
       </div>
+      <div id="mute_btn_${v.id}" onclick="event.stopPropagation();toggleMuteVid('${v.id}')" style="position:absolute;top:60px;right:14px;z-index:10;background:rgba(0,0,0,.55);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;cursor:pointer;">🔇</div>
       <div class="video-side-btns">
         <div class="side-btn" onclick="likeVideo('${v.id}',this)">
           <span>❤️</span><small id="lc_${v.id}">${likes}</small>
@@ -2180,6 +2182,31 @@ function renderVideoCard(v) {
         ${v.description ? `<div class="video-desc-overlay">${v.description}</div>` : ''}
       </div>
     </div>`;
+}
+
+// TikTok tap-to-pause
+function togglePlayVid(id){
+  var vid = document.getElementById('vid_'+id);
+  var icon = document.getElementById('play_icon_'+id);
+  if(!vid) return;
+  if(vid.paused){
+    vid.play().catch(function(){});
+    if(icon){ icon.style.opacity='0'; }
+  } else {
+    vid.pause();
+    if(icon){ icon.innerHTML='<div style="background:rgba(0,0,0,.5);border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;font-size:2rem;">▶</div>'; icon.style.opacity='1'; }
+  }
+}
+
+// TikTok mute toggle
+function toggleMuteVid(id){
+  var vid = document.getElementById('vid_'+id);
+  var btn = document.getElementById('mute_btn_'+id);
+  if(!vid) return;
+  vid.muted = !vid.muted;
+  if(btn) btn.textContent = vid.muted ? '🔇' : '🔊';
+  // Unmuting — also make sure it's playing
+  if(!vid.muted && vid.paused) vid.play().catch(function(){});
 }
 
 // TikTok IntersectionObserver — auto-play visible video, pause others

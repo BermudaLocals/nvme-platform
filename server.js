@@ -2468,4 +2468,62 @@ app.post('/api/videos/upload', authMiddleware, async (req, res) => {
     res.json({ ok: true, video: rows[0] });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
+// ── AI Video Studio ─────────────────────────────────────────────────────────
+const { fal } = require('@fal-ai/client');
+if (process.env.FAL_KEY) fal.config({ credentials: process.env.FAL_KEY });
+
+app.get('/api/ai/models', authMiddleware, (req, res) => {
+  res.json({ models: [
+    { id: 'fal-ai/minimax/video-01', name: 'MiniMax Video', description: 'Fast 6-sec vertical clips', speed: 'Fast (~30s)' },
+    { id: 'fal-ai/kling-video/v2/master/text-to-video', name: 'Kling v2 Master', description: 'Cinematic quality 5-10s', speed: 'Slow (~3min)' },
+    { id: 'fal-ai/hunyuan-video', name: 'HunyuanVideo', description: 'High quality long form', speed: 'Slow (~5min)' }
+  ]});
+});
+
+app.post('/api/ai/generate-video', authMiddleware, async (req, res) => {
+  const { prompt, title, model } = req.body;
+  if (!prompt) return res.status(400).json({ error: 'prompt required' });
+  if (!process.env.FAL_KEY) return res.status(503).json({ error: 'AI generation not configured — add FAL_KEY to Railway env' });
+  try {
+    console.log(`[AI Studio] Generating for user ${req.user.id}: ${prompt}`);
+    const selectedModel = model || 'fal-ai/minimax/video-01';
+    const result = await fal.subscribe(selectedModel, {
+      input: { prompt, duration: 6, aspect_ratio: '9:16' },
+      logs: false
+    });
+    const videoUrl = result?.data?.video?.url || result?.data?.video_url || result?.video?.url;
+    if (!videoUrl) return res.status(500).json({ error: 'No video URL returned from AI model' });
+
+    // Download + upload to Supabase
+    const fetchMod = require('node-fetch');
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    const videoRes = await fetchMod(videoUrl);
+    const videoBuffer = await videoRes.buffer();
+    const fileName = `ai-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`;
+    await supabase.storage.from('nvme-videos').upload(fileName, videoBuffer, { contentType: 'video/mp4', upsert: false });
+    const { data: pubData } = supabase.storage.from('nvme-videos').getPublicUrl(fileName);
+    const publicUrl = pubData.publicUrl;
+
+    // Generate thumbnail via fal flux
+    let thumbUrl = '';
+    try {
+      const thumbResult = await fal.subscribe('fal-ai/flux/schnell', {
+        input: { prompt: prompt + ', vertical thumbnail, vibrant', image_size: 'portrait_4_3', num_images: 1 },
+        logs: false
+      });
+      thumbUrl = thumbResult?.data?.images?.[0]?.url || '';
+    } catch(_) {}
+
+    const { rows } = await db.query(
+      'INSERT INTO videos (user_id, title, description, url, thumbnail) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [req.user.id, title || 'AI Generated Video', prompt, publicUrl, thumbUrl]
+    );
+    console.log(`[AI Studio] Posted video ${rows[0].id} to feed`);
+    res.json({ ok: true, video: rows[0], url: publicUrl });
+  } catch(e) {
+    console.error('[AI Studio] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 // ── END ROUTE ALIASES ────────────────────────────────────────────────────────

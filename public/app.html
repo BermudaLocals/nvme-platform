@@ -1885,15 +1885,40 @@ function openGiftPanel(username, videoId){
   document.body.appendChild(sheet);
 }
 
+function floatGift(emoji) {
+  // Spawn 6 floating emoji bubbles like TikTok gift animation
+  for (var i = 0; i < 6; i++) {
+    (function(idx) {
+      setTimeout(function() {
+        var el = document.createElement('div');
+        el.textContent = emoji;
+        el.style.cssText = 'position:fixed;font-size:2rem;pointer-events:none;z-index:9999;transition:transform 2s ease-out,opacity 2s ease-out;';
+        el.style.left = (30 + Math.random() * 40) + '%';
+        el.style.bottom = '20%';
+        document.body.appendChild(el);
+        requestAnimationFrame(function() {
+          el.style.transform = 'translateY(-' + (200 + Math.random()*200) + 'px) rotate(' + (Math.random()*30-15) + 'deg)';
+          el.style.opacity = '0';
+        });
+        setTimeout(function() { el.remove(); }, 2100);
+      }, idx * 150);
+    })(i);
+  }
+}
+
 async function sendGift(username, videoId, emoji, cost){
-  var bal = parseInt(localStorage.getItem('nvme_coins')||'0');
+  // Use manusBalance (live in-memory balance) instead of stale localStorage
+  var bal = typeof manusBalance !== 'undefined' ? manusBalance : parseInt(localStorage.getItem('nvme_coins')||'0');
   if(bal < cost){ showToast('Not enough coins! Top up in Wallet 💰'); return; }
   document.getElementById('gift-sheet')&&document.getElementById('gift-sheet').remove();
   try{
-    await fetch(API+'/api/wallet/deduct',{method:'POST',headers:authHeaders(),body:JSON.stringify({amount:cost,reason:'gift'})});
-    localStorage.setItem('nvme_coins', bal-cost);
+    var res = await fetch(API+'/api/wallet/deduct',{method:'POST',headers:authHeaders(),body:JSON.stringify({amount:cost,reason:'gift to @'+username})});
+    var data = res.ok ? await res.json() : null;
+    var newBal = (data && data.balance != null) ? data.balance : bal - cost;
+    if(typeof updateBalanceTo === 'function') updateBalanceTo(newBal);
+    else localStorage.setItem('nvme_coins', newBal);
     floatGift(emoji);
-    showToast(`${emoji} Sent to @${username}!`);
+    showToast(emoji + ' Sent to @' + username + '!');
   }catch(e){ showToast('Gift failed — try again'); }
 }
 // ---- INIT ----
@@ -2362,7 +2387,7 @@ function renderDemoFeed() {
 
 function playVideo(id) { showToast('▶ Video player coming soon!'); }
 
-function openComments(id) { showToast('💬 Comments coming soon!'); }
+/* openComments defined above at line 1815 — stub removed */
 
 function shareVideo(id) {
   if (navigator.share) navigator.share({ url: window.location.href });

@@ -487,9 +487,22 @@ function showJackpotWin(d) {
 const _origShowScreen = typeof showScreen === 'function' ? showScreen : null;
 
 // ===== PROFILE EDIT =====
-function openProfileEdit() {
+async function openProfileEdit() {
   const modal = document.getElementById('peditModal');
-  if(!currentUser) { var _s=localStorage.getItem('nvme_user'); if(_s){try{currentUser=JSON.parse(_s);}catch(e){}} if(!currentUser){ showToast('Loading profile...'); checkAuth(); return; } }
+  if(!currentUser) {
+    var _s=localStorage.getItem('nvme_user');
+    if(_s){try{currentUser=JSON.parse(_s);}catch(e){}}
+    if(!currentUser){
+      showToast('Loading profile...');
+      // Fetch fresh from API instead of giving up
+      try {
+        const r = await fetch(API+'/api/auth/me', { headers: authHeaders() });
+        const d = await r.json();
+        if(d && d.id) { currentUser = d; }
+        else { showToast('Please sign in first'); return; }
+      } catch(e) { showToast('Please sign in first'); return; }
+    }
+  }
   // Pre-fill fields
   document.getElementById('peditDisplayName').value = currentUser.display_name || currentUser.username || '';
   document.getElementById('peditUsername').value = currentUser.username || '';

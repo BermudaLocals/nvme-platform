@@ -1166,8 +1166,7 @@ function enterApp(user){
     window._socket = socketConn;
   }
   loadWalletBalance();
-  renderFeed();
-  loadRealFeed();
+  loadFeed();      // TikTok-style scroll-snap feed with working buttons
   renderChats();
   renderExplore();
   renderTx();
@@ -2376,8 +2375,8 @@ function renderDemoFeed() {
         </div>
         <div class="video-desc">${v.desc}</div>
         <div class="video-actions">
-          <button class="action-btn" onclick="this.classList.toggle('liked');showToast('❤️ Liked!')">❤️ ${v.likes}</button>
-          <button class="action-btn" onclick="showToast('💬 Comments coming soon!')">💬 ${v.comments}</button>
+          <button class="action-btn" onclick="event.stopPropagation();likeVideo('${v.id}',this)">❤️ <span id="lc_${v.id}">${v.likes}</span></button>
+          <button class="action-btn" onclick="event.stopPropagation();openComments('${v.id}')">💬 ${v.comments}</button>
           <button class="action-btn" onclick="showToast('Link copied!')">↗️ Share</button>
           <button class="action-btn" onclick="sendGiftToUser('${v.username}')">🎁 Gift</button>
         </div>

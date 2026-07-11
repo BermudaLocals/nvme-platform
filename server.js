@@ -340,8 +340,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback',
-        failureRedirect: '/auth/failure'
+        callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback'
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
@@ -743,6 +742,11 @@ async function initDB() {
 // ── Routes: Health ───────────────────────────────────────────
 
 // ── GOOGLE OAUTH ROUTES ──────────────────────────────────────────────────────
+// Auth failure safety net — catches any strategy-level failures
+app.get('/auth/failure', (req, res) => {
+  res.redirect('/?auth=failed&reason=google_strategy_error');
+});
+
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/?auth=failed', session: false }),

@@ -267,6 +267,8 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .upload-input::placeholder{color:var(--muted)}
 .upload-btn{padding:1rem;background:linear-gradient(135deg,var(--purple),var(--pink));border:none;border-radius:14px;color:white;font-family:'Outfit',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:all .2s}
 .upload-btn:active{transform:scale(0.97)}
+.dur-chip{padding:6px 14px;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.3);border-radius:20px;color:#a78bfa;font-size:0.8rem;font-weight:700;cursor:pointer;transition:all .2s;user-select:none}
+.dur-chip.active{background:linear-gradient(135deg,#7c3aed,#db2777);border-color:transparent;color:#fff}
 /* COIN ANIMATION */
 .coin-pop{position:fixed;pointer-events:none;z-index:999;font-size:1.5rem;animation:coinFly 1s ease forwards}
 @keyframes coinFly{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-80px) scale(1.5)}}
@@ -814,6 +816,17 @@ if(typeof socket !== 'undefined' && socket) {
     <div class="fpreview" style="filter:sepia(.5) hue-rotate(-20deg) saturate(1.8)">🥇</div><span>Golden</span>
   </div>
 </div>
+<div style="margin-bottom:10px;">
+  <div style="font-size:0.75rem;color:#a78bfa;margin-bottom:6px;font-weight:600;">CLIP LENGTH</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;" id="durationChips">
+    <span class="dur-chip active" data-dur="8" onclick="selectDuration(this,8)">8s</span>
+    <span class="dur-chip" data-dur="15" onclick="selectDuration(this,15)">15s</span>
+    <span class="dur-chip" data-dur="30" onclick="selectDuration(this,30)">30s</span>
+    <span class="dur-chip" data-dur="60" onclick="selectDuration(this,60)">60s</span>
+    <span class="dur-chip" data-dur="180" onclick="selectDuration(this,180)">3min</span>
+    <span class="dur-chip" data-dur="0" onclick="selectDuration(this,0)">Full</span>
+  </div>
+</div>
 <button class="upload-btn" style="flex:1" onclick="goLive()">🔴 Go Live</button>
       <button class="upload-btn" style="flex:1;background:linear-gradient(135deg,#7c3aed,#db2777)" onclick="openAIStudio()">🤖 AI Generate</button>
       <button class="upload-btn" id="postVideoBtn" style="flex:1;background:linear-gradient(135deg,var(--purple),var(--blue))" onclick="submitUpload()">Post Video</button>
@@ -1219,23 +1232,61 @@ async function requestPayout(){
   alert('Payout requests require minimum 1,000 coins. Visit your profile settings.');
 }
 function goLive(){
-  // Coin gate: 300 coins required to go live
-  const bal = parseInt(localStorage.getItem('nvme_coins') || '0');
+  // Coin gate: use manusBalance (live in-memory) not stale localStorage
+  const bal = typeof manusBalance !== 'undefined' ? manusBalance : parseInt(localStorage.getItem('nvme_coins')||'0');
   if(bal < 300) {
     showToast('You need 300 coins to go live 🎥 — tap Wallet to top up');
     showScreen('wallet');
     return;
   }
-  // Deduct 300 coins
+  // Check if desktop — offer OBS/RTMP option
+  const isDesktop = window.innerWidth >= 768 && !('ontouchstart' in window);
+  if(isDesktop){
+    showPCLiveModal();
+    return;
+  }
   deductCoins(300, 'Go Live');
   showFilterBar(true);
-  // Show live setup screen first
   showScreen('upload');
-  // Switch to the Go Live tab
-  setTimeout(() => {
-    const liveBtn = document.querySelector('.upload-btn[onclick*="goLive"]');
-    startGoLive();
-  }, 100);
+  setTimeout(() => { startGoLive(); }, 100);
+}
+async function showPCLiveModal(){
+  // Get stream key for PC/OBS streaming
+  const existing = document.getElementById('pc-live-modal');
+  if(existing) { existing.style.display='flex'; return; }
+  let streamKey = '...';
+  try {
+    const r = await fetch(API+'/api/live/start', {method:'POST',headers:{...authHeaders(),'Content-Type':'application/json'},body:JSON.stringify({title:'Live Stream'})});
+    const d = await r.json();
+    if(d.streamKey) streamKey = d.streamKey;
+  } catch(e){}
+  const modal = document.createElement('div');
+  modal.id = 'pc-live-modal';
+  modal.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML=`
+    <div style="background:#1a0a2e;border-radius:20px;padding:28px;max-width:440px;width:90%;border:1px solid #7c3aed;">
+      <h3 style="text-align:center;margin-bottom:6px;">🔴 Go Live from PC</h3>
+      <p style="text-align:center;font-size:0.85rem;color:#a78bfa;margin-bottom:20px;">Use OBS or Streamlabs to stream to NVME</p>
+      <div style="background:#0d0020;border-radius:12px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:0.75rem;color:#888;margin-bottom:6px;">RTMP SERVER URL</div>
+        <div style="font-family:monospace;font-size:0.85rem;color:#e879f9;word-break:break-all;">rtmp://nvme.live/live</div>
+      </div>
+      <div style="background:#0d0020;border-radius:12px;padding:14px;margin-bottom:20px;">
+        <div style="font-size:0.75rem;color:#888;margin-bottom:6px;">YOUR STREAM KEY</div>
+        <div style="font-family:monospace;font-size:0.85rem;color:#a78bfa;word-break:break-all;">${streamKey}</div>
+        <button onclick="navigator.clipboard.writeText('${streamKey}').then(()=>showToast('Key copied!'))" style="margin-top:8px;background:#7c3aed;border:none;border-radius:8px;padding:6px 14px;color:#fff;font-size:0.8rem;cursor:pointer;">Copy Key</button>
+      </div>
+      <ol style="font-size:0.82rem;color:#ccc;padding-left:18px;margin-bottom:20px;line-height:1.8;">
+        <li>Open OBS or Streamlabs</li>
+        <li>Go to Settings → Stream</li>
+        <li>Service: Custom RTMP</li>
+        <li>Paste the server URL and stream key above</li>
+        <li>Click Start Streaming</li>
+      </ol>
+      <button onclick="document.getElementById('pc-live-modal').style.display='none'" style="width:100%;padding:12px;background:#7c3aed;border:none;border-radius:12px;color:#fff;font-size:1rem;font-weight:700;cursor:pointer;">Got It — Starting OBS</button>
+      <button onclick="document.getElementById('pc-live-modal').remove()" style="width:100%;padding:10px;background:transparent;border:1px solid #333;border-radius:12px;color:#888;font-size:0.85rem;cursor:pointer;margin-top:8px;">Cancel</button>
+    </div>`;
+  document.body.appendChild(modal);
 }
 async function submitUpload(){
   const titleEl = document.getElementById('uploadTitle');
@@ -1860,18 +1911,23 @@ async function postComment(videoId){
   var input = document.getElementById('comment-input-'+videoId);
   if(!input || !input.value.trim()) return;
   var text = input.value.trim();
+  var tok = localStorage.getItem('empire_token');
+  if(!tok){ showToast('Sign in to comment'); return; }
   input.value = '';
   try{
-    await fetch(API+'/api/videos/'+videoId+'/comments', {method:'POST',headers:authHeaders(),body:JSON.stringify({text:text})});
+    var r = await fetch(API+'/api/videos/'+videoId+'/comments', {method:'POST',headers:authHeaders(),body:JSON.stringify({text:text})});
+    if(r.status===401){ showToast('Session expired — please sign in again'); return; }
+    if(!r.ok){ var e2=await r.json(); showToast(e2.error||'Post failed'); return; }
     var list = document.getElementById('comment-list-'+videoId);
     if(list){
       var div = document.createElement('div');
       div.style.cssText='padding:.5rem 0;border-bottom:1px solid #222;';
       div.innerHTML = `<span style="font-weight:700;font-size:.8rem;">@${(currentUser&&currentUser.username)||'you'}</span> <span style="font-size:.85rem;">${text}</span>`;
-      list.appendChild(div);
+      if(list.textContent.includes('No comments')) list.innerHTML = '';
+      list.prepend(div);
     }
     showToast('Comment posted! 💬');
-  }catch(e){ showToast('Post failed'); }
+  }catch(e){ showToast('Network error — try again'); }
 }
 
 function openGiftPanel(username, videoId){
@@ -3050,6 +3106,14 @@ function toggleCam() {
 function openUpload() { document.getElementById('upload-modal').classList.add('open'); }
 
 function closeUpload() { document.getElementById('upload-modal').classList.remove('open'); }
+
+// ── Clip Duration Selector ───────────────────────────────────────────────────
+let selectedDuration = 8;
+function selectDuration(el, dur) {
+  document.querySelectorAll('.dur-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedDuration = dur;
+}
 
 // ── AI Studio ────────────────────────────────────────────────────────────────
 function openAIStudio() {

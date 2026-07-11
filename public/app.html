@@ -612,7 +612,7 @@ function showGuestInvite(slot) {
 async function sendGuestInvite() {
   const username = document.getElementById('guestSearchInput').value.replace('@','').trim();
   if(!username) return;
-  if(!activeStreamId) { alert('Start your live stream first'); return; }
+  if(!activeStreamId) { showToast('Start your live stream first'); return; }
   try {
     const r = await fetch(API+`/api/streams/${activeStreamId}/invite-guest`, {
       method:'POST', headers: authHeaders(),
@@ -625,9 +625,9 @@ async function sendGuestInvite() {
       document.getElementById('guestSearchWrap').style.display = 'none';
       typeof showNotif === 'function' && showNotif(`Invited @${username} as Guest ${invitingSlot}`);
     } else {
-      alert(d.error || 'Could not invite guest');
+      showToast(d.error || 'Could not invite guest');
     }
-  } catch(e) { alert('Network error'); }
+  } catch(e) { showToast('Network error — try again'); }
 }
 
 function updateGuestSlot(slot, guest) {
@@ -767,7 +767,8 @@ if(typeof socket !== 'undefined' && socket) {
 
 <!-- EXPLORE SCREEN -->
 <div class="screen" id="explore-screen">
-  <div class="explore-search"><span>🔍</span><input type="text" placeholder="Search creators, videos..."></div>
+  <div class="explore-search"><span>🔍</span><input type="text" id="exploreSearchInput" placeholder="Search creators, videos..." oninput="handleExploreSearch(this.value)"></div>
+  <div id="searchResults" style="display:none;padding:0 1rem;"></div>
   <div class="explore-grid" id="exploreGrid"></div>
 </div>
 
@@ -1226,10 +1227,54 @@ function updateBalance(delta){
   localStorage.setItem('nvme_coins',manusBalance);
 }
 async function openPayPal(){
-  window.open('https://paypal.me/DollarDoubleEmpire','_blank');
+  // Load coin packages from API
+  try {
+    const r = await fetch(API+'/api/credits/packages', {headers:authHeaders()});
+    const d = await r.json();
+    const pkgs = d.packages || [
+      {id:'coins_500',coins:500,price:'$4.99',label:'Starter Pack'},
+      {id:'coins_1500',coins:1500,price:'$12.99',label:'Creator Pack'},
+      {id:'coins_5000',coins:5000,price:'$39.99',label:'Empire Pack'}
+    ];
+    // Show coin purchase modal
+    var existing = document.getElementById('coin-buy-modal');
+    if(existing) existing.remove();
+    var m = document.createElement('div');
+    m.id='coin-buy-modal';
+    m.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;justify-content:center;';
+    m.onclick = function(e){ if(e.target===m) m.remove(); };
+    m.innerHTML=`
+      <div style="width:100%;max-width:480px;background:#1a0a2e;border-radius:24px 24px 0 0;padding:24px 20px 36px;border-top:1px solid rgba(124,58,237,0.4);">
+        <div style="width:40px;height:4px;background:#444;border-radius:2px;margin:0 auto 20px"></div>
+        <h3 style="text-align:center;margin-bottom:6px;">🪙 Buy Coins</h3>
+        <p style="text-align:center;font-size:0.8rem;color:#a78bfa;margin-bottom:20px;">Coins unlock gifts, live streams & premium features</p>
+        ${pkgs.map(p=>`
+          <div onclick="buyCoinPackage('${p.id}')" style="background:#0d0020;border:1px solid #333;border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+            <div><div style="font-weight:700;">${p.label||p.id}</div><div style="font-size:0.8rem;color:#a78bfa;">${p.coins.toLocaleString()} coins</div></div>
+            <div style="background:linear-gradient(135deg,#7c3aed,#db2777);padding:8px 16px;border-radius:10px;font-weight:700;">${p.price}</div>
+          </div>`).join('')}
+        <button onclick="document.getElementById('coin-buy-modal').remove()" style="width:100%;padding:12px;background:transparent;border:1px solid #333;border-radius:12px;color:#888;cursor:pointer;margin-top:8px;">Cancel</button>
+      </div>`;
+    document.body.appendChild(m);
+  } catch(e) { window.open('https://paypal.me/DollarDoubleEmpire','_blank'); }
+}
+async function buyCoinPackage(packageId){
+  if(!localStorage.getItem('empire_token')){ showToast('Sign in first'); return; }
+  try {
+    const r = await fetch(API+'/api/credits/create-order', {
+      method:'POST', headers:{...authHeaders(),'Content-Type':'application/json'},
+      body: JSON.stringify({ packageId })
+    });
+    const d = await r.json();
+    if(d.approvalUrl) {
+      document.getElementById('coin-buy-modal')?.remove();
+      window.open(d.approvalUrl, '_blank');
+      showToast('Complete your PayPal purchase to receive coins 🪙');
+    } else { showToast(d.error || 'Payment setup failed'); }
+  } catch(e){ showToast('Network error — try again'); }
 }
 async function requestPayout(){
-  alert('Payout requests require minimum 1,000 coins. Visit your profile settings.');
+  showToast('Payout coming soon — minimum 1,000 coins required');
 }
 function goLive(){
   // Coin gate: use manusBalance (live in-memory) not stale localStorage
@@ -1667,23 +1712,59 @@ function renderExplore(){
     </div>
   `).join('');
 }
-function renderTx(){
-  document.getElementById('txList').innerHTML=demoTxs.map(t=>`
-    <div class="tx-item">
-      <div class="tx-icon ${t.type}">${t.icon}</div>
-      <div class="tx-info"><div class="tx-name">${t.name}</div><div class="tx-date">${t.date}</div></div>
-      <div class="tx-amount ${t.type}">${t.amount}</div>
-    </div>
-  `).join('');
+async function renderTx(){
+  const list = document.getElementById('txList');
+  if(!list) return;
+  if(!localStorage.getItem('empire_token')){ list.innerHTML='<p style="color:var(--muted);padding:1rem;text-align:center;">Sign in to see transactions</p>'; return; }
+  list.innerHTML='<p style="color:var(--muted);padding:1rem;text-align:center;">Loading...</p>';
+  try {
+    const r = await fetch(API+'/api/wallet/transactions', {headers:authHeaders()});
+    const d = await r.json();
+    const txs = d.transactions || [];
+    if(!txs.length){ list.innerHTML='<p style="color:var(--muted);padding:1rem;text-align:center;">No transactions yet — send a gift to get started!</p>'; return; }
+    list.innerHTML = txs.map(t => `
+      <div class="tx-item">
+        <div class="tx-icon ${t.amount>0?'credit':'debit'}">${t.amount>0?'💰':'🎁'}</div>
+        <div class="tx-info"><div class="tx-name">${t.label}</div><div class="tx-date">${new Date(t.created_at).toLocaleDateString()}</div></div>
+        <div class="tx-amount" style="color:${t.amount>0?'#4ade80':'#f87171'};font-weight:700;">${t.amount>0?'+':''}${t.amount} coins</div>
+      </div>`)
+    .join('');
+  } catch(e){ list.innerHTML='<p style="color:var(--muted);padding:1rem;text-align:center;">Could not load transactions</p>'; }
 }
-function renderVideos(){
-  document.getElementById('videoList').innerHTML=demoVideos.map(v=>`
-    <div class="video-item" onclick="spawnCoin(event)">
-      <div class="video-thumb">${v.emoji}<div class="video-duration">${v.duration}</div></div>
-      <div class="video-info"><div class="video-title">${v.title}</div><div class="video-meta">${v.meta}</div></div>
-    </div>
-  `).join('');
+async function renderVideos(){
+  const list = document.getElementById('videoList');
+  if(!list) return;
+  try {
+    const r = await fetch(API+'/api/videos?limit=20', {headers:authHeaders()});
+    const d = await r.json();
+    const vids = d.videos || d || [];
+    if(!vids.length){ list.innerHTML='<p style="color:var(--muted);padding:2rem;text-align:center;">No videos yet</p>'; return; }
+    list.innerHTML = vids.map(v=>`
+      <div class="video-item" onclick="playVideoModal('${v.url}','${(v.title||'').replace(/'/g,'')}')">
+        <div class="video-thumb" style="background:#1a0a2e;display:flex;align-items:center;justify-content:center;">
+          ${v.thumbnail ? `<img src="${v.thumbnail}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">` : '🎬'}
+          <div class="video-duration">▶</div>
+        </div>
+        <div class="video-info"><div class="video-title">${v.title||'Untitled'}</div><div class="video-meta">@${v.username||'creator'}</div></div>
+      </div>`).join('');
+  } catch(e){ list.innerHTML='<p style="color:var(--muted);padding:2rem;text-align:center;">Could not load videos</p>'; }
 }
+function playVideoModal(url, title){
+  if(!url || url.includes('placeholder')) { showToast('Video not available'); return; }
+  var existing = document.getElementById('video-play-modal');
+  if(existing) existing.remove();
+  var m = document.createElement('div');
+  m.id='video-play-modal';
+  m.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+  m.innerHTML=`
+    <div style="position:absolute;top:16px;right:16px;z-index:1;">
+      <button onclick="document.getElementById('video-play-modal').remove()" style="background:rgba(255,255,255,.15);border:none;border-radius:50%;width:40px;height:40px;color:#fff;font-size:1.2rem;cursor:pointer;">✕</button>
+    </div>
+    <div style="font-size:0.9rem;color:#fff;margin-bottom:10px;padding:0 20px;text-align:center;">${title}</div>
+    <video src="${url}" controls autoplay playsinline style="max-width:100%;max-height:85vh;border-radius:8px;"></video>`;
+  document.body.appendChild(m);
+}
+function playVideo(id) { showToast('Tap the video thumbnail to play'); }
 function renderProfile(){
   document.getElementById('profileGrid').innerHTML=Array(12).fill(0).map((_,i)=>`
     <div class="profile-cell" onclick="spawnCoin(event)" style="background:hsl(${i*30},20%,12%)">${['🏝️','💰','🤖','🎵','⚓','❤️','🏋️','💎','🌺','🚀','👑','💻'][i]}</div>
@@ -1699,6 +1780,10 @@ function showScreen(name){
   if(name==='jackpot' && typeof loadJackpot==='function') loadJackpot();
   if((name==='game'||name==='wallet'||name==='jackpot') && typeof loadWalletBalance==='function') loadWalletBalance();
   if(name==='feed' && typeof loadFeed==='function') loadFeed();
+  if(name==='wallet') renderTx();
+  if(name==='video') renderVideos();
+  if(name==='explore') initExploreSearch();
+  if(name==='profile') loadNotifCount();
   const map={feed:0,explore:1,msg:3,profile:4};
   const botItems=document.querySelectorAll('.bot-item');
   if(map[name]!==undefined) botItems[map[name]].classList.add('active');
@@ -3107,6 +3192,102 @@ function openUpload() { document.getElementById('upload-modal').classList.add('o
 
 function closeUpload() { document.getElementById('upload-modal').classList.remove('open'); }
 
+// ── Explore Search ──────────────────────────────────────────────────────────
+let _searchTimer = null;
+function initExploreSearch() {
+  renderExplore(); // load default grid
+  const inp = document.getElementById('exploreSearchInput');
+  if(inp) inp.value = '';
+  document.getElementById('searchResults').style.display = 'none';
+  document.getElementById('exploreGrid').style.display = 'grid';
+}
+function handleExploreSearch(val) {
+  clearTimeout(_searchTimer);
+  if(!val || val.trim().length < 2) {
+    document.getElementById('searchResults').style.display = 'none';
+    document.getElementById('exploreGrid').style.display = 'grid';
+    return;
+  }
+  _searchTimer = setTimeout(() => runSearch(val.trim()), 350);
+}
+async function runSearch(q) {
+  const results = document.getElementById('searchResults');
+  const grid = document.getElementById('exploreGrid');
+  results.style.display = 'block';
+  grid.style.display = 'none';
+  results.innerHTML = '<p style="color:var(--muted);padding:1rem;">Searching...</p>';
+  try {
+    const r = await fetch(API+'/api/search?q='+encodeURIComponent(q), {headers:authHeaders()});
+    const d = await r.json();
+    const users = d.users || []; const videos = d.videos || [];
+    let html = '';
+    if(users.length) {
+      html += '<div style="font-size:0.75rem;color:#a78bfa;padding:8px 0 4px;font-weight:700;">CREATORS</div>';
+      html += users.map(u=>`
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1a1a2e;">
+          <div style="width:40px;height:40px;border-radius:50%;background:#2a0a4a;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">
+            ${u.avatar_url?`<img src="${u.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:u.username[0].toUpperCase()}
+          </div>
+          <div><div style="font-weight:700;">@${u.username}</div><div style="font-size:0.8rem;color:#a78bfa;">${u.display_name||''} ${u.plan==='founder'?'👑':''}</div></div>
+        </div>`).join('');
+    }
+    if(videos.length) {
+      html += '<div style="font-size:0.75rem;color:#a78bfa;padding:8px 0 4px;font-weight:700;">VIDEOS</div>';
+      html += videos.map(v=>`
+        <div onclick="playVideoModal('${v.url}','${(v.title||'').replace(/'/g,'')}')" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1a1a2e;cursor:pointer;">
+          <div style="width:56px;height:40px;border-radius:8px;background:#2a0a4a;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🎬</div>
+          <div><div style="font-weight:600;font-size:0.9rem;">${v.title||'Untitled'}</div><div style="font-size:0.75rem;color:#888;">@${v.username}</div></div>
+        </div>`).join('');
+    }
+    if(!users.length && !videos.length) html = '<p style="color:var(--muted);padding:1rem;text-align:center;">No results for "'+q+'"</p>';
+    results.innerHTML = html;
+  } catch(e) { results.innerHTML = '<p style="color:var(--muted);padding:1rem;">Search failed — try again</p>'; }
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+async function loadNotifCount() {
+  if(!localStorage.getItem('empire_token')) return;
+  try {
+    const r = await fetch(API+'/api/notifications/count', {headers:authHeaders()});
+    const d = await r.json();
+    const dot = document.querySelector('.notif-dot');
+    if(dot && d.count > 0) {
+      dot.setAttribute('data-count', d.count > 9 ? '9+' : d.count);
+      dot.style.setProperty('--notif-count', `'${d.count > 9 ? "9+" : d.count}'`);
+    }
+  } catch(e){}
+}
+async function showNotif() {
+  const existing = document.getElementById('notif-panel');
+  if(existing) { existing.remove(); return; }
+  const panel = document.createElement('div');
+  panel.id = 'notif-panel';
+  panel.style.cssText='position:fixed;top:60px;right:8px;left:8px;max-width:400px;margin:0 auto;background:#1a0a2e;border:1px solid rgba(124,92,252,.4);border-radius:16px;z-index:999;max-height:60vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5);';
+  panel.innerHTML='<div style="padding:12px 16px;border-bottom:1px solid #2a0a4a;font-weight:700;">🔔 Notifications</div><div id="notifList" style="padding:8px;"><p style="color:var(--muted);padding:8px;text-align:center;">Loading...</p></div>';
+  document.body.appendChild(panel);
+  // Close on outside tap
+  setTimeout(()=>document.addEventListener('click',function h(e){if(!panel.contains(e.target)){panel.remove();document.removeEventListener('click',h);}},),100);
+  // Load notifications
+  try {
+    const r = await fetch(API+'/api/notifications', {headers:authHeaders()});
+    const d = await r.json();
+    const notifs = d.notifications || [];
+    const list = document.getElementById('notifList');
+    if(!list) return;
+    if(!notifs.length){list.innerHTML='<p style="color:var(--muted);padding:12px;text-align:center;">No notifications yet</p>';return;}
+    const icons={follow:'👤',like:'❤️',comment:'💬',gift:'🎁'};
+    list.innerHTML=notifs.map(n=>`
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 8px;border-bottom:1px solid #1a0a2e;">
+        <div style="font-size:1.4rem;">${icons[n.type]||'🔔'}</div>
+        <div><div style="font-size:0.85rem;"><strong>@${n.actor}</strong> ${n.type==='follow'?'followed you':n.type==='like'?'liked your video':n.type==='comment'?'commented: '+n.extra:n.type==='gift'?'sent you '+n.extra+' coins gift':'interacted'}</div>
+        <div style="font-size:0.72rem;color:#888;">${new Date(n.created_at).toLocaleString()}</div></div>
+      </div>`).join('');
+  } catch(e){
+    const list=document.getElementById('notifList');
+    if(list) list.innerHTML='<p style="color:var(--muted);padding:12px;">Could not load notifications</p>';
+  }
+}
+
 // ── Clip Duration Selector ───────────────────────────────────────────────────
 let selectedDuration = 8;
 function selectDuration(el, dur) {
@@ -3147,11 +3328,12 @@ async function generateAIVideo() {
     msgIdx = Math.min(msgIdx + 1, messages.length - 1);
     status.textContent = messages[msgIdx];
   }, 15000);
+  const dur = typeof selectedDuration !== 'undefined' ? selectedDuration : 8;
   try {
     const res = await fetch(`${API}/api/ai/generate-video`, {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, title: title || prompt.slice(0,60), model })
+      body: JSON.stringify({ prompt, title: title || prompt.slice(0,60), model, duration: dur || 6 })
     });
     const data = await res.json();
     clearInterval(msgTimer);

@@ -2368,8 +2368,7 @@ db.query(`
 
 
 // ── ROUTE ALIASES (app.html compatibility) ─────────────────────────────────
-// /api/auth/signup → /api/auth/register
-app.post('/api/auth/signup', async (req, res, next) => { req.url = '/api/auth/register'; next('route'); });
+// /api/auth/signup — full handler (deduped)
 app.post('/api/auth/signup', async (req, res) => {
   const { email, password, username } = req.body;
   if (!email || !password || !username) return res.status(400).json({ error: 'email, password and username required' });
@@ -2525,5 +2524,69 @@ app.post('/api/ai/generate-video', authMiddleware, async (req, res) => {
     console.error('[AI Studio] Error:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+// ── SEARCH ──────────────────────────────────────────────────────────────────
+app.get('/api/search', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q || q.length < 2) return res.json({ users: [], videos: [] });
+  try {
+    const term = `%${q.toLowerCase()}%`;
+    const [users, videos] = await Promise.all([
+      db.query(`SELECT id, username, display_name, avatar_url, plan FROM users WHERE LOWER(username) LIKE $1 OR LOWER(display_name) LIKE $1 LIMIT 10`, [term]),
+      db.query(`SELECT v.id, v.title, v.url, v.thumbnail, v.views, v.likes, u.username, u.avatar_url FROM videos v JOIN users u ON v.user_id=u.id WHERE LOWER(v.title) LIKE $1 OR LOWER(v.description) LIKE $1 ORDER BY v.created_at DESC LIMIT 20`, [term])
+    ]);
+    res.json({ users: users.rows, videos: videos.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── TRANSACTION HISTORY ─────────────────────────────────────────────────────
+app.get('/api/wallet/transactions', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT 'gift_sent' AS type, -g.credits AS amount, 'Gift sent' AS label, g.created_at
+      FROM gifts g WHERE g.sender_id=$1
+      UNION ALL
+      SELECT 'gift_received' AS type, g.credits AS amount, 'Gift received' AS label, g.created_at
+      FROM gifts g WHERE g.receiver_id=$1
+      ORDER BY created_at DESC LIMIT 50
+    `, [req.user.id]);
+    res.json({ ok: true, transactions: rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── NOTIFICATIONS ────────────────────────────────────────────────────────────
+app.get('/api/notifications', authMiddleware, async (req, res) => {
+  try {
+    // Build notifications from follows, likes, comments, gifts
+    const { rows } = await db.query(`
+      SELECT 'follow' AS type, u.username AS actor, u.avatar_url, f.created_at, NULL AS extra
+      FROM follows f JOIN users u ON u.id=f.follower_id WHERE f.followee_id=$1
+      UNION ALL
+      SELECT 'like' AS type, u.username AS actor, u.avatar_url, vl.created_at, v.title AS extra
+      FROM video_likes vl JOIN users u ON u.id=vl.user_id JOIN videos v ON v.id=vl.video_id WHERE v.user_id=$1 AND vl.user_id!=$1
+      UNION ALL
+      SELECT 'comment' AS type, u.username AS actor, u.avatar_url, c.created_at, c.text AS extra
+      FROM comments c JOIN users u ON u.id=c.user_id JOIN videos v ON v.id=c.video_id WHERE v.user_id=$1 AND c.user_id!=$1
+      UNION ALL
+      SELECT 'gift' AS type, u.username AS actor, u.avatar_url, g.created_at, g.credits::text AS extra
+      FROM gifts g JOIN users u ON u.id=g.sender_id WHERE g.receiver_id=$1
+      ORDER BY created_at DESC LIMIT 30
+    `, [req.user.id]);
+    res.json({ ok: true, notifications: rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/notifications/count', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT (
+        (SELECT COUNT(*) FROM follows WHERE followee_id=$1 AND created_at > NOW()-INTERVAL '24 hours') +
+        (SELECT COUNT(*) FROM video_likes vl JOIN videos v ON v.id=vl.video_id WHERE v.user_id=$1 AND vl.user_id!=$1 AND vl.created_at > NOW()-INTERVAL '24 hours') +
+        (SELECT COUNT(*) FROM comments c JOIN videos v ON v.id=c.video_id WHERE v.user_id=$1 AND c.user_id!=$1 AND c.created_at > NOW()-INTERVAL '24 hours') +
+        (SELECT COUNT(*) FROM gifts WHERE receiver_id=$1 AND created_at > NOW()-INTERVAL '24 hours')
+      ) AS count
+    `, [req.user.id]);
+    res.json({ ok: true, count: parseInt(rows[0].count) || 0 });
+  } catch(e) { res.json({ ok: true, count: 0 }); }
 });
 // ── END ROUTE ALIASES ────────────────────────────────────────────────────────

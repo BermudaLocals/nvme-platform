@@ -1813,6 +1813,215 @@ app.get('/api/dm/:conversationId/messages', authMiddleware, async (req, res) => 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ── DATING / DISCOVER ROUTES ─────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Ensure swipes table exists
+db.query(`CREATE TABLE IF NOT EXISTS swipes (
+  id SERIAL PRIMARY KEY,
+  swiper_id UUID NOT NULL,
+  swiped_id UUID NOT NULL,
+  direction VARCHAR(4) NOT NULL CHECK (direction IN ('like','pass')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(swiper_id, swiped_id)
+)`).catch(()=>{});
+
+db.query(`CREATE TABLE IF NOT EXISTS dating_matches (
+  id SERIAL PRIMARY KEY,
+  user_a UUID NOT NULL,
+  user_b UUID NOT NULL,
+  matched_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_a, user_b)
+)`).catch(()=>{});
+
+// GET /api/dating/profiles — get discover profiles (not yet swiped)
+app.get('/api/dating/profiles', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT id, username, display_name, avatar_url, bio,
+             (SELECT COUNT(*) FROM follows WHERE followee_id=u.id) AS followers
+      FROM users u
+      WHERE u.id != $1
+      AND u.id NOT IN (
+        SELECT swiped_id FROM swipes WHERE swiper_id=$1
+      )
+      ORDER BY RANDOM()
+      LIMIT 10
+    `, [req.user.id]);
+    res.json({ ok: true, profiles: rows });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// POST /api/dating/swipe — like or pass
+app.post('/api/dating/swipe', authMiddleware, async (req, res) => {
+  try {
+    const { targetId, direction } = req.body;
+    if (!['like','pass'].includes(direction)) return res.status(400).json({ ok: false, error: 'direction must be like or pass' });
+    await db.query(
+      'INSERT INTO swipes (swiper_id, swiped_id, direction) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+      [req.user.id, targetId, direction]
+    );
+    let matched = false;
+    if (direction === 'like') {
+      // Check if target already liked this user
+      const { rows } = await db.query(
+        'SELECT id FROM swipes WHERE swiper_id=$1 AND swiped_id=$2 AND direction=$3',
+        [targetId, req.user.id, 'like']
+      );
+      if (rows.length > 0) {
+        const a = req.user.id < targetId ? req.user.id : targetId;
+        const b = req.user.id < targetId ? targetId : req.user.id;
+        await db.query('INSERT INTO dating_matches (user_a, user_b) VALUES ($1,$2) ON CONFLICT DO NOTHING', [a, b]);
+        // Create DM conversation for the match
+        await db.query(
+          'INSERT INTO dm_conversations (participant_a, participant_b) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+          [a, b]
+        );
+        matched = true;
+      }
+    }
+    res.json({ ok: true, matched });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// GET /api/dating/matches — get all mutual matches
+app.get('/api/dating/matches', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT m.id, m.matched_at,
+        u.id AS user_id, u.username, u.display_name, u.avatar_url, u.bio
+      FROM dating_matches m
+      JOIN users u ON u.id = CASE WHEN m.user_a=$1 THEN m.user_b ELSE m.user_a END
+      WHERE m.user_a=$1 OR m.user_b=$1
+      ORDER BY m.matched_at DESC
+    `, [req.user.id]);
+    res.json({ ok: true, matches: rows });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── STORIES ROUTES ─────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+db.query(`CREATE TABLE IF NOT EXISTS stories (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL,
+  media_url TEXT NOT NULL,
+  media_type VARCHAR(10) DEFAULT 'image',
+  caption VARCHAR(200),
+  view_count INT DEFAULT 0,
+  expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '24 hours'),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(()=>{});
+
+db.query(`CREATE TABLE IF NOT EXISTS story_views (
+  story_id INT NOT NULL,
+  viewer_id UUID NOT NULL,
+  viewed_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (story_id, viewer_id)
+)`).catch(()=>{});
+
+// GET /api/stories — get active stories (last 24h) from followed users + own
+app.get('/api/stories', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT s.*, u.username, u.display_name, u.avatar_url,
+        EXISTS(SELECT 1 FROM story_views sv WHERE sv.story_id=s.id AND sv.viewer_id=$1) AS viewed
+      FROM stories s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.expires_at > NOW()
+      AND (s.user_id=$1 OR s.user_id IN (SELECT followee_id FROM follows WHERE follower_id=$1))
+      ORDER BY u.id, s.created_at ASC
+    `, [req.user.id]);
+    // Group by user
+    const grouped = {};
+    rows.forEach(s => {
+      if (!grouped[s.user_id]) grouped[s.user_id] = { user_id:s.user_id, username:s.username, display_name:s.display_name, avatar_url:s.avatar_url, stories:[], all_viewed:true };
+      grouped[s.user_id].stories.push(s);
+      if (!s.viewed) grouped[s.user_id].all_viewed = false;
+    });
+    res.json({ ok: true, users: Object.values(grouped) });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// POST /api/stories — create a story (base64 or URL)
+app.post('/api/stories', authMiddleware, async (req, res) => {
+  try {
+    const { media_url, media_type = 'image', caption = '' } = req.body;
+    if (!media_url) return res.status(400).json({ ok: false, error: 'media_url required' });
+    const { rows } = await db.query(
+      'INSERT INTO stories (user_id, media_url, media_type, caption) VALUES ($1,$2,$3,$4) RETURNING *',
+      [req.user.id, media_url, media_type, caption.slice(0,200)]
+    );
+    res.json({ ok: true, story: rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// POST /api/stories/:id/view
+app.post('/api/stories/:id/view', authMiddleware, async (req, res) => {
+  try {
+    await db.query('INSERT INTO story_views (story_id, viewer_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.params.id, req.user.id]);
+    await db.query('UPDATE stories SET view_count=view_count+1 WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.json({ ok: true }); }
+});
+
+// DELETE /api/stories/:id
+app.delete('/api/stories/:id', authMiddleware, async (req, res) => {
+  try {
+    await db.query('DELETE FROM stories WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── PAYOUT / WITHDRAWAL ROUTES ──────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+db.query(`CREATE TABLE IF NOT EXISTS payout_requests (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL,
+  coins_requested INT NOT NULL,
+  usd_amount DECIMAL(10,2) NOT NULL,
+  paypal_email VARCHAR(255) NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(()=>{});
+
+// POST /api/wallet/payout — request a payout (1000 coins = $1)
+app.post('/api/wallet/payout', authMiddleware, async (req, res) => {
+  try {
+    const { coins, paypal_email } = req.body;
+    if (!coins || coins < 1000) return res.status(400).json({ ok: false, error: 'Minimum payout is 1,000 coins ($1.00)' });
+    if (!paypal_email || !paypal_email.includes('@')) return res.status(400).json({ ok: false, error: 'Valid PayPal email required' });
+    // Check balance
+    const { rows } = await db.query('SELECT balance_credits FROM users WHERE id=$1', [req.user.id]);
+    const balance = rows[0]?.balance_credits || 0;
+    if (balance < coins) return res.status(400).json({ ok: false, error: `Insufficient balance. You have ${balance} coins.` });
+    const usd = (coins / 1000).toFixed(2);
+    // Deduct coins
+    await db.query('UPDATE users SET balance_credits=balance_credits-$1 WHERE id=$2', [coins, req.user.id]);
+    // Create payout request
+    const pr = await db.query(
+      'INSERT INTO payout_requests (user_id, coins_requested, usd_amount, paypal_email) VALUES ($1,$2,$3,$4) RETURNING id',
+      [req.user.id, coins, usd, paypal_email]
+    );
+    res.json({ ok: true, message: `Payout of $${usd} requested to ${paypal_email}. Processed within 3-5 business days.`, request_id: pr.rows[0].id });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// GET /api/wallet/payouts — payout history
+app.get('/api/wallet/payouts', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, coins_requested, usd_amount, paypal_email, status, created_at FROM payout_requests WHERE user_id=$1 ORDER BY created_at DESC LIMIT 20',
+      [req.user.id]
+    );
+    res.json({ ok: true, payouts: rows });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ── SOCKET.IO REAL-TIME ENGINE ─────────────────────────────────────────────
 const onlineUsers = new Map(); // userId -> socketId
 

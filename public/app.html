@@ -748,7 +748,7 @@ if(typeof socket !== 'undefined' && socket) {
     <div class="wallet-pill" onclick="showScreen('wallet')">
       🪙 <span id="manus-bal">0</span>
     </div>
-    <div class="nav-icon notif-dot" onclick="showNotif()">🔔</div>
+    <div class="nav-icon notif-dot" id="notifBell" onclick="showNotif()" style="position:relative">🔔<span id="notifCount" style="display:none;position:absolute;top:2px;right:2px;background:#ff3d7f;color:#fff;font-size:0.6rem;font-weight:800;min-width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 3px;">0</span></div>
   </div>
 </nav>
 
@@ -2051,6 +2051,96 @@ async function postComment(videoId){
   }catch(e){ showToast('Network error — try again'); }
 }
 
+// ── TikTok Features: Tip & Hashtag Search ──────────────────
+function sendTip(toUserId, username) {
+  if(!currentUser) { showToast('Sign in to tip creators'); return; }
+  var existing = document.getElementById('tip-sheet');
+  if(existing) existing.remove();
+  var sheet = document.createElement('div');
+  sheet.id = 'tip-sheet';
+  sheet.style.cssText = 'position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#1a0a2e;border-radius:20px 20px 0 0;z-index:9999;padding:1.5rem;animation:fadeIn .2s ease;';
+  sheet.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <span style="font-weight:800;font-size:1.1rem;">💝 Tip @${username}</span>
+      <span onclick="document.getElementById('tip-sheet').remove()" style="cursor:pointer;font-size:1.4rem;color:var(--muted);">✕</span>
+    </div>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem;">100% goes directly to this creator — no platform cut on tips.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;margin-bottom:1rem;">
+      ${[10,25,50,100,200,500].map(c=>`<div onclick="confirmTip('${toUserId}','${username}',${c},this)" style="background:#0a0a1a;border:1px solid #333;border-radius:10px;padding:.6rem;text-align:center;cursor:pointer;font-weight:700;"><div style="font-size:1.1rem;">🪙</div><div style="font-size:.9rem;color:var(--gold);">${c}</div><div style="font-size:.65rem;color:var(--muted);">coins</div></div>`).join('')}
+    </div>
+    <div style="display:flex;gap:.5rem;">
+      <input id="tipCustom" type="number" min="1" placeholder="Custom amount" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:10px;border-radius:10px;font-family:Outfit,sans-serif;">
+      <button onclick="var v=parseInt(document.getElementById('tipCustom').value);if(v>0)confirmTip('${toUserId}','${username}',v,this)" style="background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:700;">Tip</button>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+}
+
+async function confirmTip(toUserId, username, coins, btn) {
+  var tok = localStorage.getItem('empire_token');
+  if(!tok) { showToast('Sign in to tip'); return; }
+  var orig = btn.innerHTML;
+  btn.innerHTML = '⏳'; btn.style.pointerEvents='none';
+  try {
+    var r = await fetch('/api/tips', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body: JSON.stringify({ to_user_id: toUserId, coins, message: '' })
+    });
+    var d = await r.json();
+    if(d.ok) {
+      spawnCoin({clientX:window.innerWidth/2,clientY:window.innerHeight/2});
+      var s = document.getElementById('tip-sheet'); if(s) s.remove();
+      showToast('💝 Tipped '+coins+' coins to @'+username+'!');
+      loadBalance();
+    } else { showToast(d.error||'Tip failed'); btn.innerHTML=orig; btn.style.pointerEvents=''; }
+  } catch(e) { showToast('Tip error'); btn.innerHTML=orig; btn.style.pointerEvents=''; }
+}
+
+function searchHashtag(tag) {
+  showScreen('explore');
+  setTimeout(function() {
+    var inp = document.querySelector('.explore-search input') || document.querySelector('.search-bar input');
+    if(inp) { inp.value = '#'+tag; inp.dispatchEvent(new Event('input')); }
+    loadHashtagVideos(tag);
+  }, 200);
+}
+
+async function loadHashtagVideos(tag) {
+  try {
+    var r = await fetch('/api/hashtags/'+encodeURIComponent(tag)+'/videos');
+    var d = await r.json();
+    if(d.ok && d.videos && d.videos.length) {
+      var list = document.getElementById('videoList') || document.getElementById('exploreGrid');
+      if(list && typeof renderVideoCard === 'function') {
+        list.innerHTML = '<div style="padding:.75rem 1rem;color:var(--muted);font-size:.85rem;">🔖 #'+tag+' — '+d.videos.length+' videos</div>' + d.videos.map(v=>renderVideoCard(v)).join('');
+      }
+    }
+  } catch(e) {}
+}
+
+// Notification count polling (every 30s)
+function pollNotifCount() {
+  var tok = localStorage.getItem('empire_token');
+  if(!tok) return;
+  fetch('/api/notifications/count', {headers:{'Authorization':'Bearer '+tok}})
+    .then(r=>r.json()).then(d=>{
+      var badge = document.getElementById('notifCount');
+      if(!badge) return;
+      var count = d.count || 0;
+      if(count > 0) {
+        badge.textContent = count > 99 ? '99+' : count;
+        badge.style.display = 'flex';
+        document.getElementById('notifBell') && document.getElementById('notifBell').classList.add('notif-dot');
+      } else {
+        badge.style.display = 'none';
+      }
+    }).catch(()=>{});
+}
+setInterval(pollNotifCount, 30000);
+setTimeout(pollNotifCount, 3000);
+// ── End TikTok Features JS ───────────────────────────────────
+
 function openGiftPanel(username, videoId){
   event && event.stopPropagation && event.stopPropagation();
   var existing = document.getElementById('gift-sheet');
@@ -2493,6 +2583,10 @@ function renderVideoCard(v) {
         <div class="side-btn" onclick="event.stopPropagation();openGiftPanel('${name}','${v.id}')">
           <span>🎁</span><small>Gift</small>
         </div>
+        <div class="side-btn" onclick="event.stopPropagation();sendTip('${v.user_id||v.author_id}','${name}')">
+          <span>💝</span><small>Tip</small>
+        </div>
+        ${v.product_url ? `<div class="side-btn" onclick="event.stopPropagation();window.open('${v.product_url}','_blank')"><span>🛒</span><small>Shop</small></div>` : ''}
       </div>
       <div class="video-overlay">
         <div class="creator-row">
@@ -2502,6 +2596,8 @@ function renderVideoCard(v) {
         </div>
         ${v.title ? `<div class="video-title-overlay">${v.title}</div>` : ''}
         ${v.description ? `<div class="video-desc-overlay">${v.description}</div>` : ''}
+        ${(v.tags && v.tags.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${(Array.isArray(v.tags)?v.tags:[]).map(t=>`<span onclick="event.stopPropagation();searchHashtag('${t}')" style="background:rgba(124,92,252,0.25);border:1px solid rgba(124,92,252,0.5);color:#c4b5fd;border-radius:20px;padding:2px 8px;font-size:0.72rem;cursor:pointer;">#${t}</span>`).join('')}</div>` : ''}
+        ${v.sound_name ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;"><div style="width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--pink));display:flex;align-items:center;justify-content:center;font-size:0.7rem;animation:spin 3s linear infinite;">♪</div><span style="font-size:0.75rem;color:rgba(255,255,255,0.8);">${v.sound_name} · ${v.sound_artist||'Unknown'}</span></div>` : ''}
       </div>
     </div>`;
 }

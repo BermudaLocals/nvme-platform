@@ -2546,7 +2546,7 @@ async function loadFeed(type = 'forYou') {
     }
 
     list.innerHTML = videos.map(v => renderVideoCard(v)).join('');
-    setTimeout(() => initFeedObserver(), 150);
+    setTimeout(() => { initFeedObserver(); initSwipeGestures(); }, 150);
   } catch {
     list.innerHTML = renderDemoFeed();
   }
@@ -2641,6 +2641,28 @@ function initFeedObserver(){
   document.querySelectorAll('#feedContainer .video-card').forEach(function(card){
     obs.observe(card);
   });
+}
+
+// TikTok swipe gesture handler — swipe up/down to navigate videos
+function initSwipeGestures(){
+  var container=document.getElementById('feedContainer');
+  if(!container)return;
+  var startY=0,startX=0,threshold=60;
+  container.addEventListener('touchstart',function(e){
+    startY=e.touches[0].clientY;
+    startX=e.touches[0].clientX;
+  },{passive:true});
+  container.addEventListener('touchend',function(e){
+    var endY=e.changedTouches[0].clientY;
+    var endX=e.changedTouches[0].clientX;
+    var diffY=startY-endY;
+    var diffX=Math.abs(startX-endX);
+    if(Math.abs(diffY)>threshold&&Math.abs(diffY)>diffX){
+      var itemH=container.clientHeight;
+      if(diffY>0){container.scrollBy({top:itemH,behavior:'smooth'});}
+      else{container.scrollBy({top:-itemH,behavior:'smooth'});}
+    }
+  },{passive:true});
 }
 
 function renderDemoFeed() {

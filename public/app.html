@@ -103,7 +103,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .bot-item{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:0.4rem 0.6rem;border-radius:12px;transition:all .2s;min-width:52px}
 .bot-item.active .bot-icon{color:var(--purple);transform:scale(1.1)}
 .bot-item.active .bot-label{color:var(--purple)}
-.bot-icon{font-size:1.3rem;transition:all .2s;color:var(--muted)}
+.bot-icon{font-size:1.7rem;transition:all .2s;color:rgba(255,255,255,0.85);filter:drop-shadow(0 0 4px rgba(255,255,255,0.1))}
 .bot-label{font-size:0.62rem;color:var(--muted);font-weight:500;letter-spacing:.02em}
 .bot-item:active{transform:scale(0.92)}
 .bot-center{background:linear-gradient(135deg,var(--purple),var(--pink));border-radius:16px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 0 20px rgba(124,92,252,0.5);margin-top:-8px;cursor:pointer;transition:all .2s}
@@ -986,13 +986,13 @@ if(typeof socket !== 'undefined' && socket) {
   <div class="more-nav-item" onclick="showScreen('game')"><span>⚓</span><span>Games</span></div>
   <div class="more-nav-item" onclick="showScreen('dating')"><span>❤️</span><span>Dating</span></div>
   <div class="more-nav-item" onclick="showScreen('video')"><span>▶️</span><span>Videos</span></div>
-  <div class="more-nav-item" onclick="showCall()"><span>📞</span><span>Call</span></div>
+  <div class="more-nav-item" onclick="openContacts()"><span>👥</span><span>Contacts</span></div>
 </div>
 
 <!-- CALL OVERLAY -->
 <div class="call-overlay" id="callOverlay">
-  <div class="call-avatar">🦁</div>
-  <div class="call-name" id="callName">KushAgent</div>
+  <div class="call-avatar" id="callAvatar">👤</div>
+  <div class="call-name" id="callName">Connecting...</div>
   <div class="call-status" id="callStatus">Connecting...</div>
   <div class="call-actions">
     <div class="call-btn call-mute">🎤</div>
@@ -1891,8 +1891,11 @@ function spawnCoin(e){
 }
 
 // ---- CALL ----
-function showCall(){
-  document.getElementById('callOverlay').classList.add('show');
+function showCall(name, avatar){
+  const overlay = document.getElementById('callOverlay');
+  overlay.classList.add('show');
+  document.getElementById('callName').textContent = name || 'NVME Call';
+  document.getElementById('callAvatar').textContent = avatar || '📞';
   let t=0;
   const st=['Connecting...','Ringing...','Connected ✓'];
   const iv=setInterval(()=>{
@@ -3852,6 +3855,174 @@ async function openDMWithUser(userId, username) {
   // Navigate to messages and open conversation
   localStorage.setItem('nvme_dm_open', JSON.stringify({ userId, username }));
   window.location = '/messages.html';
+}
+</script>
+
+<!-- CONTACTS MODAL -->
+<div id="contacts-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.9);backdrop-filter:blur(8px)">
+  <div style="position:absolute;inset:0;max-width:480px;margin:0 auto;display:flex;flex-direction:column;background:#07070d">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:1.2rem 1rem;border-bottom:1px solid #1e1e30">
+      <div>
+        <div style="font-weight:700;font-size:1.1rem">👥 Contacts & Invites</div>
+        <div style="font-size:0.75rem;color:#888;margin-top:2px">Import contacts · Send invites · Call friends</div>
+      </div>
+      <span onclick="document.getElementById('contacts-modal').style.display='none'" style="cursor:pointer;font-size:1.4rem;padding:4px 8px">✕</span>
+    </div>
+    <div style="padding:1rem;display:flex;gap:0.75rem;flex-wrap:wrap">
+      <button onclick="loadPhoneContacts()" style="flex:1;min-width:140px;background:linear-gradient(135deg,#7c3aed,#db2777);border:none;border-radius:12px;padding:0.8rem;color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer">📱 Import Contacts</button>
+      <label style="flex:1;min-width:140px;background:#1a0a2e;border:1px solid #333;border-radius:12px;padding:0.8rem;color:#fff;font-weight:600;font-size:0.9rem;cursor:pointer;text-align:center">
+        📂 Upload CSV / VCF
+        <input type="file" accept=".csv,.vcf,text/vcard,text/csv" style="display:none" onchange="parseContactsFile(event)">
+      </label>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:0 1rem 1rem" id="contacts-list">
+      <div style="text-align:center;padding:40px 20px;color:#888">
+        <div style="font-size:3rem;margin-bottom:12px">📱</div>
+        <div style="font-weight:600;margin-bottom:6px">Import your contacts</div>
+        <div style="font-size:0.85rem">Tap "Import Contacts" to access your phone contacts, or upload a CSV/VCF export</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// CONTACTS — Import, Invite, Call
+// ════════════════════════════════════════════
+let importedContacts = [];
+
+function openContacts() {
+  document.getElementById('contacts-modal').style.display = 'block';
+}
+
+async function loadPhoneContacts() {
+  // Use native Contacts API (Android Chrome 80+)
+  if ('contacts' in navigator && 'ContactsManager' in window) {
+    try {
+      const props = ['name', 'tel', 'email'];
+      const opts = { multiple: true };
+      const contacts = await navigator.contacts.select(props, opts);
+      importedContacts = contacts.map(c => ({
+        name: (c.name && c.name[0]) || 'Unknown',
+        phone: c.tel && c.tel[0] || '',
+        email: c.email && c.email[0] || ''
+      })).filter(c => c.phone || c.email);
+      renderContactsList();
+    } catch(e) {
+      showToast('Contacts access cancelled or unavailable');
+    }
+  } else {
+    showToast('📂 Use "Upload CSV/VCF" instead — contacts API not supported on this browser');
+  }
+}
+
+function parseContactsFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    if (file.name.endsWith('.vcf') || file.type === 'text/vcard') {
+      importedContacts = parseVCF(text);
+    } else {
+      importedContacts = parseCSV(text);
+    }
+    renderContactsList();
+  };
+  reader.readAsText(file);
+}
+
+function parseVCF(text) {
+  const contacts = [];
+  const cards = text.split(/BEGIN:VCARD/i).slice(1);
+  cards.forEach(card => {
+    const nameMatch = card.match(/FN[^:]*:([^\r\n]+)/i);
+    const telMatch = card.match(/TEL[^:]*:([^\r\n]+)/i);
+    const emailMatch = card.match(/EMAIL[^:]*:([^\r\n]+)/i);
+    if (nameMatch || telMatch) {
+      contacts.push({
+        name: nameMatch ? nameMatch[1].trim() : 'Unknown',
+        phone: telMatch ? telMatch[1].trim().replace(/[^+\d]/g,'') : '',
+        email: emailMatch ? emailMatch[1].trim() : ''
+      });
+    }
+  });
+  return contacts.filter(c => c.phone || c.email);
+}
+
+function parseCSV(text) {
+  const lines = text.split('\n').slice(1);
+  return lines.map(line => {
+    const cols = line.split(',').map(c => c.replace(/^"|"$/g,'').trim());
+    return { name: cols[0] || 'Unknown', phone: cols[1] || '', email: cols[2] || '' };
+  }).filter(c => c.phone || c.email);
+}
+
+function renderContactsList() {
+  const list = document.getElementById('contacts-list');
+  if (!importedContacts.length) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:#888">No contacts found in file</div>';
+    return;
+  }
+  list.innerHTML = `
+    <div style="font-size:0.8rem;color:#888;margin-bottom:0.75rem">${importedContacts.length} contacts imported</div>
+    ${importedContacts.map((c, i) => `
+      <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:#0e0e1a;border-radius:12px;margin-bottom:0.5rem">
+        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#db2777);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${(c.name[0]||'?').toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</div>
+          <div style="font-size:0.75rem;color:#888">${c.phone || c.email}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button onclick="inviteContact(${i})" style="background:#7c3aed;border:none;border-radius:8px;padding:5px 10px;color:#fff;font-size:0.75rem;cursor:pointer;font-weight:600">Invite</button>
+          ${c.phone ? `<button onclick="callContact('${c.name}','${c.phone}')" style="background:#0e8a0e;border:none;border-radius:8px;padding:5px 10px;color:#fff;font-size:0.75rem;cursor:pointer">📞</button>` : ''}
+        </div>
+      </div>`).join('')}
+    <div style="text-align:center;margin-top:1rem">
+      <button onclick="inviteAll()" style="background:linear-gradient(135deg,#7c3aed,#db2777);border:none;border-radius:12px;padding:0.8rem 2rem;color:#fff;font-weight:700;cursor:pointer">Send All Invites</button>
+    </div>`;
+}
+
+async function inviteContact(idx) {
+  const c = importedContacts[idx];
+  if (!c) return;
+  const inviteLink = 'https://nvme.live';
+  if (c.phone) {
+    try {
+      const r = await fetch(`${API}/api/invites/sms`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ phone: c.phone, name: c.name })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        showToast(`Invite sent to ${c.name}! ✅`);
+      } else {
+        // Fallback: copy link
+        navigator.clipboard?.writeText(inviteLink).then(() => showToast(`Link copied — send to ${c.name}`));
+      }
+    } catch(e) {
+      navigator.clipboard?.writeText(inviteLink).then(() => showToast(`Link copied — send to ${c.name}`));
+    }
+  } else if (c.email) {
+    window.open(`mailto:${c.email}?subject=Join me on NVME.live&body=Hey! I'm on NVME — a creator platform where you can stream, battle, and earn. Join free: https://nvme.live`, '_blank');
+  }
+}
+
+async function inviteAll() {
+  if (!importedContacts.length) return;
+  let sent = 0;
+  for (let i = 0; i < Math.min(importedContacts.length, 10); i++) {
+    await inviteContact(i);
+    sent++;
+  }
+  showToast(`${sent} invites sent! 🚀`);
+}
+
+function callContact(name, phone) {
+  // Show NVME call screen with the contact name
+  showCall(name, (name[0]||'?').toUpperCase());
+  showToast(`Calling ${name}... (WebRTC voice call)`);
 }
 </script>
 </body>

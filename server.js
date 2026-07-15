@@ -2022,6 +2022,47 @@ app.get('/api/wallet/payouts', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ── INVITES / CONTACTS ───────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+// POST /api/invites/sms — send Twilio SMS invite to a phone number
+app.post('/api/invites/sms', authMiddleware, async (req, res) => {
+  try {
+    const { phone, name } = req.body;
+    if (!phone) return res.status(400).json({ ok: false, error: 'Phone number required' });
+    // Clean phone number
+    const cleanPhone = phone.replace(/[^+\d]/g, '');
+    if (cleanPhone.length < 7) return res.status(400).json({ ok: false, error: 'Invalid phone number' });
+    // Check Twilio config
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromPhone = process.env.TWILIO_PHONE;
+    if (!accountSid || !authToken || !fromPhone) {
+      return res.status(503).json({ ok: false, error: 'SMS not configured' });
+    }
+    const sender = req.user;
+    const senderName = sender?.display_name || sender?.username || 'Someone';
+    const inviteUrl = process.env.APP_URL || 'https://nvme.live';
+    const message = `${senderName} invited you to NVME.live! Create, stream, battle & earn. Join free: ${inviteUrl}`;
+    // Send via Twilio REST API
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const body = new URLSearchParams({ To: cleanPhone, From: fromPhone, Body: message });
+    const response = await fetch(twilioUrl, {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    const result = await response.json();
+    if (result.sid) {
+      res.json({ ok: true, message: `Invite sent to ${name || cleanPhone}` });
+    } else {
+      res.status(400).json({ ok: false, error: result.message || 'SMS failed' });
+    }
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ── SOCKET.IO REAL-TIME ENGINE ─────────────────────────────────────────────
 const onlineUsers = new Map(); // userId -> socketId
 

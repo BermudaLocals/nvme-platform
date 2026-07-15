@@ -1638,115 +1638,91 @@ function checkCoinBalance() {
     }).catch(() => {});
 }
 
-// ---- STATIC DEMO DATA (shown while API loads) ----
-const demoFeeds=[
-  {emoji:'🏝️',user:'bermuda_vibes',name:'Bermuda Vibes',caption:'Paradise life — Hamilton sunset hits different 🌅 #bermuda #island',coins:240,likes:'12.4K',comments:'892',shares:'3.2K',music:'Island Beats - Local Mix'},
-  {emoji:'💰',user:'empire_hq',name:'Empire HQ',caption:'How I made $2K this week using AI tools with zero capital 💸 #ai #money #hustle',coins:890,likes:'45.1K',comments:'2.3K',shares:'8.7K',music:'Money Moves - Empire',live:true},
-  {emoji:'🤖',user:'kush_agent',name:'Kush AI',caption:'Just deployed 3 apps in 2 hours using Agent Zero + Claude 🚀 #ai #coding',coins:560,likes:'23.7K',comments:'1.8K',shares:'5.4K',music:'Code Beats'},
-  {emoji:'⚓',user:'crown_anchor',name:'Crown & Anchor',caption:'Big winner tonight! 500 coins on the crown 👑 Come play! #crownandanchor',coins:300,likes:'6.2K',comments:'334',shares:'892',music:'Bermuda Club Night'},
-  {emoji:'🎵',user:'luna_void',name:'LUNA VOID',caption:'New track dropping Friday 🎵 Lo-fi vibes for late night sessions #lofi',coins:120,likes:'8.9K',comments:'441',shares:'1.1K',music:'Luna Void - Midnight Code'},
-];
-const demoChats=[
-  {emoji:'🦁',name:'Kush Agent',preview:'Task completed: NVME deployed ✅',time:'now',unread:3,online:true,color:'#7c5cfc'},
-  {emoji:'💼',name:'Empire HQ',preview:'Revenue update: $847 this week',time:'2m',unread:1,online:true,color:'#ff3d7f'},
-  {emoji:'🎵',name:'Luna Void',preview:'Track ready for review 🎵',time:'1h',unread:2,online:true,color:'#ffc940'},
-  {emoji:'💰',name:'SwiftPay',preview:'Payment received: $297.00',time:'3h',unread:0,online:false,color:'#00f5a0'},
-  {emoji:'🏝️',name:'Bermuda Locals',preview:'Community post got 1.2K views',time:'5h',unread:0,online:false,color:'#ff6b35'},
-];
-const demoTxs=[
-  {icon:'🎲',name:'Crown & Anchor win',date:'Today',amount:'+250',type:'in'},
-  {icon:'📱',name:'Gift received',date:'Today',amount:'+150',type:'in'},
-  {icon:'🎁',name:'Gift sent to creator',date:'Yesterday',amount:'-50',type:'out'},
-  {icon:'💰',name:'PayPal top-up',date:'Yesterday',amount:'+500',type:'in'},
-];
-const demoVideos=[
-  {emoji:'💡',title:'How to build an AI business with $0 in 2026',meta:'Empire HQ · 234K views · 2 days ago',duration:'12:34'},
-  {emoji:'⚓',title:'Crown & Anchor strategy — win every time',meta:'BermudaLocals · 89K views · 1 week ago',duration:'8:12'},
-  {emoji:'🤖',title:'Agent Zero full setup tutorial — build your AI empire',meta:'Kush Agent · 156K views · 3 days ago',duration:'24:07'},
-  {emoji:'💰',title:'$2,000 in 7 days — creator economy on NVME',meta:'Empire HQ · 312K views · 5 days ago',duration:'18:45'},
-  {emoji:'🎵',title:'Lo-fi beats for coding — 2 hour mix',meta:'LUNA VOID · 45K views · 2 weeks ago',duration:'2:03:14'},
-];
-const explores=['🏝️','💰','🤖','🎵','⚓','❤️','🏄','💎','🌺','🎭','🚀','👑','🌊','🦁','💻','🎪','🏋️','🌙'];
+// ---- ALL DEMO DATA REMOVED — real API data only ----
 
-// ---- RENDER FUNCTIONS ----
+// ---- RENDER FUNCTIONS — all real API, no demo data ----
 function renderFeed(){
-  const c=document.getElementById('feedContainer');
-  c.innerHTML=demoFeeds.map(f=>`
-    <div class="feed-item">
-      <div class="feed-video-bg">${f.emoji}</div>
-      <div class="feed-overlay"></div>
-      ${f.live?'<div class="manus-badge"><span class="live-badge">LIVE</span></div>':'<div class="manus-badge">🪙 +'+f.coins+'</div>'}
-      <div class="feed-content">
-        <div class="feed-user">
-          <div class="feed-avatar">${f.emoji}</div>
-          <span class="feed-username">@${f.user}</span>
-          <button class="follow-btn" onclick="event.stopPropagation()">Follow</button>
-        </div>
-        <div class="feed-caption">${f.caption}</div>
-        <div class="feed-music"><div class="music-disc">♪</div>${f.music}</div>
-      </div>
-      <div class="feed-actions">
-        <div class="feed-action" onclick="spawnCoin(event)">
-          <div class="feed-action-icon">❤️</div>
-          <div class="feed-action-count">${f.likes}</div>
-        </div>
-        <div class="feed-action">
-          <div class="feed-action-icon">💬</div>
-          <div class="feed-action-count">${f.comments}</div>
-        </div>
-        <div class="feed-action" onclick="spawnCoin(event)">
-          <div class="feed-action-icon">🔗</div>
-          <div class="feed-action-count">${f.shares}</div>
-        </div>
-        <div class="feed-action" onclick="sendGift(event,'${f.user}')">
-          <div class="feed-action-icon">🎁</div>
-          <div class="feed-action-count">Gift</div>
-        </div>
-      </div>
-    </div>
-  `).join('');
+  // Delegate to real loadFeed function
+  loadFeed();
 }
-function renderChats(){
-  document.getElementById('chatList').innerHTML=demoChats.map(c=>`
-    <div class="chat-item" onclick="spawnCoin(event)">
-      <div class="chat-avatar ${c.online?'online-ring':''}" style="background:${c.color}22;color:${c.color};font-size:1.3rem">
-        ${c.emoji}${c.online?'<div class="online-dot"></div>':''}
-      </div>
-      <div class="chat-info">
-        <div class="chat-name">${c.name}${c.online?'<span style="font-size:0.65rem;color:var(--green);font-weight:400">● online</span>':''}</div>
-        <div class="chat-preview">${c.preview}</div>
-      </div>
-      <div class="chat-meta">
-        <div class="chat-time">${c.time}</div>
-        ${c.unread>0?`<div class="unread-badge">${c.unread}</div>`:''}
-      </div>
-    </div>
-  `).join('');
-  // Stories
-  document.getElementById('storyRow').innerHTML = `
-    <div class="story-item">
-      <div class="story-ring"><div class="story-inner" style="background:linear-gradient(135deg,var(--purple),var(--pink));color:white;font-size:1.4rem">+</div></div>
-      <div class="story-name">Your Story</div>
-    </div>
-  ` + demoChats.filter(c=>c.online).map(c=>`
-    <div class="story-item" onclick="spawnCoin(event)">
-      <div class="story-ring"><div class="story-inner">${c.emoji}</div></div>
-      <div class="story-name">${c.name.split(' ')[0]}</div>
-    </div>
-  `).join('');
+async function renderChats(){
+  // Fetch real conversations from API
+  const storyRow = document.getElementById('storyRow');
+  const chatList = document.getElementById('chatList');
+  if(storyRow) storyRow.innerHTML = `<div class="story-item"><div class="story-ring"><div class="story-inner" style="background:linear-gradient(135deg,var(--purple),var(--pink));color:white;font-size:1.4rem">+</div></div><div class="story-name">Your Story</div></div>`;
+  if(!chatList) return;
+  if(!localStorage.getItem('nvme_token')){ chatList.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">Sign in to see messages</div>'; return; }
+  chatList.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Loading...</div>';
+  try {
+    const r = await fetch(API+'/api/dm/conversations', {headers:authHeaders()});
+    const d = await r.json();
+    const convos = d.conversations || d || [];
+    if(!convos.length){ chatList.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)"><div style="font-size:2.5rem;margin-bottom:12px">💬</div><div style="font-weight:600">No messages yet</div><div style="font-size:0.85rem;margin-top:6px">Follow creators and start a conversation!</div></div>'; return; }
+    chatList.innerHTML = convos.map(c=>`
+      <div class="chat-item" onclick="openDM('${c.other_user_id}','${(c.other_username||'user').replace(/'/g,'')}')">
+        <div class="chat-avatar${c.online?' online-ring':''}" style="background:#1a0a2e;font-size:1.3rem">
+          ${c.avatar_url?`<img src="${c.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`:(c.other_username||'?')[0].toUpperCase()}
+          ${c.online?'<div class="online-dot"></div>':''}
+        </div>
+        <div class="chat-info">
+          <div class="chat-name">@${c.other_username||'user'}</div>
+          <div class="chat-preview">${c.last_message||'Start a conversation...'}</div>
+        </div>
+        <div class="chat-meta">
+          <div class="chat-time">${c.last_at?new Date(c.last_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div>
+          ${c.unread_count>0?`<div class="unread-badge">${c.unread_count}</div>`:''}
+        </div>
+      </div>`).join('');
+  } catch(e){ chatList.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Could not load messages</div>'; }
 }
-function renderExplore(){
-  document.getElementById('exploreGrid').innerHTML=explores.map((e,i)=>`
-    <div class="explore-cell ${i===0?'tall':i===4?'wide':''}" onclick="spawnCoin(event)" style="background:hsl(${i*20},20%,12%)">
-      ${e}
-      <div class="cell-overlay"><div class="cell-stats">❤️ ${Math.floor(Math.random()*50+5)}K &nbsp; 👁️ ${Math.floor(Math.random()*200+10)}K</div></div>
-    </div>
-  `).join('');
+// Curated Bermuda & creator culture images (Unsplash free CDN)
+const featuredCards = [
+  {img:'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400&h=700&fit=crop&auto=format',title:'Bermuda Pink Sand Beach',tag:'🏝️ Island Life'},
+  {img:'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=700&fit=crop&auto=format',title:'Live Music Vibes',tag:'🎵 Music'},
+  {img:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=700&fit=crop&auto=format',title:'Hamilton Harbour Sunset',tag:'🌅 Bermuda'},
+  {img:'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=400&h=700&fit=crop&auto=format',title:'Creator Mode On',tag:'🎤 Creator'},
+  {img:'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=700&fit=crop&auto=format',title:'Ocean Waves',tag:'🌊 Bermuda'},
+  {img:'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=700&fit=crop&auto=format',title:'Night Life',tag:'🌙 Nightlife'},
+  {img:'https://images.unsplash.com/photo-1598387993441-a364f854c3e1?w=400&h=700&fit=crop&auto=format',title:'Hustle & Flow',tag:'💰 Grind'},
+  {img:'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=400&h=700&fit=crop&auto=format',title:'Crowd Energy',tag:'🔥 Live'},
+  {img:'https://images.unsplash.com/photo-1503659902315-f0df5bec0e58?w=400&h=700&fit=crop&auto=format',title:'Turquoise Waters',tag:'💎 Island'},
+  {img:'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=400&h=700&fit=crop&auto=format',title:'DJ Set Live',tag:'🎧 Music'},
+  {img:'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=400&h=700&fit=crop&auto=format',title:'Festival Vibes',tag:'🎪 Events'},
+  {img:'https://images.unsplash.com/photo-1566438480900-0609be27a4be?w=400&h=700&fit=crop&auto=format',title:'Bermuda Glow',tag:'🌺 Culture'},
+];
+async function renderExplore(){
+  const grid = document.getElementById('exploreGrid');
+  if(!grid) return;
+  grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading...</div>';
+  let apiVideos = [];
+  try {
+    const r = await fetch(API+'/api/feed?limit=18', {headers:authHeaders()});
+    const d = await r.json();
+    apiVideos = d.videos || d || [];
+  } catch(e){ apiVideos = []; }
+  // Merge real videos + featured cards (real videos go first)
+  const videoCards = apiVideos.map((v,i) => ({
+    img: v.thumbnail || null,
+    title: v.title || 'Untitled',
+    tag: `@${v.username||'creator'}`,
+    url: v.url || '',
+    isVideo: true
+  }));
+  const allCards = [...videoCards, ...featuredCards].slice(0, 18);
+  grid.innerHTML = allCards.map((c,i)=>`
+    <div class="explore-cell ${i===0?'tall':i===4?'wide':''}" onclick="${c.isVideo?`playVideoModal('${(c.url||'').replace(/'/g,'')}','${(c.title||'').replace(/'/g,'')}')`:"handleExploreSearch('" + (c.tag||'') + "')" }" style="background:#0e0e1a;position:relative;overflow:hidden;border-radius:12px;cursor:pointer;min-height:140px">
+      <img src="${c.img||'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400&h=700&fit=crop'}" loading="lazy" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0" onerror="this.style.display='none'">
+      <div style="position:absolute;inset:0;background:linear-gradient(transparent 40%,rgba(0,0,0,0.85))"></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:0.5rem 0.6rem">
+        <div style="font-size:0.65rem;color:#fff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.title||''}</div>
+        <div style="font-size:0.6rem;color:rgba(255,255,255,0.65);margin-top:2px">${c.tag||''}</div>
+      </div>
+    </div>`).join('');
 }
 async function renderTx(){
   const list = document.getElementById('txList');
   if(!list) return;
-  if(!localStorage.getItem('empire_token')){ list.innerHTML='<p style="color:var(--muted);padding:1rem;text-align:center;">Sign in to see transactions</p>'; return; }
+  if(!localStorage.getItem('nvme_token')){ list.innerHTML='<p style="color:var(--muted);padding:1rem;text-align:center;">Sign in to see transactions</p>'; return; }
   list.innerHTML='<p style="color:var(--muted);padding:1rem;text-align:center;">Loading...</p>';
   try {
     const r = await fetch(API+'/api/wallet/transactions', {headers:authHeaders()});
@@ -2522,7 +2498,48 @@ async function loadWallet() {
 }
 
 function buyCoins() {
-  showToast('💰 Coin packages coming soon!');
+  // Wire to the real coin packages modal
+  const modal = document.getElementById('coinModal');
+  if(modal) { modal.style.display='flex'; return; }
+  // Build modal dynamically if not present
+  const packages = [
+    {id:'coins_500',coins:500,price:'$4.99',label:'Starter Pack',emoji:'⚡'},
+    {id:'coins_1500',coins:1500,price:'$12.99',label:'Creator Pack',emoji:'🚀'},
+    {id:'coins_5000',coins:5000,price:'$39.99',label:'Empire Pack',emoji:'👑'}
+  ];
+  const m = document.createElement('div');
+  m.id = 'coinModal';
+  m.style.cssText = 'display:flex;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center';
+  m.innerHTML = `<div style="background:#0f0f1a;border-radius:24px 24px 0 0;width:100%;max-width:480px;padding:1.5rem 1.5rem 2.5rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+      <div style="font-weight:800;font-size:1.1rem">🪙 Buy Coins</div>
+      <span onclick="document.getElementById('coinModal').style.display='none'" style="cursor:pointer;font-size:1.4rem">✕</span>
+    </div>
+    ${packages.map(p=>`
+    <div onclick="purchaseCoins('${p.id}','${p.coins}','${p.price}')" style="display:flex;align-items:center;gap:1rem;background:#1a0a2e;border:1px solid #333;border-radius:14px;padding:1rem;margin-bottom:0.75rem;cursor:pointer">
+      <div style="font-size:2rem">${p.emoji}</div>
+      <div style="flex:1"><div style="font-weight:700">${p.label}</div><div style="font-size:0.85rem;color:#9b59ff">${p.coins} coins</div></div>
+      <div style="font-weight:800;color:#4ade80;font-size:1.1rem">${p.price}</div>
+    </div>`).join('')}
+    <p style="font-size:0.75rem;color:#666;text-align:center;margin-top:0.5rem">Powered by PayPal · Secure checkout</p>
+  </div>`;
+  m.addEventListener('click', e => { if(e.target===m) m.style.display='none'; });
+  document.body.appendChild(m);
+}
+async function purchaseCoins(packageId, coins, price) {
+  showToast('Redirecting to PayPal...');
+  try {
+    const r = await fetch(API+'/api/credits/create-order', {
+      method:'POST', headers:authHeaders(),
+      body: JSON.stringify({package_id: packageId, coins: parseInt(coins), amount: parseFloat(price)})
+    });
+    const d = await r.json();
+    if(d.approvalUrl || d.approval_url) {
+      window.open(d.approvalUrl || d.approval_url, '_blank');
+    } else {
+      showToast('PayPal checkout: ' + (d.error||'Try again'));
+    }
+  } catch(e) { showToast('Could not connect to payment system'); }
 }
 
 // ════════════════════════════════════════════
@@ -2551,7 +2568,7 @@ async function loadFeed(type = 'forYou') {
     list.innerHTML = videos.map(v => renderVideoCard(v)).join('');
     setTimeout(() => { initFeedObserver(); initSwipeGestures(); }, 150);
   } catch {
-    list.innerHTML = renderDemoFeed();
+    list.innerHTML = '<div style="text-align:center;padding:60px 24px;color:var(--muted)"><div style="font-size:3rem;margin-bottom:16px">🎬</div><div style="font-weight:600;margin-bottom:8px">Be the first to post!</div><div style="font-size:0.85rem">Tap + to upload your first video</div></div>';
   }
 }
 
@@ -2668,35 +2685,7 @@ function initSwipeGestures(){
   },{passive:true});
 }
 
-function renderDemoFeed() {
-  const demos = [
-    { id: 1, username: 'kingkwadz', emoji: '👑', desc: 'The empire is built. 100 apps by Dec 31. 🏆', likes: 412, comments: 28 },
-    { id: 2, username: 'sara_ai', emoji: '🤖', desc: 'AI-powered creator tools are live!', likes: 891, comments: 64 },
-    { id: 3, username: 'live_queen', emoji: '🔥', desc: 'Battle stream tonight at 9PM. Come ready ⚔️', likes: 234, comments: 17 },
-  ];
-  return demos.map(v => `
-    <div class="video-card">
-      <div class="video-thumb" onclick="showToast('Video player coming soon!')">
-        <span style="z-index:1;position:relative;font-size:4rem">${v.emoji}</span>
-        <div class="play-overlay"><div class="play-btn-big">▶</div></div>
-      </div>
-      <div class="video-info">
-        <div class="video-meta">
-          <div class="avatar-sm" style="background:linear-gradient(135deg,${colorFor(v.username)},#9b59ff);pointer-events:none">${initials(v.username)}</div>
-          <div><div class="creator-name">${v.username}</div><div style="font-size:0.75rem;color:var(--muted)">2h ago</div></div>
-        </div>
-        <div class="video-desc">${v.desc}</div>
-        <div class="video-actions">
-          <button class="action-btn" onclick="event.stopPropagation();likeVideo('${v.id}',this)">❤️ <span id="lc_${v.id}">${v.likes}</span></button>
-          <button class="action-btn" onclick="event.stopPropagation();openComments('${v.id}')">💬 ${v.comments}</button>
-          <button class="action-btn" onclick="showToast('Link copied!')">↗️ Share</button>
-          <button class="action-btn" onclick="sendGiftToUser('${v.username}')">🎁 Gift</button>
-        </div>
-      </div>
-    </div>`).join('');
-}
-
-function playVideo(id) { showToast('▶ Video player coming soon!'); }
+// renderDemoFeed and playVideo stubs removed — real API only
 
 /* openComments defined above at line 1815 — stub removed */
 

@@ -104,6 +104,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .bot-item.active .bot-icon{color:var(--purple);transform:scale(1.1)}
 .bot-item.active .bot-label{color:var(--purple)}
 .bot-icon{font-size:1.7rem;transition:all .2s;color:rgba(255,255,255,0.85);filter:drop-shadow(0 0 4px rgba(255,255,255,0.1))}
+#globalBackBar{display:none;position:fixed;top:0;left:0;right:0;max-width:480px;margin:0 auto;height:52px;background:rgba(7,7,13,0.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.06);z-index:300;align-items:center;padding:0 1rem;gap:0.75rem}
+#globalBackBar .back-arrow{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;flex-shrink:0;border:none;color:#fff;transition:background .2s}
+#globalBackBar .back-arrow:active{background:rgba(124,92,252,0.3)}
+#backBarLabel{font-weight:700;font-size:1rem;flex:1}
 .bot-label{font-size:0.62rem;color:var(--muted);font-weight:500;letter-spacing:.02em}
 .bot-item:active{transform:scale(0.92)}
 .bot-center{background:linear-gradient(135deg,var(--purple),var(--pink));border-radius:16px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 0 20px rgba(124,92,252,0.5);margin-top:-8px;cursor:pointer;transition:all .2s}
@@ -960,6 +964,12 @@ if(typeof socket !== 'undefined' && socket) {
 </div>
 
 <!-- BOTTOM NAV -->
+<!-- GLOBAL BACK BAR — shown on all non-feed screens -->
+<div id="globalBackBar">
+  <button class="back-arrow" onclick="goBack()">&#8592;</button>
+  <span id="backBarLabel">Home</span>
+</div>
+
 <nav class="botnav" id="botNav" style="display:none">
   <div class="bot-item active" onclick="showScreen('feed')">
     <div class="bot-icon">🏠</div>
@@ -1779,7 +1789,34 @@ function renderProfile(){
 }
 
 // ---- NAVIGATION ----
-function showScreen(name){
+// ── Back navigation stack ──────────────────────────────────────
+let _screenHistory = ['feed'];
+const _screenLabels = {
+  feed:'Home', explore:'Explore', upload:'Upload', wallet:'Wallet',
+  game:'Crown & Anchor', dating:'Dating', video:'Videos', profile:'Profile',
+  jackpot:'Jackpot', msg:'Messages', creator:'Creator Studio'
+};
+function goBack(){
+  if(_screenHistory.length>1){
+    _screenHistory.pop();
+    const prev=_screenHistory[_screenHistory.length-1];
+    showScreen(prev, true);
+  } else {
+    showScreen('feed', true);
+  }
+}
+function _updateBackBar(name){
+  const bar = document.getElementById('globalBackBar');
+  if(!bar) return;
+  if(name==='feed'){
+    bar.style.display='none';
+  } else {
+    bar.style.display='flex';
+    const lbl = bar.querySelector('#backBarLabel');
+    if(lbl) lbl.textContent = _screenLabels[name] || name;
+  }
+}
+function showScreen(name, isBack){
   // Messages → full-page experience (Socket.io DM system)
   if(name==='msg'){ window.location='/messages.html'; return; }
   // Creator dashboard → full-page experience
@@ -1793,12 +1830,18 @@ function showScreen(name){
   if(name==='feed' && typeof loadFeed==='function') loadFeed();
   if(name==='wallet') renderTx();
   if(name==='video') renderVideos();
-  if(name==='explore') initExploreSearch();
+  if(name==='explore'){ renderExplore(); initExploreSearch(); }
   if(name==='profile') loadNotifCount();
   if(name==='dating') loadDatingProfiles();
   const map={feed:0,explore:1,msg:3,profile:4};
   const botItems=document.querySelectorAll('.bot-item');
   if(map[name]!==undefined) botItems[map[name]].classList.add('active');
+  // Track history (don't push if going back)
+  if(!isBack){
+    if(_screenHistory[_screenHistory.length-1]!==name) _screenHistory.push(name);
+    if(_screenHistory.length>10) _screenHistory.shift();
+  }
+  _updateBackBar(name);
 }
 
 // ---- GAME ----
@@ -2689,9 +2732,16 @@ function initSwipeGestures(){
 
 /* openComments defined above at line 1815 — stub removed */
 
-function shareVideo(id) {
-  if (navigator.share) navigator.share({ url: window.location.href });
-  else { navigator.clipboard?.writeText(window.location.href); showToast('Link copied!'); }
+async function shareVideo(id) {
+  const shareUrl = window.location.origin + '/app.html?v=' + id;
+  if (navigator.share) {
+    navigator.share({ url: shareUrl, title: 'Check this out on NVME' }).catch(()=>{});
+  } else {
+    navigator.clipboard?.writeText(shareUrl);
+    showToast('Link copied! 🔗');
+  }
+  // Log share to DB
+  try { await fetch(API+'/api/videos/'+id+'/share', {method:'POST', headers:authHeaders()}); } catch(e){}
 }
 
 // ════════════════════════════════════════════

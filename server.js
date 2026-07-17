@@ -2026,6 +2026,21 @@ app.get('/api/wallet/payouts', authMiddleware, async (req, res) => {
 // ── INVITES / CONTACTS ───────────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
 
+// POST /api/videos/:id/share — log a share event
+app.post('/api/videos/:id/share', optionalAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query(`UPDATE videos SET shares = COALESCE(shares, 0) + 1 WHERE id=$1`, [id]);
+    if (req.user) {
+      await db.query(
+        `INSERT INTO user_activity (user_id, action, target_id, created_at) VALUES ($1,'share',$2,NOW()) ON CONFLICT DO NOTHING`,
+        [req.user.id, id]
+      ).catch(() => {}); // table may not exist yet — safe ignore
+    }
+    res.json({ ok: true });
+  } catch(e) { res.json({ ok: true }); } // non-critical
+});
+
 // POST /api/invites/sms — send Twilio SMS invite to a phone number
 app.post('/api/invites/sms', authMiddleware, async (req, res) => {
   try {
@@ -2606,22 +2621,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.error('[nvme.live] DB init failed:', e.message);
 });
 
-// ============================================================
-// NVME NATIVE CRYPTO WALLET ROUTES
-// Ethereum HD wallet via Alchemy API
-// ============================================================
-const cryptoWallet = require('./modules/crypto-wallet');
 
-// Auto-create crypto_wallets table
-db.query(`
-  CREATE TABLE IF NOT EXISTS crypto_wallets (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    eth_address VARCHAR(42) NOT NULL,
-    wallet_index INTEGER NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  );
-`).catch(e => console.log('crypto_wallets table ready'));
 
 
 

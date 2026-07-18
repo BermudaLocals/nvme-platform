@@ -1318,20 +1318,13 @@ async function submitPayout(){
   }catch(e){showToast('Network error — try again');}
 }
 function goLive(){
-  // Coin gate: use manusBalance (live in-memory) not stale localStorage
-  const bal = typeof manusBalance !== 'undefined' ? manusBalance : parseInt(localStorage.getItem('nvme_coins')||'0');
-  if(bal < 300) {
-    showToast('You need 300 coins to go live 🎥 — tap Wallet to top up');
-    showScreen('wallet');
-    return;
-  }
+  // Go Live is FREE for all users — coin gate removed until platform scales
   // Check if desktop — offer OBS/RTMP option
   const isDesktop = window.innerWidth >= 768 && !('ontouchstart' in window);
   if(isDesktop){
     showPCLiveModal();
     return;
   }
-  deductCoins(300, 'Go Live');
   showFilterBar(true);
   showScreen('upload');
   setTimeout(() => { startGoLive(); }, 100);
@@ -2830,16 +2823,7 @@ function joinLiveStream(stream, hostUsername) {
     // Called with (id, username) — build a stream object
     stream = { id: stream, username: hostUsername, viewer_count: 0 };
   }
-  // Founder/creator bypass: skip coin gate for host
-  if(!stream.isHost) {
-    const bal = typeof manusBalance !== 'undefined' ? manusBalance : parseInt(localStorage.getItem('nvme_token') ? 999 : '0');
-    if(bal < 100) {
-      showToast('You need 100 coins to join a live stream 🎧');
-      showScreen('wallet');
-      return;
-    }
-    deductCoins(100, 'Join Live (Audio)');
-  }
+  // Join Live is FREE for all users — coin gate removed until platform scales
   joinLiveStream_original(stream);
 }
 

@@ -2054,8 +2054,8 @@ async function postComment(videoId){
   var input = document.getElementById('comment-input-'+videoId);
   if(!input || !input.value.trim()) return;
   var text = input.value.trim();
-  var tok = localStorage.getItem('empire_token');
-  if(!tok){ showToast('Sign in to comment'); return; }
+  var tok = localStorage.getItem('nvme_token') || localStorage.getItem('empire_token');
+  if(!tok){ showToast('Sign in to comment 💬'); return; }
   input.value = '';
   try{
     var r = await fetch(API+'/api/videos/'+videoId+'/comments', {method:'POST',headers:authHeaders(),body:JSON.stringify({text:text})});
@@ -2792,26 +2792,12 @@ function renderLiveCard(s) {
 }
 
 function renderDemoLiveStreams() {
-  const demos = [
-    { id: 1, username: 'kingkwadz', title: 'Empire Building Live 👑', emoji: '👑', viewers: 1204 },
-    { id: 2, username: 'sara_vibes', title: 'Late Night Chill ✨', emoji: '🌙', viewers: 432 },
-    { id: 3, username: 'dj_blaze', title: 'Friday Night Mix 🔥', emoji: '🎧', viewers: 887 },
-    { id: 4, username: 'battle_queen', title: '⚔️ Taking Challengers', emoji: '⚔️', viewers: 2103 },
-  ];
-  return demos.map(s => `
-    <div class="live-card" onclick="joinDemoLive('${s.username}','${s.title}',${s.viewers})">
-      <div class="live-thumb">
-        <span style="font-size:2.5rem">${s.emoji}</span>
-        <div class="live-pulse">
-          <div class="pulse-dot"></div>
-          <span class="live-viewers">👁 ${s.viewers.toLocaleString()}</span>
-        </div>
-      </div>
-      <div class="live-info">
-        <div class="live-creator">${s.username}</div>
-        <div class="live-title">${s.title}</div>
-      </div>
-    </div>`).join('');
+  // Demo streams removed — show empty state
+  return `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--muted)">
+    <div style="font-size:3rem;margin-bottom:12px">📡</div>
+    <div style="font-weight:700;font-size:1rem">No one live right now</div>
+    <div style="font-size:0.85rem;margin-top:6px">Be the first! Tap <strong>+ → Go Live</strong></div>
+  </div>`;
 }
 
 // Go Live
@@ -2838,16 +2824,23 @@ function joinDemoLive(username, title, viewers, isHost = false) {
 }
 
 
-function joinLiveStream(streamId, hostUsername) {
-  // Coin gate: 100 coins required to join with audio
-  const bal = parseInt(localStorage.getItem('nvme_coins') || '0');
-  if(bal < 100) {
-    showToast('You need 100 coins to join a live stream 🎧 — tap Wallet to top up');
-    showScreen('wallet');
-    return;
+function joinLiveStream(stream, hostUsername) {
+  // Use live in-memory balance (manusBalance), not stale localStorage
+  if(typeof stream === 'string' || typeof stream === 'number') {
+    // Called with (id, username) — build a stream object
+    stream = { id: stream, username: hostUsername, viewer_count: 0 };
   }
-  deductCoins(100, 'Join Live (Audio)');
-  joinLiveStream_original(streamId, hostUsername);
+  // Founder/creator bypass: skip coin gate for host
+  if(!stream.isHost) {
+    const bal = typeof manusBalance !== 'undefined' ? manusBalance : parseInt(localStorage.getItem('nvme_token') ? 999 : '0');
+    if(bal < 100) {
+      showToast('You need 100 coins to join a live stream 🎧');
+      showScreen('wallet');
+      return;
+    }
+    deductCoins(100, 'Join Live (Audio)');
+  }
+  joinLiveStream_original(stream);
 }
 
 function joinLiveStream_original(stream) {

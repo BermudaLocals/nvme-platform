@@ -328,6 +328,165 @@ app.get('/shop', (req, res) => {
   res.type('html').send(html);
 });
 
+
+// ── Privacy toggle ──
+app.put('/api/profile/privacy', authMiddleware, async (req, res) => {
+  try {
+    const { is_private } = req.body;
+    await db.query('UPDATE users SET is_private=$1 WHERE id=$2', [grep -n follow_requests|is_private server.js | head -5is_private, req.user.id]);
+    res.json({ ok: true, is_private: grep -n follow_requests|is_private server.js | head -5is_private });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Get pending follow requests ──
+app.get('/api/follow-requests', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT fr.id, fr.created_at, fr.requester_id,
+             u.username, u.display_name, u.avatar_url
+      FROM follow_requests fr
+      JOIN users u ON u.id = fr.requester_id
+      WHERE fr.target_id = $1 AND fr.status = 'pending'
+      ORDER BY fr.created_at DESC
+    `, [req.user.id]);
+    res.json({ ok: true, requests: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Accept or decline a follow request ──
+app.post('/api/follow-requests/:id/respond', authMiddleware, async (req, res) => {
+  try {
+    const { action } = req.body;
+    const { rows } = await db.query(
+      "SELECT * FROM follow_requests WHERE id=$1 AND target_id=$2 AND status='pending'",
+      [req.params.id, req.user.id]
+    );
+    const request = rows[0];
+    if (action === 'accept') {
+      await db.query(
+        'INSERT INTO follows (follower_id, followee_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+        [request.requester_id, req.user.id]
+      );
+    }
+    await db.query('DELETE FROM follow_requests WHERE id=$1', [request.id]);
+    res.json({ ok: true, action });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Follow / unfollow / request ──
+app.post('/api/users/:id/follow', authMiddleware, async (req, res) => {
+  try {
+    const followeeId = req.params.id;
+    if (followeeId === req.user.id) return res.status(400).json({ error: 'cannot follow yourself' });
+    const { rows: urows } = await db.query('SELECT id, is_private FROM users WHERE id=$1', [followeeId]);
+    const target = urows[0];
+
+    const { rowCount: unfollowed } = await db.query(
+      'DELETE FROM follows WHERE follower_id=$1 AND followee_id=$2', [req.user.id, followeeId]
+    );
+    if (unfollowed > 0) {
+      const { rows } = await db.query('SELECT COUNT(*)::int AS count FROM follows WHERE followee_id=$1', [followeeId]);
+      return res.json({ ok: true, status: 'unfollowed', followers: rows[0].count });
+    }
+
+    const { rowCount: cancelled } = await db.query(
+      "DELETE FROM follow_requests WHERE requester_id=$1 AND target_id=$2 AND status='pending'",
+      [req.user.id, followeeId]
+    );
+    if (cancelled > 0) {
+      const { rows } = await db.query('SELECT COUNT(*)::int AS count FROM follows WHERE followee_id=$1', [followeeId]);
+      return res.json({ ok: true, status: 'request_cancelled', followers: rows[0].count });
+    }
+
+    if (target.is_private) {
+      await db.query(
+        'INSERT INTO follow_requests (requester_id, target_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+        [req.user.id, followeeId]
+      );
+      const { rows } = await db.query('SELECT COUNT(*)::int AS count FROM follows WHERE followee_id=$1', [followeeId]);
+      return res.json({ ok: true, status: 'requested', followers: rows[0].count });
+    }
+
+    await db.query(
+      'INSERT INTO follows (follower_id, followee_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [req.user.id, followeeId]
+    );
+    const { rows } = await db.query('SELECT COUNT(*)::int AS count FROM follows WHERE followee_id=$1', [followeeId]);
+    res.json({ ok: true, status: 'following', followers: rows[0].count });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Public user profile ──
+app.get('/api/users/:username', async (req, res) => {
+  try {
+    let viewerId = null;
+    try {
+      const tok = req.cookies?.token || req.headers.authorization?.split(' ')[1];
+      if (tok) {
+        const jwt = require('jsonwebtoken');
+        const dec = jwt.verify(tok, process.env.JWT_SECRET || 'nvme-secret');
+        viewerId = dec.userId;
+      }
+    } catch {}
+
+    const { rows: urows } = await db.query(
+      'SELECT id, username, display_name, bio, avatar_url, is_private, created_at FROM users WHERE username=$1',
+      [req.params.username]
+    );
+    const user = urows[0];
+
+    const [followersR, followingR] = await Promise.all([
+      db.query('SELECT COUNT(*)::int AS count FROM follows WHERE followee_id=$1', [user.id]),
+      db.query('SELECT COUNT(*)::int AS count FROM follows WHERE follower_id=$1', [user.id]),
+    ]);
+
+    let relationship = 'none';
+    if (viewerId === user.id) {
+      relationship = 'self';
+    } else if (viewerId) {
+      const { rows: frows } = await db.query(
+        'SELECT 1 FROM follows WHERE follower_id=$1 AND followee_id=$2', [viewerId, user.id]
+      );
+      if (frows.length) {
+        relationship = 'following';
+      } else {
+        const { rows: rrows } = await db.query(
+          "SELECT 1 FROM follow_requests WHERE requester_id=$1 AND target_id=$2 AND status='pending'",
+          [viewerId, user.id]
+        );
+        if (rrows.length) relationship = 'requested';
+      }
+    }
+
+    let videos = [];
+    if (canSeeContent) {
+      const { rows: vrows } = await db.query(`
+        SELECT v.id, v.title, v.url, v.thumbnail, v.views, v.created_at,
+               COALESCE(l.like_count,0)::int AS like_count
+        FROM videos v
+        LEFT JOIN (SELECT video_id, COUNT(*) AS like_count FROM video_likes GROUP BY video_id) l ON l.video_id=v.id
+        WHERE v.user_id=$1 ORDER BY v.created_at DESC LIMIT 50
+      `, [user.id]);
+      videos = vrows;
+    }
+
+    res.json({
+      ok: true,
+      user: { id: user.id, username: user.username, display_name: user.display_name,
+              bio: canSeeContent ? user.bio : null, avatar_url: user.avatar_url,
+              is_private: user.is_private, created_at: user.created_at },
+      stats: { followers: followersR.rows[0].count, following: followingR.rows[0].count,
+               videos: canSeeContent ? videos.length : null },
+      relationship, can_see_content: canSeeContent, videos
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Serve profile page ──
+app.get('/u/:username', (req, res) => {
+  res.sendFile(require('path').join(__dirname, 'frontend', 'profile-view.html'));
+});
+
 app.use(require('express').static(require('path').join(__dirname, 'public')));
 
 // ── Auth helper ──────────────────────────────────────────────
@@ -414,6 +573,15 @@ async function initDB() {
     ALTER TABLE videos ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0;
     ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
     ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS plan TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT false;
+    CREATE TABLE IF NOT EXISTS follow_requests (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      requester_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      target_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (requester_id, target_id)
+    );
     -- migrate legacy schema.sql-era columns (video_url/thumbnail_url/view_count/like_count) if present
     DO $$ BEGIN
       IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='videos' AND column_name='video_url') THEN

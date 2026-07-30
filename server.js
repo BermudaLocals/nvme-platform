@@ -2080,6 +2080,7 @@ app.post('/api/invites/sms', authMiddleware, async (req, res) => {
 
 // ── SOCKET.IO REAL-TIME ENGINE ─────────────────────────────────────────────
 const onlineUsers = new Map(); // userId -> socketId
+const callPeer = new Map();    // userId -> userId (active/ringing call partner)
 
 io.on('connection', (socket) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
@@ -2272,6 +2273,12 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     if (userId) {
+      const peerId = callPeer.get(userId);
+      if (peerId) {
+        const peerSock = onlineUsers.get(peerId);
+        if (peerSock) io.to(peerSock).emit('vc_hangup', { fromUserId: userId, reason: 'peer_disconnected' });
+        callPeer.delete(peerId); callPeer.delete(userId);
+      }
       onlineUsers.delete(userId);
       io.emit('user_offline', { userId });
     }

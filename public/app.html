@@ -536,32 +536,48 @@ document.addEventListener('DOMContentLoaded', () => {
   if(dn) dn.addEventListener('input', updateCounts);
   if(bio) bio.addEventListener('input', updateCounts);
 });
-function previewAvatar(event) {
+let peditAvatarData = null; // processed (downscaled) avatar dataURL
+function downscaleAvatar(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(img.src);
+      const SIZE = 256;
+      const canvas = document.createElement('canvas');
+      canvas.width = SIZE; canvas.height = SIZE;
+      const ctx = canvas.getContext('2d');
+      // Center-crop square like WhatsApp avatars
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, SIZE, SIZE);
+      resolve(canvas.toDataURL('image/jpeg', 0.85)); // ~30-80KB instead of 3-10MB
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+async function previewAvatar(event) {
   const file = event.target.files[0];
   if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => { document.getElementById('peditAvatarPreview').src = e.target.result; };
-  reader.readAsDataURL(file);
+  try {
+    peditAvatarData = await downscaleAvatar(file);
+    document.getElementById('peditAvatarPreview').src = peditAvatarData;
+  } catch(e) { showToast('Could not read that image'); }
 }
 async function saveProfile() {
   const btn = document.querySelector('.pedit-save');
   if(!btn) return;
   btn.textContent = 'Saving...'; btn.disabled = true;
   try {
-    // 1. Convert avatar to base64 — Railway-safe (no ephemeral disk)
+    // 1. Use the pre-downscaled avatar (256px JPEG ~50KB) — safe for the 10mb JSON limit
     let avatarB64 = null;
     const fi = document.getElementById('peditFileInput');
     if(fi && fi.files[0]) {
-      avatarB64 = await new Promise(function(res){
-        var fr = new FileReader();
-        fr.onload = function(e){ res(e.target.result); };
-        fr.readAsDataURL(fi.files[0]);
-      });
+      if(!peditAvatarData) { try { peditAvatarData = await downscaleAvatar(fi.files[0]); } catch(e){} }
+      avatarB64 = peditAvatarData;
       // Instant preview
       var pav = document.getElementById('profileAvatar');
-      if(pav) pav.innerHTML = '<img src="'+avatarB64+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
-      var prev = document.getElementById('peditAvatarPreview');
-      if(prev) prev.src = avatarB64;
+      if(pav && avatarB64) pav.innerHTML = '<img src="'+avatarB64+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
     }
     // 2. Build update body — all fields including link
     var linkEl = document.getElementById('peditLink');
@@ -747,14 +763,9 @@ if(typeof socket !== 'undefined' && socket) {
 
 <!-- TOP NAV -->
 <div id="appRoot" style="width:100%;max-width:480px;position:relative;min-height:100vh;">
-<nav class="topnav" id="topNav" style="display:none">
-  <div style="display:flex;align-items:center;gap:0.6rem;cursor:pointer" onclick="showScreen('feed')" title="Home"><img src="/img/icon-192.png" alt="NVME" class="nav-logo-pulse" style="width:46px;height:46px;border-radius:12px;" onerror="this.style.display='none'"></div>
-  <div style="display:flex;align-items:center;gap:0.5rem">
-    <div class="wallet-pill" onclick="showScreen('wallet')">
-      🪙 <span id="manus-bal">0</span>
-    </div>
-    <div class="nav-icon notif-dot" id="notifBell" onclick="showNotif()" style="position:relative">🔔<span id="notifCount" style="display:none;position:absolute;top:2px;right:2px;background:#ff3d7f;color:#fff;font-size:0.6rem;font-weight:800;min-width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 3px;">0</span></div>
-  </div>
+<nav class="topnav" id="topNav" style="display:none;justify-content:center">
+  <!-- GLOWING LOGO ONLY per Digital King — wallet & bell relocated to profile header -->
+  <div style="display:flex;align-items:center;cursor:pointer" onclick="showScreen('feed')" title="Home"><img src="/img/icon-192.png" alt="NVME" class="nav-logo-pulse" style="width:52px;height:52px;border-radius:14px;filter:drop-shadow(0 0 12px rgba(124,58,237,.9)) drop-shadow(0 0 32px rgba(255,46,91,.45));" onerror="this.style.display='none'"></div>
 </nav>
 
 <!-- FEED SCREEN -->
@@ -961,6 +972,13 @@ if(typeof socket !== 'undefined' && socket) {
     <div class="profile-bio" id="profileBio">Welcome to NVME 🚀</div>
     <a id="profileLink" href="#" target="_blank" style="font-size:.82rem;color:var(--purple);display:none;margin-top:.3rem;text-decoration:none;font-weight:600;">🔗 Link</a>
   </div>
+  <!-- Wallet + notifications relocated here from top nav (logo-only header per Digital King) -->
+  <div style="display:flex;gap:.6rem;justify-content:center;margin-top:.75rem;">
+    <div class="wallet-pill" onclick="showScreen('wallet')" style="cursor:pointer;">
+      🪙 <span id="manus-bal">0</span>
+    </div>
+    <div class="nav-icon notif-dot" id="notifBell" onclick="showNotif()" style="position:relative;cursor:pointer;">🔔<span id="notifCount" style="display:none;position:absolute;top:2px;right:2px;background:#ff3d7f;color:#fff;font-size:0.6rem;font-weight:800;min-width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 3px;">0</span></div>
+  </div>
   <button class="edit-profile-btn" onclick="openProfileEdit()">✏️ Edit Profile</button>
   <button class="logout-btn" onclick="doLogout()">🚪 Sign Out</button>
   <div class="profile-grid" id="profileGrid"></div>
@@ -1110,6 +1128,8 @@ function doGoogleAuth(){
 }
 function doLogout(){
   localStorage.removeItem('nvme_token');
+  localStorage.removeItem('nvme_user');
+  try{ sessionStorage.removeItem('nvme_token'); }catch(e){}
   currentUser = null;
   document.getElementById('authOverlay').classList.remove('hidden');
   document.getElementById('topNav').style.display='none';
@@ -1161,6 +1181,12 @@ async function checkAuth(){
   }
 }
 function enterApp(user){
+  // Defensive: some auth paths call enterApp() with no arg after setting currentUser.
+  // Never wipe currentUser to undefined or store "undefined" in localStorage.
+  if(!user || typeof user !== 'object' || Array.isArray(user)){
+    if(currentUser && typeof currentUser === 'object') user = currentUser;
+    else { console.warn('[enterApp] called without a valid user — aborting'); return; }
+  }
   currentUser = user;
   try{localStorage.setItem('nvme_user',JSON.stringify(user));}catch(e){}
   document.getElementById('authOverlay').classList.add('hidden');
@@ -1203,8 +1229,9 @@ function enterApp(user){
 
 // ---- API HELPERS ----
 function authHeaders(){
-  const t = localStorage.getItem('nvme_token');
-  return {'Content-Type':'application/json', 'Authorization': t?'Bearer '+t:''};
+  // Token source policy: localStorage → sessionStorage (Samsung private mode) → empire_token legacy
+  const t = localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token') || localStorage.getItem('empire_token') || '';
+  return {'Content-Type':'application/json', 'Authorization': t ? 'Bearer '+t : ''};
 }
 async function loadWalletBalance(){
   try{
@@ -2259,7 +2286,8 @@ async function handleGoogleAuthRedirect() {
 
   if (authStatus === 'success') {
     try {
-      const res = await fetch(`${API}/api/auth/me`);
+      const _meTok = localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token') || '';
+      const res = await fetch(`${API}/api/auth/me`, { headers: _meTok ? { 'Authorization': 'Bearer ' + _meTok } : {} });
       if (!res.ok) throw new Error('Session lookup failed');
       const data = await res.json();
       currentUser = data.creator || data.user || data;
@@ -2446,6 +2474,8 @@ async function checkExistingSession() {
 function logout() {
   fetch(`${API}/api/auth/logout`, { method: 'POST', headers: authHeaders() });
   localStorage.removeItem('nvme_token');
+  localStorage.removeItem('nvme_user');
+  try{ sessionStorage.removeItem('nvme_token'); }catch(e){}
   token = null; currentUser = null;
   if (socket) { socket.disconnect(); socket = null; }
   document.getElementById('main-app').classList.remove('visible');

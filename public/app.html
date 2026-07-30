@@ -1140,21 +1140,47 @@ function doLogout(){
 // ─── FOLLOW USER ───────────────────────────────────
 async function followUser(userId, username, btn) {
   if (!currentUser) { showToast('Sign in to follow creators'); return; }
+  if (!userId || userId === 'undefined') { showToast('Creator unavailable'); return; }
+  if (btn) { btn.disabled = true; }
   try {
     const res = await fetch(`${API}/api/users/${userId}/follow`, {
       method: 'POST',
       headers: authHeaders()
     });
     const d = await res.json();
-    if (d.ok || res.ok) {
-      const isFollowing = d.following !== false;
-      if (btn) {
-        btn.textContent = isFollowing ? '✓ Following' : '+ Follow';
-        btn.style.background = isFollowing ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg,var(--purple),var(--pink))';
+    if (!res.ok || d.error) { showToast(d.error || 'Could not follow'); if (btn) btn.disabled = false; return; }
+    // Server handshake states: following | unfollowed | requested | request_cancelled
+    const st = d.status;
+    if (btn) {
+      btn.disabled = false;
+      if (st === 'following') {
+        btn.textContent = '✓ Following';
+        btn.style.background = 'rgba(255,255,255,0.1)';
+        btn.style.border = '1.5px solid rgba(255,255,255,.35)';
+      } else if (st === 'requested') {
+        btn.textContent = '⏳ Requested';
+        btn.style.background = 'rgba(255,255,255,0.1)';
+        btn.style.border = '1.5px solid rgba(255,255,255,.35)';
+      } else {
+        btn.textContent = '+ Follow';
+        btn.style.background = 'linear-gradient(135deg,var(--purple),var(--pink))';
+        btn.style.border = 'none';
       }
-      showToast(isFollowing ? `Following @${username}!` : `Unfollowed @${username}`);
+    }
+    const msgs = {
+      following: `Following @${username}! 🎉`,
+      unfollowed: `Unfollowed @${username}`,
+      requested: `Follow request sent to @${username} 📩`,
+      request_cancelled: `Request to @${username} cancelled`
+    };
+    showToast(msgs[st] || 'Done');
+    // Live-update follower counts on screen if visible
+    if (typeof d.followers === 'number') {
+      const fEl = document.getElementById('statFollowers');
+      if (fEl && String(currentUser.id) !== String(userId)) fEl.textContent = d.followers;
     }
   } catch(e) {
+    if (btn) btn.disabled = false;
     showToast('Could not follow. Try again.');
   }
 }
@@ -2001,7 +2027,7 @@ async function loadRealFeed(){
           <div class="feed-user">
             <div class="feed-avatar">${(v.username||'U')[0].toUpperCase()}</div>
             <span class="feed-username">@${v.username||'creator'}</span>
-            <button class="follow-btn" onclick="event.stopPropagation()">Follow</button>
+            <button class="follow-btn" onclick="event.stopPropagation();followUser('${v.user_id||v.creator_id||v.id}','${(v.username||'creator').replace(/'/g,"")}',this)">+ Follow</button>
           </div>
           <div class="feed-caption">${v.title||''}</div>
           <div class="feed-tags">${(v.description||'').slice(0,60)}</div>
@@ -3404,14 +3430,47 @@ function initExploreSearch() {
   renderExplore(); // load default grid
   const inp = document.getElementById('exploreSearchInput');
   if(inp) inp.value = '';
-  document.getElementById('searchResults').style.display = 'none';
-  document.getElementById('exploreGrid').style.display = 'grid';
+  loadDiscover(); // show ALL non-private creators + online presence per Digital King
+}
+
+// ── Discover: every non-private creator, online first ──
+async function loadDiscover() {
+  const results = document.getElementById('searchResults');
+  const grid = document.getElementById('exploreGrid');
+  if (!results) return;
+  results.style.display = 'block';
+  if (grid) grid.style.display = 'none';
+  results.innerHTML = '<p style="color:var(--muted);padding:1rem;">Loading creators…</p>';
+  try {
+    const r = await fetch(API + '/api/users/discover', { headers: authHeaders() });
+    const d = await r.json();
+    const users = (d.users || []).sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0));
+    if (!users.length) { results.innerHTML = '<p style="color:var(--muted);padding:1rem;text-align:center;">No creators yet — be the first! 🚀</p>'; return; }
+    const meId = currentUser && currentUser.id;
+    let html = '<div style="font-size:0.75rem;color:#a78bfa;padding:8px 0 4px;font-weight:700;">🟢 ' + (d.online_count || 0) + ' ONLINE · ' + users.length + ' CREATORS</div>';
+    html += users.map(u => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1a1a2e;">
+        <div style="position:relative;width:44px;height:44px;flex-shrink:0;">
+          <div style="width:44px;height:44px;border-radius:50%;background:#2a0a4a;display:flex;align-items:center;justify-content:center;font-size:1.2rem;overflow:hidden;">
+            ${u.avatar_url ? `<img src="${u.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">` : (u.username || '?')[0].toUpperCase()}
+          </div>
+          ${u.online ? '<span style="position:absolute;bottom:0;right:0;width:12px;height:12px;background:#22c55e;border:2px solid #0d0d18;border-radius:50%;"></span>' : ''}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;">@${u.username} ${u.plan === 'founder' ? '👑' : ''}</div>
+          <div style="font-size:0.78rem;color:#a78bfa;">${u.display_name || ''} · ${u.followers || 0} followers ${u.online ? '· <span style="color:#22c55e;">online</span>' : ''}</div>
+        </div>
+        ${String(u.id) !== String(meId) ? `<button onclick="followUser('${u.id}','${(u.username || '').replace(/'/g, "")}',this)" style="background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;border-radius:20px;padding:.3rem .9rem;font-size:.75rem;font-weight:700;cursor:pointer;">+ Follow</button>` : '<span style="font-size:.72rem;color:#666;">you</span>'}
+      </div>`).join('');
+    results.innerHTML = html;
+  } catch (e) {
+    results.innerHTML = '<p style="color:var(--muted);padding:1rem;">Could not load creators</p>';
+  }
 }
 function handleExploreSearch(val) {
   clearTimeout(_searchTimer);
   if(!val || val.trim().length < 2) {
-    document.getElementById('searchResults').style.display = 'none';
-    document.getElementById('exploreGrid').style.display = 'grid';
+    loadDiscover(); // empty/short query → show ALL creators (Digital King order)
     return;
   }
   _searchTimer = setTimeout(() => runSearch(val.trim()), 350);

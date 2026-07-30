@@ -503,6 +503,21 @@ app.post('/api/users/:id/follow', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Discover: ALL non-private users + online presence (Explore default view) ──
+// NOTE: must be registered BEFORE '/api/users/:username' or it gets swallowed by the wildcard.
+app.get('/api/users/discover', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.username, u.display_name, u.avatar_url, u.plan, u.bio,
+              (SELECT COUNT(*)::int FROM follows f WHERE f.followee_id=u.id) AS followers
+       FROM users u WHERE u.is_private IS NOT TRUE
+       ORDER BY followers DESC, u.created_at DESC LIMIT 100`
+    );
+    const users = rows.map(u => ({ ...u, online: onlineUsers.has(u.id) || onlineUsers.has(String(u.id)) }));
+    res.json({ ok: true, users, online_count: users.filter(u => u.online).length });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ── Public user profile ──
 app.get('/api/users/:username', async (req, res) => {
   try {
@@ -2798,7 +2813,7 @@ app.get('/api/search', async (req, res) => {
   try {
     const term = `%${q.toLowerCase()}%`;
     const [users, videos] = await Promise.all([
-      db.query(`SELECT id, username, display_name, avatar_url, plan FROM users WHERE LOWER(username) LIKE $1 OR LOWER(display_name) LIKE $1 LIMIT 10`, [term]),
+      db.query(`SELECT id, username, display_name, avatar_url, plan FROM users WHERE (is_private IS NOT TRUE) AND (LOWER(username) LIKE $1 OR LOWER(display_name) LIKE $1) LIMIT 10`, [term]),
       db.query(`SELECT v.id, v.title, v.url, v.thumbnail, v.views, v.likes, u.username, u.avatar_url FROM videos v JOIN users u ON v.user_id=u.id WHERE LOWER(v.title) LIKE $1 OR LOWER(v.description) LIKE $1 ORDER BY v.created_at DESC LIMIT 20`, [term])
     ]);
     res.json({ users: users.rows, videos: videos.rows });

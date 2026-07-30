@@ -1088,7 +1088,9 @@ function initSocket() {
   socket.on('vc_answer',        handleVcAnswer);
   socket.on('vc_ice_candidate', handleVcIce);
   socket.on('vc_reject',        handleVcReject);
-  socket.on('vc_hangup',        endCall);
+  socket.on('vc_hangup',        () => endCall(false));
+  socket.on('vc_unreachable',   handleVcUnreachable);
+  socket.on('vc_busy',          handleVcBusy);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1376,8 +1378,97 @@ let incomingCallData = null;
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' }
+  { urls: 'stun:stun1.l.google.com:19302' },
+  // TURN relay — required for calls across mobile/carrier NATs (WhatsApp-grade reachability)
+  { urls: 'turn:openrelay.metered.ca:80',  username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turns:openrelay.metered.ca:443',username: 'openrelayproject', credential: 'openrelayproject' }
 ];
+
+/* ── WhatsApp-grade call engine: ringtones, timer, no-answer timeout ── */
+let callTimerInt  = null;
+let callSeconds   = 0;
+let noAnswerTimer = null;
+let ringtoneNodes = null;
+let ringbackNodes = null;
+let vibrateInt    = null;
+
+function _tone(freq, dur, type = 'sine', when = 0, gainVol = 0.15) {
+  const ctx = _tone.ctx || (_tone.ctx = new (window.AudioContext || window.webkitAudioContext)());
+  const osc = ctx.createOscillator();
+  const g   = ctx.createGain();
+  osc.type = type; osc.frequency.value = freq;
+  g.gain.setValueAtTime(gainVol, ctx.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + when + dur);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(ctx.currentTime + when); osc.stop(ctx.currentTime + when + dur);
+  return { osc, g, ctx };
+}
+
+/* WhatsApp-style double-buzz ringtone loop for incoming calls */
+function startRingtone() {
+  stopRingtone();
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  ringtoneNodes = { ctx, ints: [] };
+  const buzz = () => { try {
+    const o1 = ctx.createOscillator(), g1 = ctx.createGain();
+    o1.type = 'sine'; o1.frequency.value = 440;
+    const o2 = ctx.createOscillator(), g2 = ctx.createGain();
+    o2.type = 'sine'; o2.frequency.value = 480;
+    g1.gain.value = 0.12; g2.gain.value = 0.12;
+    o1.connect(g1); g1.connect(ctx.destination);
+    o2.connect(g2); g2.connect(ctx.destination);
+    o1.start(); o2.start();
+    o1.stop(ctx.currentTime + 1.2); o2.stop(ctx.currentTime + 1.2);
+  } catch {} };
+  buzz();
+  ringtoneNodes.ints.push(setInterval(buzz, 2000));
+  if (navigator.vibrate) {
+    navigator.vibrate([400, 200, 400]);
+    vibrateInt = setInterval(() => navigator.vibrate([400, 200, 400]), 1600);
+  }
+}
+function stopRingtone() {
+  if (ringtoneNodes) { ringtoneNodes.ints.forEach(clearInterval); try { ringtoneNodes.ctx.close(); } catch {} ringtoneNodes = null; }
+  if (vibrateInt) { clearInterval(vibrateInt); vibrateInt = null; }
+  if (navigator.vibrate) navigator.vibrate(0);
+}
+
+/* Caller ringback: soft beep every 3s while ringing */
+function startRingback() {
+  stopRingback();
+  const tick = () => { try { _tone(425, 0.9, 'sine', 0, 0.08); } catch {} };
+  tick();
+  ringbackNodes = setInterval(tick, 3000);
+}
+function stopRingback() { if (ringbackNodes) { clearInterval(ringbackNodes); ringbackNodes = null; } }
+
+/* Call duration timer rendered into vc-call-status (WhatsApp style mm:ss) */
+function startCallTimer() {
+  stopCallTimer();
+  callSeconds = 0;
+  const el = document.getElementById('vc-call-status');
+  const render = () => {
+    const m = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+    const s = String(callSeconds % 60).padStart(2, '0');
+    if (el) el.textContent = m + ':' + s;
+    callSeconds++;
+  };
+  render();
+  callTimerInt = setInterval(render, 1000);
+}
+function stopCallTimer() { if (callTimerInt) { clearInterval(callTimerInt); callTimerInt = null; } }
+
+/* 30s no-answer timeout (WhatsApp behavior) */
+function armNoAnswerTimeout() {
+  clearTimeout(noAnswerTimer);
+  noAnswerTimer = setTimeout(() => {
+    showToast('No answer', 'error');
+    const st = document.getElementById('vc-call-status');
+    if (st) st.textContent = 'No answer';
+    setTimeout(() => endCall(), 1200);
+  }, 30000);
+}
 
 async function startCall(withVideo = true) {
   if (!activeToUserId) return;
@@ -1414,6 +1505,11 @@ async function startCall(withVideo = true) {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   socket.emit('vc_offer', { toUserId: activeToUserId, offer, withVideo });
+  startRingback();
+  armNoAnswerTimeout();
+  isMuted = false; isCamOff = false;
+  const mb = document.getElementById('vc-btn-mute'); if (mb) mb.textContent = '🎤';
+  const vb = document.getElementById('vc-btn-video'); if (vb) vb.textContent = '📷';
 }
 
 async function handleVcOffer({ fromUserId, offer, withVideo }) {
@@ -1445,9 +1541,10 @@ async function acceptCall() {
     return;
   }
 
+  stopRingtone();
   document.getElementById('vc-local-video').srcObject = localStream;
   openVcOverlay();
-  document.getElementById('vc-call-status').textContent = 'Connected';
+  document.getElementById('vc-call-status').textContent = 'Connecting…';
 
   pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
@@ -1457,12 +1554,20 @@ async function acceptCall() {
   pc.ontrack = e => {
     document.getElementById('vc-remote-video').srcObject = e.streams[0];
   };
+  pc.onconnectionstatechange = () => {
+    const s = pc?.connectionState;
+    if (s === 'connected') startCallTimer();
+    if (s === 'disconnected' || s === 'failed') endCall();
+  };
 
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   socket.emit('vc_answer', { toUserId: fromUserId, answer });
   incomingCallData = null;
+  isMuted = false; isCamOff = false;
+  const mb = document.getElementById('vc-btn-mute'); if (mb) mb.textContent = '🎤';
+  const vb = document.getElementById('vc-btn-video'); if (vb) vb.textContent = '📷';
 }
 
 async function handleVcAnswer({ answer }) {
@@ -1480,14 +1585,24 @@ function handleVcReject() {
   endCall();
 }
 
-function endCall() {
+let currentCallPeer = null; // userId of the person we're calling/in a call with
+
+function endCall(notify = true) {
+  stopRingtone();
+  stopRingback();
+  stopCallTimer();
+  clearTimeout(noAnswerTimer); noAnswerTimer = null;
   document.getElementById('vc-overlay').classList.remove('open');
   document.getElementById('vc-incoming').classList.remove('open');
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   if (pc) { pc.close(); pc = null; }
   document.getElementById('vc-remote-video').srcObject = null;
   document.getElementById('vc-local-video').srcObject  = null;
-  if (activeToUserId && socket) socket.emit('vc_hangup', { toUserId: activeToUserId });
+  const peer = currentCallPeer || incomingCallData?.fromUserId || activeToUserId;
+  if (notify && peer && socket) socket.emit('vc_hangup', { toUserId: peer });
+  currentCallPeer = null;
+  incomingCallData = null;
+  isMuted = false; isCamOff = false;
 }
 
 function openVcOverlay() {

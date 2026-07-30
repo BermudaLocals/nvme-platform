@@ -130,6 +130,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .feed-action-icon{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;font-size:1.2rem;transition:all .2s}
 .feed-action-icon:active{transform:scale(0.85)}
 .feed-action-count{font-size:0.7rem;color:rgba(255,255,255,0.8);font-weight:600}
+@keyframes heartPop{0%{transform:scale(0.4);opacity:0}25%{transform:scale(1.25);opacity:1}60%{transform:scale(1);opacity:1}100%{transform:scale(1.1) translateY(-30px);opacity:0}}
 .feed-music{display:flex;align-items:center;gap:0.4rem;font-size:0.75rem;color:rgba(255,255,255,0.7);margin-top:0.4rem}
 .music-disc{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--pink));animation:spin 3s linear infinite;display:flex;align-items:center;justify-content:center;font-size:0.55rem}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -789,6 +790,8 @@ if(typeof socket !== 'undefined' && socket) {
     <input class="upload-input" type="text" id="uploadTitle" placeholder="Give your video a title...">
     <input class="upload-input" type="url" id="uploadVideoUrl" placeholder="Or paste a video URL (YouTube, MP4 link, etc.)" style="margin-bottom:.5rem;">
     <textarea class="upload-input" id="uploadCaption" rows="3" style="resize:none" placeholder="Write a caption... #tags"></textarea>
+    <button type="button" id="aiCaptionBtn" onclick="aiSuggestCaptions()" style="display:flex;align-items:center;justify-content:center;gap:0.4rem;padding:0.65rem;border:none;border-radius:12px;background:linear-gradient(135deg,#7c5cfc,#c026d3);color:#fff;font-weight:700;font-size:0.85rem;cursor:pointer;">✨ AI Caption Ideas</button>
+    <div id="aiCaptionTray" style="display:none;flex-direction:column;gap:0.4rem;"></div>
     <div style="display:flex;gap:0.5rem">
       
 <!-- CAMERA FILTERS -->
@@ -1963,7 +1966,7 @@ async function loadRealFeed(){
     const videosFinal = typeof videos2 !== 'undefined' ? videos2 : (Array.isArray(videos) ? videos : videos.feed);
     const syms=['🏝️','💰','🤖','🎵','⚓','❤️','🏄','💎'];
     c.innerHTML=videosFinal.map((v,i)=>`
-      <div class="feed-item">
+      <div class="feed-item" ondblclick="dblTapLike(event,'${v.id}')" ontouchend="feedTouchLike(event,'${v.id}')">
         <div class="feed-video-bg">${v.thumbnail||syms[i%syms.length]}</div>
         <div class="feed-overlay"></div>
         <div class="manus-badge">👁️ ${Number(v.view_count||v.views||0).toLocaleString()}</div>
@@ -1977,7 +1980,7 @@ async function loadRealFeed(){
           <div class="feed-tags">${(v.description||'').slice(0,60)}</div>
         </div>
         <div class="feed-actions">
-          <div class="feed-action" onclick="likeVideo(event,'${v.id}')">
+          <div class="feed-action" onclick="event.stopPropagation();likeVideo('${v.id}',this)">
             <div class="feed-action-icon">❤️</div>
             <div class="feed-action-count">${Number(v.like_count||0).toLocaleString()}</div>
           </div>
@@ -3532,6 +3535,53 @@ function handleFileSelect(input) {
     const name = input.files[0].name;
     document.querySelector('.upload-area p').innerHTML = `✅ ${name}<br><small style="color:var(--muted)">Ready to upload</small>`;
   }
+}
+
+/* ── TikTok-grade feed interactions ── */
+var _lastTapT = 0, _lastTapId = null;
+function heartBurst(x, y){
+  const h = document.createElement('div');
+  h.textContent = '❤️';
+  h.style.cssText = 'position:fixed;left:'+(x-40)+'px;top:'+(y-40)+'px;font-size:80px;z-index:9999;pointer-events:none;animation:heartPop .8s ease-out forwards;';
+  document.body.appendChild(h);
+  setTimeout(()=>h.remove(), 850);
+}
+function dblTapLike(e, videoId){
+  e.preventDefault(); e.stopPropagation();
+  heartBurst(e.clientX||innerWidth/2, e.clientY||innerHeight/2);
+  likeVideo(videoId, null);
+}
+function feedTouchLike(e, videoId){
+  const now = Date.now();
+  if(_lastTapId===videoId && now-_lastTapT<300){
+    const t = (e.changedTouches && e.changedTouches[0]) || {};
+    heartBurst(t.clientX||innerWidth/2, t.clientY||innerHeight/2);
+    likeVideo(videoId, null);
+    _lastTapT = 0;
+  } else { _lastTapT = now; _lastTapId = videoId; }
+}
+/* ── AI Caption Assistant (Kimi K3) ── */
+async function aiSuggestCaptions(){
+  const btn = document.getElementById('aiCaptionBtn');
+  const tray = document.getElementById('aiCaptionTray');
+  const title = (document.getElementById('uploadTitle')||{value:''}).value.trim();
+  const desc  = (document.getElementById('uploadCaption')||{value:''}).value.trim();
+  if(!title && !desc){ btn.textContent='✨ Add a title first!'; setTimeout(()=>btn.innerHTML='✨ AI Caption Ideas',1600); return; }
+  btn.disabled = true; btn.textContent = '✨ Thinking…';
+  try{
+    const r = await fetch(API+'/api/ai/captions',{method:'POST',headers:{...authHeaders(),'Content-Type':'application/json'},body:JSON.stringify({title,description:desc})});
+    const d = await r.json();
+    if(!r.ok || !d.captions) throw new Error(d.error||'AI error');
+    tray.style.display='flex';
+    tray.innerHTML = d.captions.map((c,i)=>{
+      const txt=(c.caption||'')+' '+(c.hashtags||'');
+      return '<div onclick="document.getElementById(\'uploadCaption\').value=this.dataset.c" data-c="'+txt.replace(/"/g,'&quot;')+'" style="padding:0.6rem 0.75rem;background:rgba(124,92,252,0.12);border:1px solid rgba(124,92,252,0.35);border-radius:10px;font-size:0.8rem;cursor:pointer;color:#e2e8f0;">'+txt+'</div>';
+    }).join('');
+  }catch(err){
+    tray.style.display='flex';
+    tray.innerHTML='<div style="font-size:0.78rem;color:#f87171;padding:0.5rem;">AI captions unavailable: '+err.message+'</div>';
+  }
+  btn.disabled = false; btn.innerHTML='✨ AI Caption Ideas';
 }
 
 async function uploadVideo() {

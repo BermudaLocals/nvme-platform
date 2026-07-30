@@ -2609,6 +2609,7 @@ app.get('/api/wallet/crypto/eth-price', async (req, res) => {
 // ── TikTok Parity Features ───────────────────────────────────
 try {
   require('./nvme-tiktok-features')(app, db, authMiddleware, optionalAuth);
+  require('./nvme-ai-studio')(app, db, authMiddleware, optionalAuth);
   console.log('[nvme.live] ✅ TikTok features module loaded');
 } catch(e) {
   console.error('[nvme.live] TikTok features module error:', e.message);

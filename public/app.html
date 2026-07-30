@@ -16,7 +16,7 @@ const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  if(!isInStandaloneMode && !localStorage.getItem('nvme_pwa_dismissed')) {
+  if(!isInStandaloneMode && !localStorage.getItem('nvme_pwa_dismissed_v26')) {
     setTimeout(() => showPWABanner(), 3000);
   }
 });
@@ -41,16 +41,20 @@ function triggerInstall() {
       }
       deferredPrompt = null;
     });
+    return;
   }
+  // Android fallback: prompt not captured — give manual instructions
+  showToast('📲 Tap your browser ⋮ menu → "Install app" or "Add to Home screen"');
 }
 
 function dismissPWA() {
-  localStorage.setItem('nvme_pwa_dismissed', '1');
+  // Dismiss only for this app version — re-prompt after updates
+  localStorage.setItem('nvme_pwa_dismissed_v26', '1');
   document.getElementById('pwaBanner').classList.remove('show');
 }
 
 // Show iOS banner after delay if on iOS, not installed, not dismissed
-if(isIOS && isMobile && !isInStandaloneMode && !localStorage.getItem('nvme_pwa_dismissed')) {
+if(isIOS && isMobile && !isInStandaloneMode && !localStorage.getItem('nvme_pwa_dismissed_v26')) {
   setTimeout(() => {
     const banner = document.getElementById('pwaBanner');
     if(banner) {
@@ -2855,7 +2859,9 @@ function renderDemoLiveStreams() {
 // Go Live
 
 async function startGoLive() {
-  const title = prompt('Stream title (or leave blank):') || 'Live Stream';
+  if(!currentUser){ showToast('Sign in to go live'); showScreen('profile'); return; }
+  const title = (document.getElementById('liveTitleInput')||{value:''}).value.trim() || (currentUser.display_name || currentUser.username || 'NVME') + ' is LIVE';
+  showToast('🔴 Starting your live...');
   try {
     const res = await fetch(`${API}/api/live/start`, {
       method: 'POST',
@@ -2863,12 +2869,31 @@ async function startGoLive() {
       body: JSON.stringify({ title })
     });
     const data = await res.json();
+    if(!res.ok || data.ok === false){ showToast(data.error || 'Could not start live — try again'); return; }
     const stream = data.stream || data;
-    joinLiveStream({ ...stream, username: currentUser?.username, isHost: true });
-  } catch {
-    // Demo mode
-    joinDemoLive(currentUser?.username || 'You', title, 0, true);
+    joinLiveStream({ ...stream, username: currentUser.username, isHost: true });
+  } catch(e) {
+    showToast('Network issue — retrying in demo mode');
+    joinDemoLive(currentUser.username || 'You', title, 0, true);
   }
+}
+
+// Host camera activation — required for Go Live (was missing, broke every host)
+let hostCameraStream = null;
+async function activateHostCamera() {
+  if(hostCameraStream){ return; }
+  try {
+    hostCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+    const vid = document.getElementById('live-host-video') || document.getElementById('hostVideo') || document.getElementById('stream-video');
+    if(vid){ vid.srcObject = hostCameraStream; vid.muted = true; vid.playsInline = true; vid.play().catch(()=>{}); }
+    showToast('📹 Camera live!');
+  } catch(e) {
+    console.warn('[live] camera denied:', e.message);
+    showToast('📹 Allow camera + mic access to be seen — check your browser permissions');
+  }
+}
+function stopHostCamera() {
+  if(hostCameraStream){ hostCameraStream.getTracks().forEach(t => t.stop()); hostCameraStream = null; }
 }
 
 function joinDemoLive(username, title, viewers, isHost = false) {
@@ -2913,6 +2938,7 @@ function closeLiveRoom() {
     socket.emit('leave_stream', { stream_id: currentLiveStream.id });
   }
   currentLiveStream = null;
+  if(typeof stopHostCamera === 'function') stopHostCamera();
   document.getElementById('live-room').classList.remove('open');
 }
 

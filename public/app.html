@@ -1004,7 +1004,7 @@ if(typeof socket !== 'undefined' && socket) {
     <div class="bot-icon">🔍</div>
     <div class="bot-label">Explore</div>
   </div>
-  <div class="bot-center" onclick="showScreen('upload')">➕</div>
+  <div class="bot-center" onclick="openRecorder()">➕</div>
   <div class="bot-item" onclick="showScreen('msg')">
     <div class="bot-icon">💬</div>
     <div class="bot-label">Messages</div>
@@ -1443,7 +1443,8 @@ async function submitUpload(){
 
   if(postBtn) { postBtn.textContent = 'Posting...'; postBtn.disabled = true; }
 
-  const file = fileInput ? fileInput.files[0] : null;
+  // Prefer in-app recorded clip, else gallery file
+  const file = window.recordedVideoFile || (fileInput ? fileInput.files[0] : null);
 
   try {
     if(!file) {
@@ -1491,6 +1492,7 @@ async function submitUpload(){
       const d = await r.json();
       if(d.ok || d.id) {
         showToast('Posted! Going live on your feed 🎥');
+        window.recordedVideoFile = null;
         setTimeout(() => { showScreen('feed'); loadFeed(); }, 400);
       } else {
         showToast(d.error || 'Upload failed. Check file size (max 100MB).');
@@ -1508,6 +1510,7 @@ function triggerUpload(){
 function handleVideoSelect(e){
   const f = e.target.files[0];
   if(!f) return;
+  window.recordedVideoFile = null; // gallery pick overrides recorder clip
   // Show file selected in upload area
   const area = document.querySelector('.upload-area');
   if(area) {
@@ -3933,6 +3936,132 @@ function copyEthAddress() {
     <button class="pwa-dismiss-btn" onclick="dismissPWA()">Not now</button>
   </div>
 </div>
+
+<!-- CAMERA RECORDER (TikTok-style) -->
+<div id="recorderOverlay" style="display:none;position:fixed;inset:0;z-index:8000;background:#000;">
+  <video id="recPreview" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"></video>
+  <div style="position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;z-index:2;">
+    <button onclick="closeRecorder()" style="width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.5);border:none;color:#fff;font-size:1.2rem;cursor:pointer;">✕</button>
+    <button onclick="flipRecCamera()" style="width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.5);border:none;color:#fff;font-size:1.1rem;cursor:pointer;">🔄</button>
+  </div>
+  <div id="recTimer" style="display:none;position:absolute;top:16px;left:50%;transform:translateX(-50%);background:rgba(255,0,60,0.85);color:#fff;font-weight:700;font-size:0.85rem;padding:4px 14px;border-radius:20px;z-index:2;">⏺ 0:00</div>
+  <div style="position:absolute;left:16px;bottom:110px;display:flex;flex-direction:column;gap:14px;z-index:2;">
+    <button onclick="closeRecorder();showScreen('upload');setTimeout(triggerUpload,150)" style="width:44px;height:44px;border-radius:12px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.25);color:#fff;font-size:1.1rem;cursor:pointer;" title="Upload from gallery">🖼️</button>
+  </div>
+  <div style="position:absolute;bottom:88px;left:0;right:0;display:flex;justify-content:center;z-index:2;">
+    <button id="recBtn" onclick="toggleRecording()" style="width:76px;height:76px;border-radius:50%;border:5px solid #fff;background:linear-gradient(135deg,#ff3d7f,#ff0040);cursor:pointer;box-shadow:0 0 24px rgba(255,61,127,0.6);transition:transform .15s;"></button>
+  </div>
+  <div id="recModeStrip" style="position:absolute;bottom:34px;left:0;right:0;display:flex;justify-content:center;gap:22px;z-index:2;overflow-x:auto;padding:0 16px;">
+    <span class="rec-mode active" data-mode="15" onclick="setRecMode(this,15)" style="color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;text-shadow:0 1px 4px #000;">15s</span>
+    <span class="rec-mode" data-mode="60" onclick="setRecMode(this,60)" style="color:rgba(255,255,255,0.55);font-weight:600;font-size:0.9rem;cursor:pointer;text-shadow:0 1px 4px #000;">60s</span>
+    <span class="rec-mode" data-mode="180" onclick="setRecMode(this,180)" style="color:rgba(255,255,255,0.55);font-weight:600;font-size:0.9rem;cursor:pointer;text-shadow:0 1px 4px #000;">3min</span>
+    <span class="rec-mode" data-mode="LIVE" onclick="slideToLive()" style="color:rgba(255,255,255,0.55);font-weight:700;font-size:0.9rem;cursor:pointer;text-shadow:0 1px 4px #000;">LIVE 🔴</span>
+  </div>
+  <div id="recReview" style="display:none;position:absolute;inset:0;background:#000;z-index:3;">
+    <video id="recPlayback" controls playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;"></video>
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));display:flex;gap:10px;background:linear-gradient(transparent,rgba(0,0,0,0.9));">
+      <button onclick="discardRecording()" style="flex:1;padding:14px;border-radius:14px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;font-weight:700;font-size:0.95rem;cursor:pointer;">↩️ Retake</button>
+      <button onclick="useRecording()" style="flex:2;padding:14px;border-radius:14px;background:linear-gradient(135deg,#7c5cfc,#ff3d7f);border:none;color:#fff;font-weight:800;font-size:0.95rem;cursor:pointer;">Use Clip →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════ TIKTOK-STYLE CAMERA RECORDER ══════
+let recStream = null, mediaRecorder = null, recChunks = [], recFacing = 'user', recLimit = 15, recStartTs = 0, recTimerInt = null, recordedBlob = null;
+window.recordedVideoFile = null;
+
+async function openRecorder(){
+  if(!currentUser){ showToast('Sign in to create'); return; }
+  document.getElementById('recorderOverlay').style.display = 'block';
+  document.getElementById('recReview').style.display = 'none';
+  try {
+    recStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: recFacing, width:{ideal:720}, height:{ideal:1280} }, audio: true });
+    document.getElementById('recPreview').srcObject = recStream;
+  } catch(e){ showToast('📷 Allow camera + mic to record'); closeRecorder(); }
+}
+function closeRecorder(){
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){ try{ mediaRecorder.stop(); }catch(e){} }
+  if(recTimerInt){ clearInterval(recTimerInt); recTimerInt = null; }
+  if(recStream){ recStream.getTracks().forEach(t=>t.stop()); recStream = null; }
+  document.getElementById('recorderOverlay').style.display = 'none';
+  document.getElementById('recTimer').style.display = 'none';
+  const btn = document.getElementById('recBtn');
+  if(btn) btn.style.transform = 'scale(1)';
+}
+async function flipRecCamera(){
+  recFacing = recFacing === 'user' ? 'environment' : 'user';
+  if(recStream){ recStream.getTracks().forEach(t=>t.stop()); }
+  try {
+    recStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: recFacing }, audio: true });
+    document.getElementById('recPreview').srcObject = recStream;
+  } catch(e){ showToast('Could not flip camera'); }
+}
+function setRecMode(el, secs){
+  document.querySelectorAll('.rec-mode').forEach(m=>{ m.style.color='rgba(255,255,255,0.55)'; m.classList.remove('active'); });
+  el.style.color='#fff'; el.classList.add('active');
+  recLimit = secs;
+}
+function slideToLive(){
+  closeRecorder();
+  goLive();
+}
+function toggleRecording(){
+  if(!recStream){ showToast('Camera not ready'); return; }
+  if(mediaRecorder && mediaRecorder.state === 'recording'){ stopRecording(); return; }
+  recChunks = [];
+  let mime = 'video/webm;codecs=vp8,opus';
+  if(MediaRecorder.isTypeSupported('video/mp4')) mime = 'video/mp4';
+  else if(!MediaRecorder.isTypeSupported(mime)) mime = '';
+  try { mediaRecorder = mime ? new MediaRecorder(recStream, { mimeType: mime }) : new MediaRecorder(recStream); }
+  catch(e){ showToast('Recording not supported on this browser'); return; }
+  mediaRecorder.ondataavailable = e => { if(e.data && e.data.size) recChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    const type = mediaRecorder.mimeType || 'video/webm';
+    recordedBlob = new Blob(recChunks, { type });
+    const url = URL.createObjectURL(recordedBlob);
+    const pb = document.getElementById('recPlayback');
+    pb.src = url;
+    document.getElementById('recReview').style.display = 'block';
+    pb.play().catch(()=>{});
+  };
+  mediaRecorder.start(250);
+  recStartTs = Date.now();
+  const tEl = document.getElementById('recTimer');
+  tEl.style.display = 'block';
+  document.getElementById('recBtn').style.transform = 'scale(0.82)';
+  recTimerInt = setInterval(() => {
+    const s = Math.floor((Date.now()-recStartTs)/1000);
+    tEl.textContent = '⏺ ' + Math.floor(s/60) + ':' + String(s%60).padStart(2,'0') + ' / ' + (recLimit>=60 ? Math.floor(recLimit/60)+'m' : recLimit+'s');
+    if(recLimit && s >= recLimit) stopRecording();
+  }, 300);
+}
+function stopRecording(){
+  if(recTimerInt){ clearInterval(recTimerInt); recTimerInt = null; }
+  document.getElementById('recTimer').style.display = 'none';
+  document.getElementById('recBtn').style.transform = 'scale(1)';
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){ try{ mediaRecorder.stop(); }catch(e){} }
+}
+function discardRecording(){
+  recordedBlob = null;
+  const pb = document.getElementById('recPlayback');
+  pb.pause(); pb.src = '';
+  document.getElementById('recReview').style.display = 'none';
+}
+function useRecording(){
+  if(!recordedBlob){ showToast('Nothing recorded'); return; }
+  const ext = recordedBlob.type.includes('mp4') ? 'mp4' : 'webm';
+  window.recordedVideoFile = new File([recordedBlob], 'nvme_clip_' + Date.now() + '.' + ext, { type: recordedBlob.type });
+  discardRecording();
+  closeRecorder();
+  showScreen('upload');
+  const area = document.querySelector('.upload-area');
+  if(area) area.innerHTML = '<div class="upload-icon">✅</div><div class="upload-title" style="color:#9b59ff">Clip recorded!</div><div class="upload-sub">' + (window.recordedVideoFile.size/1024/1024).toFixed(1) + 'MB — add a title and post</div>';
+  const t = document.getElementById('uploadTitle');
+  if(t && !t.value) t.value = 'My new clip';
+  showToast('🎬 Clip ready — title it and hit Post Video');
+}
+</script>
 
 <!-- iOS INSTALL SHEET -->
 <!-- AI STUDIO MODAL -->

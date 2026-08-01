@@ -3292,6 +3292,7 @@ function openDemoDM(name) {
   msgs.scrollTop = msgs.scrollHeight;
 }
 
+function openDM(userId, username){ openDMChat(userId, username, null); }
 function openDMChat(userId, username, convId) {
   currentConversationId = userId;
   currentConversationUser = { username, conv_id: convId };

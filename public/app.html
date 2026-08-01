@@ -2094,6 +2094,18 @@ async function loadRealFeed(){
         </div>
       </div>
     `).join('');
+    // TikTok autoplay-on-scroll: play the visible video (muted = mobile-safe), pause the rest
+    if('IntersectionObserver' in window){
+      if(window._feedVideoObs) window._feedVideoObs.disconnect();
+      window._feedVideoObs = new IntersectionObserver(function(entries){
+        entries.forEach(function(en){
+          var vid = en.target;
+          if(en.intersectionRatio >= 0.6){ vid.play().catch(function(){}); }
+          else { vid.pause(); }
+        });
+      },{threshold:[0,0.6,1]});
+      c.querySelectorAll('.feed-video').forEach(function(v){ window._feedVideoObs.observe(v); });
+    }
     console.log('[Feed] Loaded', videos.length, 'real videos');
   } catch(e){ console.log('[Feed] Using demo data'); }
 }

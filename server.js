@@ -670,6 +670,7 @@ async function initDB() {
       text TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE comments ADD COLUMN IF NOT EXISTS text TEXT DEFAULT '';
     ALTER TABLE comments ADD COLUMN IF NOT EXISTS image_url TEXT;
     CREATE TABLE IF NOT EXISTS follows (
       follower_id UUID REFERENCES users(id) ON DELETE CASCADE,

@@ -2034,7 +2034,7 @@ async function loadRealFeed(){
           <div class="feed-user">
             <div class="feed-avatar">${(v.username||'U')[0].toUpperCase()}</div>
             <span class="feed-username">@${v.username||'creator'}</span>
-            <button class="follow-btn" onclick="event.stopPropagation();followUser('${v.user_id||v.creator_id||v.id}','${(v.username||'creator').replace(/'/g,"")}',this)">+ Follow</button>
+            <button class="follow-btn" onclick="event.stopPropagation();followUser('${v.author_id||v.user_id||v.creator_id}','${(v.username||'creator').replace(/'/g,"")}',this)">+ Follow</button>
           </div>
           <div class="feed-caption">${v.title||''}</div>
           <div class="feed-tags">${(v.description||'').slice(0,60)}</div>
@@ -2044,9 +2044,9 @@ async function loadRealFeed(){
             <div class="feed-action-icon">❤️</div>
             <div class="feed-action-count">${Number(v.like_count||0).toLocaleString()}</div>
           </div>
-          <div class="feed-action">
+          <div class="feed-action" onclick="event.stopPropagation();openComments('${v.id}')">
             <div class="feed-action-icon">💬</div>
-            <div class="feed-action-count">${Number(v.comment_count||0).toLocaleString()}</div>
+            <div class="feed-action-count" id="cc_${v.id}">${Number(v.comment_count||0).toLocaleString()}</div>
           </div>
           <div class="feed-action" onclick="spawnCoin(event)">
             <div class="feed-action-icon">🔗</div>
@@ -2113,7 +2113,7 @@ function openComments(videoId){
             ${c.image_url?`<img src="${c.image_url}" style="max-width:180px;max-height:180px;border-radius:10px;margin-top:6px;cursor:pointer;" onclick="window.open('${c.image_url}','_blank')">`:''}
           </div>
         </div>`).join('');
-    }).catch(()=>{ var l=document.getElementById('comment-list-'+videoId); if(l) l.textContent='Be the first to comment! 👆'; });
+    }).catch(()=>{ var l=document.getElementById('comment-list-'+videoId); if(l) l.innerHTML='Could not load comments. <span onclick="openComments(\''+videoId+'\')" style="color:#a78bfa;cursor:pointer;font-weight:700;">Tap to retry</span>'; });
 }
 
 async function postComment(videoId){
@@ -2139,6 +2139,7 @@ async function postComment(videoId){
       if(list.textContent.includes('No comments') || list.textContent.includes('Be the first')) list.innerHTML = '';
       list.prepend(div);
     }
+    var cce=document.getElementById('cc_'+videoId); if(cce){ var _n=parseInt((cce.textContent||'0').replace(/,/g,''))||0; cce.textContent=(_n+1).toLocaleString(); }
     showToast('Comment posted! 💬');
   }catch(e){ showToast('Network error — try again'); }
 }

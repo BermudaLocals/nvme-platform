@@ -1,7 +1,7 @@
 // NVME Service Worker v15 — network-first for HTML, cache-first for assets
 // Fixes: never cache app.html (strips OAuth ?token= params)
 // v15: force-wipes all stale caches on Samsung/mobile after update
-const CACHE = 'nvme-v28';
+const CACHE = 'nvme-v29';
 const STATIC_ASSETS = [
   '/img/icon-192.png',
   '/img/icon-512.png',

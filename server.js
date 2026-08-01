@@ -671,7 +671,10 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
     ALTER TABLE comments ADD COLUMN IF NOT EXISTS text TEXT DEFAULT '';
+    ALTER TABLE comments ADD COLUMN IF NOT EXISTS content TEXT DEFAULT '';
     ALTER TABLE comments ADD COLUMN IF NOT EXISTS image_url TEXT;
+    ALTER TABLE comments ALTER COLUMN content DROP NOT NULL;
+    ALTER TABLE comments ALTER COLUMN text DROP NOT NULL;
     CREATE TABLE IF NOT EXISTS follows (
       follower_id UUID REFERENCES users(id) ON DELETE CASCADE,
       followee_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -938,7 +941,7 @@ app.post('/api/videos/:id/view', async (req, res) => {
 app.get('/api/videos/:id/comments', async (req, res) => {
   try {
     const { rows } = await db.query(`
-      SELECT c.id, c.text, c.image_url, c.created_at, u.username, u.display_name, u.avatar_url
+      SELECT c.id, COALESCE(NULLIF(c.text,''), c.content, '') AS text, c.image_url, c.created_at, u.username, u.display_name, u.avatar_url
       FROM comments c JOIN users u ON u.id = c.user_id
       WHERE c.video_id = $1 ORDER BY c.created_at DESC LIMIT 100
     `, [req.params.id]);
@@ -955,8 +958,8 @@ app.post('/api/videos/:id/comments', authMiddleware, async (req, res) => {
     const { rows: vrows } = await db.query('SELECT id FROM videos WHERE id=$1', [req.params.id]);
     if (!vrows.length) return res.status(404).json({ error: 'video not found' });
     const { rows } = await db.query(
-      'INSERT INTO comments (video_id, user_id, text, image_url) VALUES ($1,$2,$3,$4) RETURNING id, text, image_url, created_at',
-      [req.params.id, req.user.id, text || '', imageUrl]
+      'INSERT INTO comments (video_id, user_id, text, content, image_url) VALUES ($1,$2,$3,$4,$5) RETURNING id, text, image_url, created_at',
+      [req.params.id, req.user.id, text || '', text || '', imageUrl]
     );
     res.status(201).json({ ok: true, comment: rows[0] });
   } catch (e) { res.status(500).json({ error: e.message }); }

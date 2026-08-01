@@ -2090,6 +2090,8 @@ function openComments(videoId){
     </div>
     <div id="comment-list-${videoId}" style="min-height:80px;color:rgba(255,255,255,.6);font-size:.85rem;padding:.5rem 0;">Loading comments...</div>
     <div style="display:flex;gap:.5rem;margin-top:1rem;">
+      <button onclick="document.getElementById('comment-photo-${videoId}').click()" style="background:#0a0a1a;border:1px solid #333;border-radius:50%;width:38px;height:38px;color:#fff;font-size:1rem;cursor:pointer;flex-shrink:0;" title="Add photo">📷</button>
+      <input type="file" id="comment-photo-${videoId}" accept="image/*" style="display:none" onchange="previewCommentPhoto(event,'${videoId}')">
       <input id="comment-input-${videoId}" type="text" placeholder="Add a comment..." style="flex:1;background:#0a0a1a;border:1px solid #333;border-radius:20px;padding:.5rem 1rem;color:#fff;font-size:.9rem;">
       <button onclick="postComment('${videoId}')" style="background:#9b59ff;border:none;border-radius:20px;padding:.5rem 1rem;color:#fff;font-weight:700;cursor:pointer;">Post</button>
     </div>`;
@@ -2102,31 +2104,74 @@ function openComments(videoId){
       if(!list) return;
       var comments = d.comments||d||[];
       if(!comments.length){ list.textContent='No comments yet. Be first! 👆'; return; }
-      list.innerHTML = comments.map(c=>`<div style="padding:.5rem 0;border-bottom:1px solid #222;"><span style="font-weight:700;font-size:.8rem;">@${c.username||'user'}</span> <span style="font-size:.85rem;">${c.content||c.text||''}</span></div>`).join('');
+      list.innerHTML = comments.map(c=>`
+        <div style="display:flex;gap:10px;padding:.6rem 0;border-bottom:1px solid #222;">
+          <div style="width:34px;height:34px;border-radius:50%;background:#2a0a4a;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700;overflow:hidden;">${c.avatar_url?`<img src="${c.avatar_url}" style="width:100%;height:100%;object-fit:cover;">`:(c.username||'?')[0].toUpperCase()}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:.8rem;">@${c.username||'user'} <span style="font-weight:400;color:#a78bfa;">${c.display_name||''}</span></div>
+            ${c.text||c.content?`<div style="font-size:.85rem;margin-top:2px;">${c.text||c.content}</div>`:''}
+            ${c.image_url?`<img src="${c.image_url}" style="max-width:180px;max-height:180px;border-radius:10px;margin-top:6px;cursor:pointer;" onclick="window.open('${c.image_url}','_blank')">`:''}
+          </div>
+        </div>`).join('');
     }).catch(()=>{ var l=document.getElementById('comment-list-'+videoId); if(l) l.textContent='Be the first to comment! 👆'; });
 }
 
 async function postComment(videoId){
   var input = document.getElementById('comment-input-'+videoId);
-  if(!input || !input.value.trim()) return;
-  var text = input.value.trim();
+  var text = input ? input.value.trim() : '';
+  var photo = (window._commentPhoto && window._commentPhoto[videoId]) || null;
+  if(!text && !photo) return;
   var tok = localStorage.getItem('nvme_token') || localStorage.getItem('empire_token');
   if(!tok){ showToast('Sign in to comment 💬'); return; }
-  input.value = '';
+  if(input) input.value = '';
+  if(window._commentPhoto) delete window._commentPhoto[videoId];
+  var chip = document.getElementById('comment-photo-chip-'+videoId); if(chip) chip.remove();
   try{
-    var r = await fetch(API+'/api/videos/'+videoId+'/comments', {method:'POST',headers:authHeaders(),body:JSON.stringify({text:text})});
+    var r = await fetch(API+'/api/videos/'+videoId+'/comments', {method:'POST',headers:authHeaders(),body:JSON.stringify({text:text, image:photo})});
     if(r.status===401){ showToast('Session expired — please sign in again'); return; }
     if(!r.ok){ var e2=await r.json(); showToast(e2.error||'Post failed'); return; }
     var list = document.getElementById('comment-list-'+videoId);
     if(list){
       var div = document.createElement('div');
-      div.style.cssText='padding:.5rem 0;border-bottom:1px solid #222;';
-      div.innerHTML = `<span style="font-weight:700;font-size:.8rem;">@${(currentUser&&currentUser.username)||'you'}</span> <span style="font-size:.85rem;">${text}</span>`;
-      if(list.textContent.includes('No comments')) list.innerHTML = '';
+      div.style.cssText='padding:.6rem 0;border-bottom:1px solid #222;';
+      var _av = (currentUser&&currentUser.avatar_url) ? '<img src="'+currentUser.avatar_url+'" style="width:100%;height:100%;object-fit:cover;">' : (((currentUser&&currentUser.username)||'Y')[0].toUpperCase());
+      div.innerHTML = '<div style="display:flex;gap:10px;"><div style="width:34px;height:34px;border-radius:50%;background:#2a0a4a;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700;overflow:hidden;">'+_av+'</div><div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:.8rem;">@'+((currentUser&&currentUser.username)||'you')+'</div>'+(text?'<div style="font-size:.85rem;margin-top:2px;">'+text+'</div>':'')+(photo?'<img src="'+photo+'" style="max-width:180px;max-height:180px;border-radius:10px;margin-top:6px;">':'')+'</div></div>';
+      if(list.textContent.includes('No comments') || list.textContent.includes('Be the first')) list.innerHTML = '';
       list.prepend(div);
     }
     showToast('Comment posted! 💬');
   }catch(e){ showToast('Network error — try again'); }
+}
+
+// ── Comment photo attach ──
+window._commentPhoto = window._commentPhoto || {};
+function previewCommentPhoto(e, videoId){
+  var f = e.target.files[0];
+  if(!f) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    var img = new Image();
+    img.onload = function(){
+      var canvas = document.createElement('canvas');
+      var scale = Math.min(1, 900/Math.max(img.width, img.height));
+      canvas.width = img.width*scale; canvas.height = img.height*scale;
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      window._commentPhoto[videoId] = dataUrl;
+      var old = document.getElementById('comment-photo-chip-'+videoId); if(old) old.remove();
+      var input = document.getElementById('comment-input-'+videoId);
+      if(!input) return;
+      var chip = document.createElement('div');
+      chip.id = 'comment-photo-chip-'+videoId;
+      chip.style.cssText = 'display:flex;align-items:center;gap:8px;margin:8px 0 0;background:#0a0a1a;border:1px solid #333;border-radius:10px;padding:6px 10px;';
+      chip.innerHTML = '<img src="'+dataUrl+'" style="width:36px;height:36px;border-radius:8px;object-fit:cover;"><span style="font-size:.75rem;color:#a78bfa;flex:1;">Photo attached ✓</span><span onclick="delete window._commentPhoto[\''+videoId+'\'];this.parentElement.remove();" style="cursor:pointer;color:#ff4b4b;font-size:.9rem;">✕</span>';
+      input.parentElement.parentElement.appendChild(chip);
+      showToast('📷 Photo attached');
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+  e.target.value = '';
 }
 
 // ── TikTok Features: Tip & Hashtag Search ──────────────────
@@ -2648,6 +2693,30 @@ async function purchaseCoins(packageId, coins, price) {
 // FEED
 // ════════════════════════════════════════════
 
+// ── Suggested Creators rail (post-sign-in follow discovery) ──
+async function loadSuggestedCreators(targetId) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  try {
+    const r = await fetch(API + '/api/users/discover', { headers: authHeaders() });
+    const d = await r.json();
+    const meId = currentUser && currentUser.id;
+    const users = (d.users || []).filter(u => String(u.id) !== String(meId)).slice(0, 12);
+    if (!users.length) { target.innerHTML = ''; return; }
+    target.innerHTML = `
+      <div style="padding:14px 16px 6px;font-weight:800;font-size:.95rem;">✨ Creators to follow</div>
+      <div style="display:flex;gap:14px;overflow-x:auto;padding:4px 16px 16px;scrollbar-width:none;">
+        ${users.map(u => `
+          <div style="flex-shrink:0;width:120px;background:#0d0d18;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 10px;text-align:center;">
+            <div style="width:56px;height:56px;border-radius:50%;background:#2a0a4a;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:700;overflow:hidden;">${u.avatar_url ? `<img src="${u.avatar_url}" style="width:100%;height:100%;object-fit:cover;">` : (u.username || '?')[0].toUpperCase()}</div>
+            <div style="font-weight:700;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">@${u.username}</div>
+            <div style="font-size:.68rem;color:#a78bfa;margin-bottom:8px;">${u.followers || 0} followers</div>
+            <button onclick="followUser('${u.id}','${(u.username || '').replace(/'/g, '')}',this)" style="background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;border-radius:14px;padding:5px 14px;font-size:.72rem;font-weight:700;cursor:pointer;width:100%;">+ Follow</button>
+          </div>`).join('')}
+      </div>`;
+  } catch (e) { target.innerHTML = ''; }
+}
+
 async function loadFeed(type = 'forYou') {
   const list = document.getElementById('feedContainer');
   list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Loading...</div>';
@@ -2663,11 +2732,14 @@ async function loadFeed(type = 'forYou') {
           <div style="font-size:3rem;margin-bottom:16px">🎬</div>
           <div style="font-weight:600;margin-bottom:8px">No videos yet</div>
           <div style="font-size:0.85rem">Be the first to upload!</div>
-        </div>`;
+        </div>
+        <div id="suggestedRail" style="text-align:left"></div>`;
+      loadSuggestedCreators('suggestedRail');
       return;
     }
 
-    list.innerHTML = videos.map(v => renderVideoCard(v)).join('');
+    list.innerHTML = '<div id="suggestedRail"></div>' + videos.map(v => renderVideoCard(v)).join('');
+    loadSuggestedCreators('suggestedRail');
     setTimeout(() => { initFeedObserver(); initSwipeGestures(); }, 150);
   } catch {
     list.innerHTML = '<div style="text-align:center;padding:60px 24px;color:var(--muted)"><div style="font-size:3rem;margin-bottom:16px">🎬</div><div style="font-weight:600;margin-bottom:8px">Be the first to post!</div><div style="font-size:0.85rem">Tap + to upload your first video</div></div>';

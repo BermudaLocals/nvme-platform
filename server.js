@@ -906,10 +906,30 @@ app.get('/api/feed', optionalAuth, async (req, res) => {
       LEFT JOIN (SELECT video_id, COUNT(*) AS like_count FROM video_likes GROUP BY video_id) l ON l.video_id = v.id
       LEFT JOIN (SELECT video_id, COUNT(*) AS comment_count FROM comments GROUP BY video_id) c ON c.video_id = v.id
       LEFT JOIN video_likes vl ON vl.video_id = v.id AND vl.user_id = $1::uuid
+      WHERE v.url IS NOT NULL AND v.url <> ''
       ORDER BY score DESC, v.created_at DESC
       LIMIT 20
     `, [viewerId]);
     res.json({ ok: true, feed: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/users/:username/videos — public: a user's own videos for their profile grid (TikTok-style)
+app.get('/api/users/:username/videos', async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT v.id, v.title, v.url, v.thumbnail, v.views, v.created_at,
+             COALESCE(l.like_count, 0)::int AS like_count,
+             COALESCE(c.comment_count, 0)::int AS comment_count
+      FROM videos v
+      JOIN users u ON u.id = v.user_id
+      LEFT JOIN (SELECT video_id, COUNT(*) AS like_count FROM video_likes GROUP BY video_id) l ON l.video_id = v.id
+      LEFT JOIN (SELECT video_id, COUNT(*) AS comment_count FROM comments GROUP BY video_id) c ON c.video_id = v.id
+      WHERE u.username = $1 AND v.url IS NOT NULL AND v.url <> ''
+      ORDER BY v.created_at DESC
+      LIMIT 60
+    `, [req.params.username]);
+    res.json({ ok: true, videos: rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

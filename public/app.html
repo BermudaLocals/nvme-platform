@@ -121,6 +121,8 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .feed-container{height:100%;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
 .feed-item{height:100%;scroll-snap-align:start;position:relative;background:var(--s1);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .feed-video-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:5rem;opacity:0.15}
+.feed-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;z-index:0}
+.feed-item .feed-overlay{z-index:1}.feed-item .feed-content,.feed-item .feed-actions,.feed-item .manus-badge{z-index:2}
 .feed-overlay{position:absolute;inset:0;background:linear-gradient(transparent 40%,rgba(0,0,0,0.85) 100%)}
 .feed-content{position:absolute;bottom:1.5rem;left:1rem;right:4.5rem}
 .feed-user{display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem}
@@ -256,6 +258,12 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .profile-name{font-size:1.3rem;font-weight:800;margin-bottom:0.2rem}
 .profile-handle{color:var(--muted);font-size:0.9rem;margin-bottom:0.75rem}
 .profile-stats{display:flex;justify-content:center;gap:2rem;padding:0.75rem 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.profile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:.75rem;width:100%}
+.pg-item{position:relative;aspect-ratio:3/4;background:#0d0d18;overflow:hidden;cursor:pointer}
+.pg-item video{width:100%;height:100%;object-fit:cover;pointer-events:none}
+.pg-views{position:absolute;bottom:4px;left:6px;font-size:.7rem;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.pg-empty{grid-column:1/-1;text-align:center;padding:2.5rem 1rem;color:var(--muted)}
+.pg-empty .pg-icon{font-size:2.5rem;margin-bottom:.5rem}
 .stat{text-align:center}
 .stat-num{font-weight:800;font-size:1.1rem;font-family:'Space Mono',monospace}
 .stat-label{font-size:0.72rem;color:var(--muted)}
@@ -533,6 +541,32 @@ function updateCounts() {
   const bio = document.getElementById('peditBio');
   if(dn) document.getElementById('peditDNCount').textContent = dn.value.length;
   if(bio) document.getElementById('peditBioCount').textContent = bio.value.length;
+}
+
+// ===== PROFILE VIDEO GRID (TikTok-style) =====
+async function loadProfileVideos(){
+  var grid = document.getElementById('profileGrid');
+  if(!grid) return;
+  if(!currentUser || !currentUser.username){ grid.innerHTML='<div class="pg-empty"><div class="pg-icon">🔒</div>Sign in to see your videos</div>'; return; }
+  grid.innerHTML='';
+  try{
+    var r = await fetch(API+'/api/users/'+encodeURIComponent(currentUser.username)+'/videos');
+    var d = await r.json();
+    var vids = d.videos || [];
+    var sv = document.getElementById('statVideos');
+    if(sv) sv.textContent = vids.length;
+    if(!vids.length){
+      grid.innerHTML='<div class="pg-empty"><div class="pg-icon">🎬</div><div style="font-weight:700;">No videos yet</div><div style="font-size:.8rem;margin-top:6px;">Tap ➕ to record your first clip</div></div>';
+      return;
+    }
+    grid.innerHTML = vids.map(function(v){
+      return '<div class="pg-item" onclick="openComments(\''+v.id+'\')">'+
+        '<video src="'+v.url+'" '+(v.thumbnail?'poster="'+v.thumbnail+'" ':'')+'muted playsinline preload="metadata"></video>'+
+        '<div class="pg-views">▶ '+Number(v.views||0).toLocaleString()+'</div></div>';
+    }).join('');
+  }catch(e){
+    grid.innerHTML='<div class="pg-empty"><div class="pg-icon">⚠️</div>Could not load videos. <span onclick="loadProfileVideos()" style="color:var(--purple);cursor:pointer;font-weight:700;">Retry</span></div>';
+  }
 }
 document.addEventListener('DOMContentLoaded', () => {
   const dn = document.getElementById('peditDisplayName');
@@ -1884,6 +1918,7 @@ function showScreen(name, isBack){
   if(name==='jackpot' && typeof loadJackpot==='function') loadJackpot();
   if((name==='game'||name==='wallet'||name==='jackpot') && typeof loadWalletBalance==='function') loadWalletBalance();
   if(name==='feed' && typeof loadFeed==='function') loadFeed();
+  if(name==='profile' && typeof loadProfileVideos==='function') loadProfileVideos();
   if(name==='wallet') renderTx();
   if(name==='video') renderVideos();
   if(name==='explore'){ renderExplore(); initExploreSearch(); }
@@ -2027,7 +2062,7 @@ async function loadRealFeed(){
     const syms=['🏝️','💰','🤖','🎵','⚓','❤️','🏄','💎'];
     c.innerHTML=videosFinal.map((v,i)=>`
       <div class="feed-item" ondblclick="dblTapLike(event,'${v.id}')" ontouchend="feedTouchLike(event,'${v.id}')">
-        <div class="feed-video-bg">${v.thumbnail||syms[i%syms.length]}</div>
+        ${v.url ? `<video class="feed-video" src="${v.url}" ${v.thumbnail?`poster="${v.thumbnail}"`:''} muted loop playsinline preload="metadata" onclick="event.stopPropagation();this.paused?this.play():this.pause()"></video>` : `<div class="feed-video-bg">${syms[i%syms.length]}</div>`}
         <div class="feed-overlay"></div>
         <div class="manus-badge">👁️ ${Number(v.view_count||v.views||0).toLocaleString()}</div>
         <div class="feed-content">

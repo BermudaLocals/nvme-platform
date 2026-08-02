@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --gold: #c9a227; --coral: #ff3e3e; }
+
+html, body { background: #0a0a0a; color: #fff; }
+body { font-family: 'Inter', system-ui, sans-serif; overscroll-behavior: none; }
+
+* { -webkit-tap-highlight-color: transparent; }
+
+::selection { background: rgba(201,162,39,0.35); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0a0a0a; }
+::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #c9a227; }
+
+@layer components {
+  .btn-gold {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-nvme-gold px-7 py-3 text-sm font-bold text-black transition-all duration-200 hover:scale-[1.02] hover:bg-nvme-goldlight active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-nvme-gold;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-white/25 px-7 py-3 text-sm font-bold text-white transition-all duration-200 hover:scale-[1.02] hover:border-nvme-gold hover:text-nvme-gold active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-nvme-gold;
+  }
+  .card-hover {
+    @apply transition-all duration-200 hover:-translate-y-1 hover:border-nvme-gold/60;
+  }
+  .glass {
+    @apply bg-black/70 backdrop-blur-md border-b border-white/5;
+  }
+}
+
+.grain-overlay {
+  position: fixed; inset: -100%; z-index: 1; pointer-events: none; opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain 8s steps(10) infinite;
+}
+
+.feed-snap { scroll-snap-type: y mandatory; }
+.feed-snap-item { scroll-snap-align: start; scroll-snap-stop: always; }
+
+.focus-ring:focus-visible { outline: 2px solid #c9a227; outline-offset: 2px; }

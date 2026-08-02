@@ -604,19 +604,8 @@ app.get('/creator', (req, res) => res.sendFile(require('path').join(__dirname, '
 app.get('/messages', (req, res) => res.sendFile(require('path').join(__dirname, 'public', 'messages.html')));
 app.get('/merch', (req, res) => res.sendFile(require('path').join(__dirname, 'public', 'merch.html')));
 
-// ── Next.js 14 premium frontend (static export in public/next) ──
-// New NVME look lives at /, /feed, /discover, /studio. Legacy PWA stays at /app.
-const NEXT_DIR = require('path').join(__dirname, 'public', 'next');
-app.use('/_next', require('express').static(require('path').join(NEXT_DIR, '_next'), { maxAge: '30d', immutable: true }));
-const serveNext = (file) => (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.sendFile(require('path').join(NEXT_DIR, file));
-};
-app.get('/', serveNext('index.html'));
-app.get(['/feed', '/feed/'], serveNext('feed/index.html'));
-app.get(['/discover', '/discover/'], serveNext('discover/index.html'));
-app.get(['/studio', '/studio/'], serveNext('studio/index.html'));
-
+// ── Landing: 3D-enhanced NVME design served from public/index.html via static middleware below.
+// (Next.js static export retired 2026-08-02 — kept in public/next/ for reference; Digital King chose the 3D design.)
 app.use(require('express').static(require('path').join(__dirname, 'public')));
 
 // ── Auth helper ──────────────────────────────────────────────

@@ -3,7 +3,7 @@
    NVME is now a Next.js static export served fresh by the server,
    so this worker clears every cache, unregisters itself, and
    tells open tabs to reload once. */
-const VER = 'nvme-v34-killswitch';
+const VER = 'nvme-v35-3d-landing';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();

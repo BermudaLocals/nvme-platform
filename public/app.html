@@ -62,6 +62,22 @@ input,textarea{font-family:inherit}
 .rail-btn{background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;border-radius:20px;padding:5px 16px;font-size:.72rem;font-weight:800;cursor:pointer}
 .mute-pill{position:fixed;bottom:calc(88px + env(safe-area-inset-bottom));left:12px;z-index:95;background:rgba(0,0,0,.55);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:.75rem;cursor:pointer;backdrop-filter:blur(8px)}
 
+/* ===== CREATE SHEET ===== */
+.csheet{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:200;display:none;align-items:flex-end;justify-content:center}
+.csheet.open{display:flex}
+.csheet-in{width:100%;max-width:480px;background:var(--surface,#141414);border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));animation:csUp .25s ease}
+@keyframes csUp{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
+.csheet-title{text-align:center;font-weight:800;font-size:1.05rem;margin-bottom:14px;letter-spacing:.5px}
+.cs-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cs-tile{background:rgba(255,255,255,.05);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:16px;padding:16px 12px;text-align:center;cursor:pointer;transition:transform .15s,border-color .15s}
+.cs-tile:active{transform:scale(.96)}
+.cs-tile:hover{border-color:rgba(201,162,39,.5)}
+.cs-live{border-color:rgba(255,62,62,.5);box-shadow:0 0 18px rgba(255,62,62,.15)}
+.cs-ic{width:52px;height:52px;border-radius:14px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:1.5rem}
+.cs-lb{font-weight:800;font-size:.95rem}
+.cs-sub{font-size:.72rem;color:var(--muted,#a3a3a3);margin-top:2px}
+.cs-cancel{width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;background:rgba(255,255,255,.08);color:#fff;font-weight:700;font-size:.95rem;cursor:pointer}
+
 /* ===== BOTTOM NAV ===== */
 .botnav{position:fixed;bottom:0;left:0;right:0;height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:rgba(0,0,0,.92);backdrop-filter:blur(16px);border-top:1px solid var(--border);display:flex;z-index:100}
 .bitem{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:rgba(255,255,255,.55)}
@@ -279,10 +295,40 @@ input,textarea{font-family:inherit}
 <nav class="botnav" id="botNav">
   <div class="bitem on" data-s="feed" onclick="showScreen('feed')"><div class="ic">🏠</div><div class="lb">Home</div></div>
   <div class="bitem" data-s="explore" onclick="showScreen('explore')"><div class="ic">🔍</div><div class="lb">Discover</div></div>
-  <div class="bplus" onclick="openRecorder()"><div class="bplus-in">＋</div></div>
+  <div class="bplus" onclick="openCreateSheet()"><div class="bplus-in">＋</div></div>
   <div class="bitem" data-s="inbox" onclick="goInbox()"><div class="ic">💬</div><div class="lb">Inbox</div></div>
   <div class="bitem" data-s="profile" onclick="showScreen('profile')"><div class="ic">👤</div><div class="lb">Profile</div></div>
 </nav>
+
+<!-- ================= CREATE SHEET (TikTok-style + picker) ================= -->
+<div class="csheet" id="createSheet" onclick="if(event.target===this)closeCreateSheet()">
+  <div class="csheet-in">
+    <div class="csheet-title">Create</div>
+    <div class="cs-grid">
+      <div class="cs-tile" onclick="closeCreateSheet();openRecorder()">
+        <div class="cs-ic" style="background:linear-gradient(135deg,#00f2ea,#ff0050)">📹</div>
+        <div class="cs-lb">Record</div>
+        <div class="cs-sub">15s · 60s · 3m</div>
+      </div>
+      <div class="cs-tile" onclick="closeCreateSheet();document.getElementById('galleryInput').click()">
+        <div class="cs-ic" style="background:linear-gradient(135deg,#7b2ff7,#c9a227)">🖼️</div>
+        <div class="cs-lb">Upload</div>
+        <div class="cs-sub">From gallery</div>
+      </div>
+      <div class="cs-tile cs-live" onclick="closeCreateSheet();window.location='/creator'">
+        <div class="cs-ic" style="background:linear-gradient(135deg,#ff3e3e,#ff0050)">🔴</div>
+        <div class="cs-lb">Go LIVE</div>
+        <div class="cs-sub">Stream now · earn gifts</div>
+      </div>
+      <div class="cs-tile" onclick="closeCreateSheet();toast('🎬 Templates coming soon — record a clip first!')">
+        <div class="cs-ic" style="background:linear-gradient(135deg,#2a2a2a,#444)">🎬</div>
+        <div class="cs-lb">Templates</div>
+        <div class="cs-sub">Quick edits</div>
+      </div>
+    </div>
+    <button class="cs-cancel" onclick="closeCreateSheet()">Cancel</button>
+  </div>
+</div>
 
 <!-- ================= COMMENT SHEET ================= -->
 <div class="sheet" id="commentSheet" onclick="if(event.target===this)closeComments()">
@@ -745,6 +791,9 @@ async function loadWallet(){
 /* ================= RECORDER (record → review → post, plus LIVE handoff) ================= */
 let recStream=null, recMedia=null, recChunks=[], recModeSec=15, recTimerInt=null, recStartTs=0, facing='user';
 let pendingFile=null;
+function openCreateSheet(){ const s=$('createSheet'); if(s) s.classList.add('open'); }
+function closeCreateSheet(){ const s=$('createSheet'); if(s) s.classList.remove('open'); }
+
 async function openRecorder(){
   if(!currentUser){ showAuth(); return; }
   $('recorder').classList.add('open');

@@ -770,7 +770,7 @@ function openEditProfile(){
   $('editName').value = currentUser.display_name||'';
   $('editUsername').value = currentUser.username||'';
   $('editBio').value = currentUser.bio||'';
-  $('editLink').value = currentUser.profile_link||'';
+  const rawLink = currentUser.profile_link||''; $('editLink').value = rawLink.startsWith('http')?rawLink:'';
   $('bioCount').textContent = (currentUser.bio||'').length+'/160';
   $('editAvaPreview').src = currentUser.avatar_url || '/img/icon-192.png';
   $('editSheet').classList.add('open');

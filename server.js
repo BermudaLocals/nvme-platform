@@ -194,7 +194,7 @@ app.put('/api/profile', authMiddleware, async (req, res) => {
     if(display_name !== undefined) { updates.push(`display_name=$${idx++}`); values.push(display_name.slice(0,50)); }
     if(bio !== undefined) { updates.push(`bio=$${idx++}`); values.push(bio.slice(0,160)); }
     if(username !== undefined) { updates.push(`username=$${idx++}`); values.push(username); }
-    if(profile_link !== undefined) { updates.push(`profile_link=$${idx++}`); values.push(profile_link.slice(0,200)); }
+    if(profile_link !== undefined) { const safeLink = (profile_link||'').trim(); if(safeLink && !safeLink.match(/^https?:\/\//)) return res.status(400).json({ok:false,error:'Profile link must start with https://'}); updates.push(`profile_link=$${idx++}`); values.push(safeLink.slice(0,200)); }
     if(avatar_url !== undefined && avatar_url.startsWith('data:image')) {
       // Base64 avatar — store directly in DB (Railway-safe, no disk needed)
       updates.push(`avatar_url=$${idx++}`); values.push(avatar_url);
@@ -729,6 +729,11 @@ async function initDB() {
       END IF;
     END $$;
   `).catch(e => console.warn('DB init warning:', e.message));
+
+  // ── Clean corrupted profile_link values (error strings saved during broken deploys) ──
+  await db.query(`UPDATE users SET profile_link='' WHERE profile_link IS NOT NULL AND profile_link <> '' AND profile_link NOT LIKE 'http%'`)
+    .then(r => { if(r.rowCount) console.log('[DB] Cleaned', r.rowCount, 'corrupted profile_link(s)'); })
+    .catch(e => console.warn('profile_link cleanup warning:', e.message));
 
   // ── Gift catalog table (ORBAT tiers) ──────────────────────
   await db.query(`

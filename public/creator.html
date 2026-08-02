@@ -491,7 +491,7 @@
 <div id="auth-gate">
   <div style="font-size:3rem;">🔐</div>
   <h2>Creator Dashboard</h2>
-  <p>Please <a href="/">sign in at nvme.live</a> to access your Go Live dashboard and manage your streams.</p>
+  <p>Please <a href="/app">sign in at nvme.live/app</a> to access your Go Live dashboard and manage your streams.</p>
 </div>
 
 <!-- MAIN APP -->
@@ -654,7 +654,7 @@
    ════════════════════════════════════════════════ */
 
 const API   = '';
-const TOKEN = localStorage.getItem('nvme_token');
+const TOKEN = localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token') || localStorage.getItem('empire_token');
 const headers = {
   'Content-Type':  'application/json',
   'Authorization': `Bearer ${TOKEN}`

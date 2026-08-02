@@ -1,78 +1,28 @@
-// NVME Service Worker v15 — network-first for HTML, cache-first for assets
-// Fixes: never cache app.html (strips OAuth ?token= params)
-// v15: force-wipes all stale caches on Samsung/mobile after update
-const CACHE = 'nvme-v33';
-const STATIC_ASSETS = [
-  '/img/icon-192.png',
-  '/img/icon-512.png',
-  '/img/icon-512-maskable.png',
-  '/manifest.json'
-];
+/* NVME service worker — KILL SWITCH (nvme-v34)
+   The legacy PWA worker (<= v33) cached the old static app.
+   NVME is now a Next.js static export served fresh by the server,
+   so this worker clears every cache, unregisters itself, and
+   tells open tabs to reload once. */
+const VER = 'nvme-v34-killswitch';
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE)
-      .then(c => c.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
-  );
+self.addEventListener('install', (e) => {
+  self.skipWaiting();
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
-      ))
-      .then(() => self.clients.claim())
-  );
+self.addEventListener('activate', (e) => {
+  e.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    } catch (_) {}
+    try { await self.clients.claim(); } catch (_) {}
+    try { await self.registration.unregister(); } catch (_) {}
+    try {
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach((c) => c.navigate(c.url).catch(() => {}));
+    } catch (_) {}
+  })());
 });
 
-self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
-
-  // 1. API + auth routes: always network, never cache
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) {
-    e.respondWith(
-      fetch(e.request).catch(() =>
-        new Response(JSON.stringify({ ok: false, error: 'Offline' }), {
-          headers: { 'Content-Type': 'application/json' }
-        })
-      )
-    );
-    return;
-  }
-
-  // 2. HTML files (app.html, index.html, merch.html):
-  //    ALWAYS network-first — never serve from cache
-  //    This preserves ?token= and ?auth= query params from OAuth redirects
-  if (e.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
-    e.respondWith(
-      fetch(e.request)
-        .catch(() => {
-          // Offline fallback: serve cached index only for non-auth pages
-          // Do NOT fall back for app.html — would strip OAuth token from URL
-          if (url.pathname !== '/app.html') {
-            return caches.match('/index.html');
-          }
-          return new Response('<h1>NVME — Please connect to the internet to sign in</h1>', {
-            headers: { 'Content-Type': 'text/html' }
-          });
-        })
-    );
-    return;
-  }
-
-  // 3. Static assets (images, icons, fonts): cache-first
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (res.ok && e.request.method === 'GET') {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return res;
-      });
-    }).catch(() => new Response('', { status: 404 }))
-  );
-});
+// Never intercept — always go to network.
+self.addEventListener('fetch', () => {});

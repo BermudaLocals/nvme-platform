@@ -872,7 +872,6 @@ async function flipCamera(){
     try{ recStream=await navigator.mediaDevices.getUserMedia(c2); $('recPreview').srcObject=recStream; flipDone=true; break; }catch(_){}
   }
   if(!flipDone){ toast('Could not flip camera'); }
-  catch(e){ toast('Could not flip camera'); }
 }
 function setRecMode(el){
   document.querySelectorAll('.rec-modes span').forEach(s=>s.classList.remove('on'));

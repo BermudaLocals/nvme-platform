@@ -175,7 +175,9 @@ input,textarea{font-family:inherit}
 .rec-modes .live{color:var(--pink)}
 .rec-row{display:flex;align-items:center;justify-content:center;gap:44px}
 .rec-gallery{width:40px;height:40px;border-radius:10px;border:1.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:1.15rem;cursor:pointer;background:rgba(0,0,0,.4)}
-.rec-shutter{width:76px;height:76px;border-radius:50%;border:5px solid #fff;display:flex;align-items:center;justify-content:center;cursor:pointer;background:transparent}
+.rec-shutter{width:82px;height:82px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;background:transparent;position:relative}
+.rec-shutter::before{content:'';position:absolute;inset:-4px;border-radius:50%;background:conic-gradient(var(--pink) calc(var(--prog,0)*1%),rgba(255,255,255,.2) 0);transition:none;pointer-events:none}
+.rec-shutter::after{content:'';position:absolute;inset:4px;border-radius:50%;background:#000}
 .rec-dot{width:58px;height:58px;border-radius:50%;background:var(--pink);transition:all .2s}
 .rec.on .rec-dot{border-radius:10px;width:32px;height:32px}
 .rec-side{width:40px}
@@ -320,13 +322,44 @@ input,textarea{font-family:inherit}
         <div class="cs-lb">Go LIVE</div>
         <div class="cs-sub">Stream now · earn gifts</div>
       </div>
-      <div class="cs-tile" onclick="closeCreateSheet();toast('🎬 Templates coming soon — record a clip first!')">
+      <div class="cs-tile" onclick="closeCreateSheet();openTemplates()">
         <div class="cs-ic" style="background:linear-gradient(135deg,#2a2a2a,#444)">🎬</div>
         <div class="cs-lb">Templates</div>
         <div class="cs-sub">Quick edits</div>
       </div>
     </div>
     <button class="cs-cancel" onclick="closeCreateSheet()">Cancel</button>
+  </div>
+</div>
+
+
+<!-- ================= TEMPLATES SHEET ================= -->
+<div class="csheet" id="templatesSheet" onclick="if(event.target===this)closeTemplates()">
+  <div class="csheet-in">
+    <div class="csheet-title">🎬 Templates</div>
+    <div class="cs-grid">
+      <div class="cs-tile" onclick="useTemplate('dance','Dance Challenge',60)">
+        <div class="cs-ic" style="background:linear-gradient(135deg,#ff0050,#ff3e3e)">💃</div>
+        <div class="cs-lb">Dance Challenge</div>
+        <div class="cs-sub">60s · trending format</div>
+      </div>
+      <div class="cs-tile" onclick="useTemplate('story','Story Time',180)">
+        <div class="cs-ic" style="background:linear-gradient(135deg,#c9a227,#ff8800)">📖</div>
+        <div class="cs-lb">Story Time</div>
+        <div class="cs-sub">3m · talking head</div>
+      </div>
+      <div class="cs-tile" onclick="useTemplate('product','Product Drop',15)">
+        <div class="cs-ic" style="background:linear-gradient(135deg,#7b2ff7,#c9a227)">🛍️</div>
+        <div class="cs-lb">Product Drop</div>
+        <div class="cs-sub">15s · quick reveal</div>
+      </div>
+      <div class="cs-tile" onclick="useTemplate('vibe','Vibe Check',60)">
+        <div class="cs-ic" style="background:linear-gradient(135deg,#00f2ea,#7b2ff7)">✨</div>
+        <div class="cs-lb">Vibe Check</div>
+        <div class="cs-sub">60s · lifestyle</div>
+      </div>
+    </div>
+    <button class="cs-cancel" onclick="closeTemplates()">Back</button>
   </div>
 </div>
 
@@ -791,6 +824,16 @@ async function loadWallet(){
 /* ================= RECORDER (record → review → post, plus LIVE handoff) ================= */
 let recStream=null, recMedia=null, recChunks=[], recModeSec=15, recTimerInt=null, recStartTs=0, facing='user';
 let pendingFile=null;
+function openTemplates(){ const s=$('templatesSheet'); if(s) s.classList.add('open'); }
+function closeTemplates(){ const s=$('templatesSheet'); if(s) s.classList.remove('open'); }
+function useTemplate(type,title,sec){
+  closeTemplates();
+  const modeEl = document.querySelector('.rec-modes span[data-sec="'+sec+'"]') || document.querySelector('.rec-modes span');
+  if(modeEl) setRecMode(modeEl);
+  openRecorder();
+  toast('🎬 '+title+' template — hit record!');
+}
+
 function openCreateSheet(){ const s=$('createSheet'); if(s) s.classList.add('open'); }
 function closeCreateSheet(){ const s=$('createSheet'); if(s) s.classList.remove('open'); }
 
@@ -799,7 +842,19 @@ async function openRecorder(){
   $('recorder').classList.add('open');
   $('recReview').style.display='none';
   try{
-    recStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:720},height:{ideal:1280}},audio:true});
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+    const constraints = isMobile
+      ? [{video:{facingMode:facing,width:{ideal:720},height:{ideal:1280}},audio:true},
+         {video:{facingMode:facing},audio:true},
+         {video:true,audio:true}]
+      : [{video:{facingMode:'user',aspectRatio:{ideal:9/16}},audio:true},
+         {video:{facingMode:'user'},audio:true},
+         {video:true,audio:true}];
+    let gotStream=false;
+    for(const c of constraints){
+      try{ recStream=await navigator.mediaDevices.getUserMedia(c); gotStream=true; break; }catch(ex){ console.warn('cam try failed',c,ex); }
+    }
+    if(!gotStream){ toast('Camera access denied — check browser permissions'); closeRecorder(); return; }
     $('recPreview').srcObject = recStream;
   }catch(e){ toast('Camera/mic denied — allow access in browser settings'); closeRecorder(); }
 }
@@ -812,7 +867,11 @@ function stopRecStream(){ if(recStream){ recStream.getTracks().forEach(t=>t.stop
 async function flipCamera(){
   facing = facing==='user' ? 'environment' : 'user';
   stopRecStream();
-  try{ recStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:facing},audio:true}); $('recPreview').srcObject=recStream; }
+  let flipDone=false;
+  for(const c2 of [{video:{facingMode:facing},audio:true},{video:true,audio:true}]){
+    try{ recStream=await navigator.mediaDevices.getUserMedia(c2); $('recPreview').srcObject=recStream; flipDone=true; break; }catch(_){}
+  }
+  if(!flipDone){ toast('Could not flip camera'); }
   catch(e){ toast('Could not flip camera'); }
 }
 function setRecMode(el){
@@ -835,10 +894,13 @@ function toggleRecording(){
   recTimerInt = setInterval(()=>{
     const el = Math.floor((Date.now()-recStartTs)/1000);
     $('recTimer').textContent = fmtSec(el)+' / '+fmtSec(recModeSec);
+    const pct = Math.min(100, Math.round((Date.now()-recStartTs)/1000/recModeSec*100));
+    $('recShutter').style.setProperty('--prog', pct);
     if(el>=recModeSec && recMedia.state==='recording') recMedia.stop();
-  },250);
+  },200);
 }
 function finishRecording(){
+  $('recShutter').style.setProperty('--prog', 0);
   clearInterval(recTimerInt); $('recTimer').style.display='none'; $('recorder').classList.remove('on');
   const type = recChunks[0] ? recChunks[0].type : 'video/webm';
   const blob = new Blob(recChunks, {type});

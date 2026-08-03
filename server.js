@@ -738,6 +738,29 @@ async function initDB() {
     END $$;
   `).catch(e => console.warn('DB init warning:', e.message));
 
+  // ── livestreams schema drift repair (Go Live 500: is_premium column missing) ──
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS livestreams (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS stream_key TEXT;
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT false;
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS price_credits NUMERIC DEFAULT 0;
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'idle';
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS viewer_count INTEGER DEFAULT 0;
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS peak_viewer_count INTEGER DEFAULT 0;
+    ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS total_gifts_received NUMERIC DEFAULT 0;
+    UPDATE livestreams SET viewer_count=0 WHERE viewer_count IS NULL;
+    UPDATE livestreams SET peak_viewer_count=0 WHERE peak_viewer_count IS NULL;
+    UPDATE livestreams SET total_gifts_received=0 WHERE total_gifts_received IS NULL;
+  `).then(() => console.log('[DB] livestreams schema verified')).catch(e => console.warn('livestreams migration warning:', e.message));
+
   // ── Clean corrupted profile_link values (error strings saved during broken deploys) ──
   await db.query(`UPDATE users SET profile_link='' WHERE profile_link IS NOT NULL AND profile_link <> '' AND profile_link NOT LIKE 'http%'`)
     .then(r => { if(r.rowCount) console.log('[DB] Cleaned', r.rowCount, 'corrupted profile_link(s)'); })

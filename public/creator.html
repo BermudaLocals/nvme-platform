@@ -820,47 +820,51 @@ async function goLive() {
   btn.innerHTML = '<span class="spinner"></span> Starting…';
 
   try {
-    // STEP 1 — camera on (independent of everything)
+    // STEP 1 — camera on
     showNotification('📹 Starting camera…', '', 'info');
     const camOk = await activateHostCamera();
     if (!camOk) { btn.disabled = false; btn.innerHTML = '▶ Go Live'; return; }
 
-    // STEP 2 — auto-create stream if none selected (THE GATE FIX)
+    // STEP 2 — auto-create stream if none selected
     if (!currentStreamId) {
       showNotification('📡 Creating your stream…', '', 'info');
       const autoTitle = document.getElementById('stream-title')?.value.trim()
         || ('LIVE — ' + new Date().toLocaleDateString());
       const cr = await fetch(`${API}/api/streams`, {
         method: 'POST', headers,
-        body: JSON.stringify({ title: autoTitle, description: 'Live now on NVME', is_premium: false })
+        body: JSON.stringify({ title: autoTitle, description: 'Live now on NVME', is_premium: false, price_credits: 0 })
       });
       const cdata = await cr.json();
-      if (!cr.ok) throw new Error(cdata.message || cdata.error || 'Could not create stream');
-      currentStreamId = cdata.stream?.id || cdata.id || cdata.stream_id || cdata.stream?.stream_id || cdata._id;
-      if (cdata.stream?.stream_key || cdata.stream_key) {
-        streamKey = cdata.stream?.stream_key || cdata.stream_key;
+      if (!cr.ok) throw new Error(cdata.error || cdata.message || 'Could not create stream');
+
+      // Handle both response shapes (stream wrapper or flat)
+      currentStreamId = cdata.stream?.id || cdata.id || cdata.stream_id;
+      streamKey = cdata.stream?.stream_key || cdata.stream_key;
+
+      if (streamKey) {
         document.getElementById('stream-key-section').style.display = 'block';
         renderStreamKey();
       }
       if (socket) socket.emit('join_stream', { streamId: currentStreamId });
     }
 
-    // STEP 3 — go live
+    // STEP 3 — go live (sets status='live' in livestreams table)
     const r = await fetch(`${API}/api/streams/${currentStreamId}/go-live`, {
       method: 'POST', headers
     });
     const data = await r.json();
-    if (!r.ok) throw new Error(data.message || data.error || 'Failed to go live');
+    if (!r.ok) throw new Error(data.error || data.message || 'Failed to go live');
 
     updateLiveState(true);
-    if (data.stream_key && !streamKey) {
-      streamKey = data.stream_key;
+    if (data.stream?.stream_key && !streamKey) {
+      streamKey = data.stream.stream_key;
       document.getElementById('stream-key-section').style.display = 'block';
       renderStreamKey();
     }
     loadStreams();
     showNotification('🔴 You are LIVE!', 'Camera is on — gifts are active. Go rock it!', 'live');
   } catch(err) {
+    console.error('goLive error:', err);
     showNotification('❌ Error', err.message, 'error');
   } finally {
     btn.disabled = false;

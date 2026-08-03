@@ -217,6 +217,20 @@
 const TOKEN    = localStorage.getItem('nvme_token');
 const STREAM_ID = new URLSearchParams(location.search).get('id');
 
+// Load stream metadata on mount
+async function loadStreamInfo() {
+  if (!STREAM_ID) return;
+  try {
+    const r = await fetch(window.location.origin + '/api/streams/' + STREAM_ID);
+    if (r.ok) {
+      const data = await r.json();
+      const stream = data.stream || data;
+      document.title = (stream?.title || 'Live') + ' — nvme.live';
+    }
+  } catch(e) { console.warn('loadStreamInfo', e); }
+}
+loadStreamInfo();
+
 /* ── ORBAT Gift Tier Definitions ──────────────────────────────── */
 const GIFTS = [
   { name:'Recruit',      emoji:'🪙',  cost:10,    level:1 },

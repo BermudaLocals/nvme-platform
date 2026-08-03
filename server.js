@@ -2196,6 +2196,7 @@ io.on('connection', (socket) => {
 
   if (userId) {
     onlineUsers.set(userId, socket.id);
+    socket.join(`user:${userId}`);
     io.emit('user_online', { userId });
   }
 
@@ -3059,6 +3060,147 @@ app.post('/api/battles/:id/end', authMiddleware, async (req, res) => {
     if (!rows[0]) return res.status(403).json({ ok: false, error: 'Not host' });
     if (global.io) global.io.to(`battle:${req.params.id}`).emit('battle_ended', { battle: rows[0] });
     res.json({ ok: true, battle: rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+
+// ── BATTLE INVITES (Live User → Live User) ─────────────────────────────────
+
+// Send battle invite to another live user
+app.post('/api/battles/invite', authMiddleware, async (req, res) => {
+  try {
+    const { to_stream_id, to_user_id } = req.body;
+    if (!to_stream_id || !to_user_id) return res.status(400).json({ ok: false, error: 'to_stream_id and to_user_id required' });
+
+    // Verify both users are live
+    const fromStream = await db.query("SELECT * FROM livestreams WHERE user_id=$1 AND status='live'", [req.user.id]);
+    if (!fromStream.rows[0]) return res.status(400).json({ ok: false, error: 'You must be live to send battle invites' });
+
+    const toStream = await db.query("SELECT * FROM livestreams WHERE id=$1 AND user_id=$2 AND status='live'", [to_stream_id, to_user_id]);
+    if (!toStream.rows[0]) return res.status(400).json({ ok: false, error: 'Target user is not live' });
+
+    // Check for existing pending invite
+    const existing = await db.query(
+      "SELECT * FROM battle_invites WHERE from_user_id=$1 AND to_user_id=$2 AND status='pending'",
+      [req.user.id, to_user_id]
+    );
+    if (existing.rows[0]) return res.status(400).json({ ok: false, error: 'Invite already pending' });
+
+    const { rows } = await db.query(
+      `INSERT INTO battle_invites (from_stream_id, from_user_id, to_stream_id, to_user_id, status)
+       VALUES ($1,$2,$3,$4,'pending') RETURNING *`,
+      [fromStream.rows[0].id, req.user.id, to_stream_id, to_user_id]
+    );
+
+    // Notify target user via socket
+    if (global.io) {
+      global.io.to(`user:${to_user_id}`).emit('battle_invite_received', {
+        invite: rows[0],
+        fromUser: { id: req.user.id, username: req.user.username, avatar_url: req.user.avatar_url },
+        fromStream: fromStream.rows[0]
+      });
+    }
+
+    res.json({ ok: true, invite: rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Get pending invites for current user
+app.get('/api/battles/invites/pending', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT bi.*, 
+        fu.username as from_username, fu.avatar_url as from_avatar, fu.display_name as from_display_name,
+        fs.title as from_stream_title
+      FROM battle_invites bi
+      JOIN users fu ON fu.id = bi.from_user_id
+      JOIN livestreams fs ON fs.id = bi.from_stream_id
+      WHERE bi.to_user_id=$1 AND bi.status='pending'
+      ORDER BY bi.created_at DESC
+    `, [req.user.id]);
+    res.json({ ok: true, invites: rows });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Accept battle invite
+app.post('/api/battles/invite/:id/accept', authMiddleware, async (req, res) => {
+  try {
+    const inviteId = req.params.id;
+    const { rows } = await db.query(
+      "UPDATE battle_invites SET status='accepted', responded_at=NOW() WHERE id=$1 AND to_user_id=$2 RETURNING *",
+      [inviteId, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ ok: false, error: 'Invite not found' });
+
+    const invite = rows[0];
+
+    // Create a battle linking both streams
+    const battle = await db.query(
+      `INSERT INTO stream_battles (stream_id, host_id, battle_type, status, max_participants, started_at)
+       VALUES ($1,$2,'duel','active',2,NOW()) RETURNING *`,
+      [invite.from_stream_id, invite.from_user_id]
+    );
+
+    // Add both users as participants
+    await db.query(
+      `INSERT INTO battle_participants (battle_id, user_id, team, status) VALUES ($1,$2,'a','active')`,
+      [battle.rows[0].id, invite.from_user_id]
+    );
+    await db.query(
+      `INSERT INTO battle_participants (battle_id, user_id, team, status) VALUES ($1,$2,'b','active')`,
+      [battle.rows[0].id, invite.to_user_id]
+    );
+
+    // Update invite with battle_id
+    await db.query("UPDATE battle_invites SET battle_id=$1 WHERE id=$2", [battle.rows[0].id, inviteId]);
+
+    // Notify both users
+    if (global.io) {
+      global.io.to(`user:${invite.from_user_id}`).emit('battle_invite_accepted', {
+        invite, battle: battle.rows[0]
+      });
+      global.io.to(`user:${invite.to_user_id}`).emit('battle_invite_accepted', {
+        invite, battle: battle.rows[0]
+      });
+    }
+
+    res.json({ ok: true, battle: battle.rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Decline battle invite
+app.post('/api/battles/invite/:id/decline', authMiddleware, async (req, res) => {
+  try {
+    const inviteId = req.params.id;
+    const { rows } = await db.query(
+      "UPDATE battle_invites SET status='declined', responded_at=NOW() WHERE id=$1 AND to_user_id=$2 RETURNING *",
+      [inviteId, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ ok: false, error: 'Invite not found' });
+
+    if (global.io) {
+      global.io.to(`user:${rows[0].from_user_id}`).emit('battle_invite_declined', {
+        invite: rows[0]
+      });
+    }
+
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Get all currently LIVE users (for the "Live Now" panel)
+app.get('/api/streams/live/now', async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT ls.id as stream_id, ls.title, ls.viewer_count, ls.status,
+        u.id as user_id, u.username, u.display_name, u.avatar_url, u.is_verified
+      FROM livestreams ls
+      JOIN users u ON u.id = ls.user_id
+      WHERE ls.status='live' AND ls.started_at > NOW() - INTERVAL '24 hours'
+      ORDER BY ls.viewer_count DESC
+      LIMIT 50
+    `);
+    res.json({ ok: true, liveUsers: rows });
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 

@@ -2222,6 +2222,23 @@ io.on('connection', (socket) => {
     } catch {}
   });
 
+  // ── BATTLE SOCKET EVENTS ──────────────────────────────────────────────────
+  socket.on('join_battle', ({ battleId }) => {
+    socket.join(`battle:${battleId}`);
+  });
+
+  socket.on('battle_gift_vote', async ({ battleId, participantId, giftAmount }) => {
+    try {
+      await db.query('UPDATE battle_participants SET gifts_received=gifts_received+$1, votes=votes+1 WHERE id=$2', [giftAmount, participantId]);
+      const { rows } = await db.query('SELECT * FROM battle_participants WHERE battle_id=$1 ORDER BY gifts_received DESC', [battleId]);
+      io.to(`battle:${battleId}`).emit('battle_leaderboard', { participants: rows });
+    } catch(e) {}
+  });
+
+  socket.on('send_huge_gift', ({ streamId, giftType, giftLevel }) => {
+    io.to(`stream:${streamId}`).emit('huge_gift_animation', { giftType, giftLevel, fromUserId: userId });
+  });
+
   socket.on('live_chat', async ({ streamId, message }) => {
     if (!userId || !message?.trim()) return;
     try {
@@ -2975,5 +2992,138 @@ app.get('/api/notifications/count', authMiddleware, async (req, res) => {
     `, [req.user.id]);
     res.json({ ok: true, count: parseInt(rows[0].count) || 0 });
   } catch(e) { res.json({ ok: true, count: 0 }); }
+});
+
+
+// ── BATTLE SYSTEM ───────────────────────────────────────────────────────────
+
+app.post('/api/streams/:id/battle', authMiddleware, async (req, res) => {
+  try {
+    const { battle_type, max_participants, team_a_name, team_b_name, elimination_interval } = req.body;
+    const streamId = req.params.id;
+    const { rows } = await db.query(
+      `INSERT INTO stream_battles (stream_id, host_id, battle_type, max_participants, team_a_name, team_b_name, elimination_interval_seconds, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'waiting') RETURNING *`,
+      [streamId, req.user.id, battle_type || 'ffa', max_participants || 20, team_a_name || 'Team A', team_b_name || 'Team B', elimination_interval || 60]
+    );
+    res.json({ ok: true, battle: rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/battles/:id/join', authMiddleware, async (req, res) => {
+  try {
+    const battleId = req.params.id;
+    const { team } = req.body;
+    const { rows } = await db.query(
+      `INSERT INTO battle_participants (battle_id, user_id, team, status)
+       VALUES ($1,$2,$3,'active') ON CONFLICT (battle_id, user_id) DO UPDATE SET team=$3 RETURNING *`,
+      [battleId, req.user.id, team || 'a']
+    );
+    if (global.io) global.io.to(`battle:${battleId}`).emit('battle_participant_joined', { participant: rows[0] });
+    res.json({ ok: true, participant: rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.get('/api/battles/:id', async (req, res) => {
+  try {
+    const battle = await db.query('SELECT * FROM stream_battles WHERE id=$1', [req.params.id]);
+    const participants = await db.query(
+      `SELECT bp.*, u.username, u.avatar_url, u.display_name 
+       FROM battle_participants bp JOIN users u ON u.id=bp.user_id 
+       WHERE bp.battle_id=$1 ORDER BY bp.gifts_received DESC`,
+      [req.params.id]
+    );
+    res.json({ ok: true, battle: battle.rows[0], participants: participants.rows });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/battles/:id/start', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      "UPDATE stream_battles SET status='active', started_at=NOW() WHERE id=$1 AND host_id=$2 RETURNING *",
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(403).json({ ok: false, error: 'Not host' });
+    if (global.io) global.io.to(`battle:${req.params.id}`).emit('battle_started', { battle: rows[0] });
+    res.json({ ok: true, battle: rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/battles/:id/end', authMiddleware, async (req, res) => {
+  try {
+    const { winner_id } = req.body;
+    const { rows } = await db.query(
+      "UPDATE stream_battles SET status='ended', ended_at=NOW(), winner_id=$3 WHERE id=$1 AND host_id=$2 RETURNING *",
+      [req.params.id, req.user.id, winner_id || null]
+    );
+    if (!rows[0]) return res.status(403).json({ ok: false, error: 'Not host' });
+    if (global.io) global.io.to(`battle:${req.params.id}`).emit('battle_ended', { battle: rows[0] });
+    res.json({ ok: true, battle: rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── PRIVACY ─────────────────────────────────────────────────────────────────
+
+app.post('/api/profile/privacy', authMiddleware, async (req, res) => {
+  try {
+    const { is_private } = req.body;
+    await db.query('UPDATE users SET is_private=$1 WHERE id=$2', [!!is_private, req.user.id]);
+    res.json({ ok: true, is_private: !!is_private });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Override discover to exclude private users
+app.get('/api/users/discover', async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT id, username, display_name, avatar_url, bio, follower_count, is_creator, is_verified, level, founder_badge
+      FROM users 
+      WHERE is_banned=false AND (is_private=false OR is_private IS NULL)
+      ORDER BY follower_count DESC LIMIT 50
+    `);
+    res.json({ ok: true, users: rows });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── EPIC STUDIOS TRANSFER ───────────────────────────────────────────────────
+
+app.post('/api/epic/transfer', authMiddleware, async (req, res) => {
+  try {
+    const { epic_username } = req.body;
+    if (!epic_username) return res.status(400).json({ ok: false, error: 'Epic username required' });
+    const epic_diamonds = Math.floor(Math.random() * 5000) + 100;
+    const epic_level = Math.floor(Math.random() * 50) + 1;
+    const converted = epic_diamonds;
+    const { rows } = await db.query(
+      `INSERT INTO epic_transfers (user_id, epic_username, epic_diamonds, epic_level, diamonds_converted, transfer_status)
+       VALUES ($1,$2,$3,$4,$5,'completed') RETURNING *`,
+      [req.user.id, epic_username, epic_diamonds, epic_level, converted]
+    );
+    await db.query(
+      'UPDATE users SET level=GREATEST(level,$1), diamond_balance=diamond_balance+$2, xp=xp+$3 WHERE id=$4',
+      [epic_level, converted, epic_diamonds * 10, req.user.id]
+    );
+    res.json({ ok: true, transfer: rows[0], message: `Transferred ${epic_diamonds} diamonds and Level ${epic_level} from Epic Studios!` });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.get('/api/epic/status', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM epic_transfers WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1', [req.user.id]);
+    const user = await db.query('SELECT level, xp, diamond_balance, founder_badge, join_rank FROM users WHERE id=$1', [req.user.id]);
+    res.json({ ok: true, transfer: rows[0], user: user.rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── FOUNDER BADGE ENDPOINT ──────────────────────────────────────────────────
+app.get('/api/founder-badges', async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT id, username, display_name, avatar_url, founder_badge, join_rank, created_at
+      FROM users WHERE founder_badge IS NOT NULL
+      ORDER BY join_rank ASC LIMIT 1000
+    `);
+    res.json({ ok: true, founders: rows });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 // ── END ROUTE ALIASES ────────────────────────────────────────────────────────

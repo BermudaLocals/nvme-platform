@@ -785,17 +785,67 @@ async function createStream(e) {
   }
 }
 
-// ── go live ────────────────────────────────────
-async function goLive() {
-  if (!currentStreamId) {
-    showNotification('⚠️ No stream selected', 'Create a stream first, or select one from history.', 'warning');
-    return;
+// ── ONE-TAP GO LIVE (independent — no stream selection needed) ──
+let hostCameraStream = null;
+
+async function activateHostCamera() {
+  try {
+    hostCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+    const ring = document.getElementById('live-ring');
+    if (ring) {
+      ring.innerHTML = '<video id="host-preview" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></video>';
+      const v = document.getElementById('host-preview');
+      v.srcObject = hostCameraStream;
+      v.play().catch(() => {});
+    }
+    return true;
+  } catch(e) {
+    showNotification('📷 Camera needed', 'Allow camera + mic access so viewers can see you — check browser permissions', 'warning');
+    return false;
   }
+}
+
+function stopHostCamera() {
+  if (hostCameraStream) {
+    hostCameraStream.getTracks().forEach(t => t.stop());
+    hostCameraStream = null;
+  }
+  const ring = document.getElementById('live-ring');
+  if (ring) ring.textContent = '📹';
+}
+
+async function goLive() {
   const btn = document.getElementById('btn-go-live');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>';
+  btn.innerHTML = '<span class="spinner"></span> Starting…';
 
   try {
+    // STEP 1 — camera on (independent of everything)
+    showNotification('📹 Starting camera…', '', 'info');
+    const camOk = await activateHostCamera();
+    if (!camOk) { btn.disabled = false; btn.innerHTML = '▶ Go Live'; return; }
+
+    // STEP 2 — auto-create stream if none selected (THE GATE FIX)
+    if (!currentStreamId) {
+      showNotification('📡 Creating your stream…', '', 'info');
+      const autoTitle = document.getElementById('stream-title')?.value.trim()
+        || ('LIVE — ' + new Date().toLocaleDateString());
+      const cr = await fetch(`${API}/api/streams`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ title: autoTitle, description: 'Live now on NVME', is_premium: false })
+      });
+      const cdata = await cr.json();
+      if (!cr.ok) throw new Error(cdata.message || cdata.error || 'Could not create stream');
+      currentStreamId = cdata.stream?.id || cdata.id || cdata.stream_id || cdata.stream?.stream_id || cdata._id;
+      if (cdata.stream?.stream_key || cdata.stream_key) {
+        streamKey = cdata.stream?.stream_key || cdata.stream_key;
+        document.getElementById('stream-key-section').style.display = 'block';
+        renderStreamKey();
+      }
+      if (socket) socket.emit('join_stream', { streamId: currentStreamId });
+    }
+
+    // STEP 3 — go live
     const r = await fetch(`${API}/api/streams/${currentStreamId}/go-live`, {
       method: 'POST', headers
     });
@@ -809,7 +859,7 @@ async function goLive() {
       renderStreamKey();
     }
     loadStreams();
-    showNotification('🔴 You are LIVE!', 'Your stream has started. Go rock it!', 'live');
+    showNotification('🔴 You are LIVE!', 'Camera is on — gifts are active. Go rock it!', 'live');
   } catch(err) {
     showNotification('❌ Error', err.message, 'error');
   } finally {

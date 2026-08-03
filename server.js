@@ -19,6 +19,8 @@ const { Server: IOServer } = require('socket.io');
 const server = http.createServer(app);
 const io = new IOServer(server, { cors: { origin: '*', credentials: true } });
 
+global.io = io; // expose for route handlers & guest system
+
 // ⚠️ CRITICAL: body parsers MUST be registered before ANY route.
 // Routes declared above the parser receive req.body === undefined and 500.
 // (Bug 2026-08-02: express.json() sat at line ~406 while /api/profile,
@@ -224,7 +226,7 @@ app.post('/api/streams/:id/invite-guest', authMiddleware, async (req, res) => {
     const { guest_username } = req.body;
     const streamId = req.params.id;
     // Check stream exists and belongs to host
-    const stream = await db.query('SELECT * FROM live_streams WHERE id=$1', [streamId]);
+    const stream = await db.query('SELECT * FROM livestreams WHERE id=$1', [streamId]);
     if(!stream.rows[0]) return res.status(404).json({ ok:false, error:'Stream not found' });
     // Find guest user
     const guest = await db.query('SELECT id, username, avatar_url FROM users WHERE username=$1', [guest_username]);
@@ -1870,7 +1872,7 @@ app.post('/api/streams/:id/end-live', authMiddleware, async (req, res) => {
 
 app.get('/api/streams/live', async (req, res) => {
   try {
-    const { rows } = await db.query("SELECT ls.*, u.username, u.avatar_url FROM live_streams ls JOIN users u ON u.id=ls.user_id WHERE ls.is_active=true ORDER BY ls.viewer_count DESC");
+    const { rows } = await db.query("SELECT ls.*, u.username, u.avatar_url FROM livestreams ls JOIN users u ON u.id=ls.user_id WHERE ls.status='live' ORDER BY ls.viewer_count DESC");
     res.json({ ok: true, streams: rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -2764,7 +2766,7 @@ app.post('/api/auth/logout', (req, res) => { res.json({ ok: true }); });
 // /api/live/streams → alias for /api/streams/live
 app.get('/api/live/streams', async (req, res) => {
   try {
-    const { rows } = await db.query("SELECT * FROM live_streams WHERE is_active=true ORDER BY viewer_count DESC LIMIT 20");
+    const { rows } = await db.query("SELECT * FROM livestreams WHERE status='live' ORDER BY viewer_count DESC LIMIT 20");
     res.json({ streams: rows, live: rows });
   } catch(e) { res.json({ streams: [], live: [] }); }
 });
@@ -2817,13 +2819,29 @@ app.post('/api/live/start', authMiddleware, async (req, res) => {
   try {
     const streamKey = require('crypto').randomBytes(16).toString('hex');
     const { rows } = await db.query(
-      'INSERT INTO live_streams (id,user_id,title,stream_key,is_active,created_at) VALUES (gen_random_uuid(),$1,$2,$3,true,NOW()) RETURNING *',
+      'INSERT INTO livestreams (id,user_id,title,stream_key,status,created_at) VALUES (gen_random_uuid(),$1,$2,$3,'live',NOW()) RETURNING *',
       [req.user.id, title || 'Live Stream', streamKey]
     );
     res.json({ ok: true, stream: rows[0], streamKey, rtmpUrl: `rtmp://nvme.live/live/${streamKey}` });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+
+
+// ── TURN / ICE config for WebRTC ──────────────────────────────────────────
+app.get('/api/rtc/config', (req, res) => {
+  res.json({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      ...(process.env.TURN_URL ? [{
+        urls: process.env.TURN_URL,
+        username: process.env.TURN_USER || 'nvme',
+        credential: process.env.TURN_PASS || ''
+      }] : [])
+    ]
+  });
+});
 // /api/videos/upload (stub — returns presigned-style response)
 app.post('/api/videos/upload', authMiddleware, async (req, res) => {
   const { title, description, video_url } = req.body;

@@ -14,10 +14,17 @@ const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const session = require('express-session');
 
 const app = express();
+app.set('trust proxy', 1);  // required behind Cloudflare proxy
 const http = require('http');
 const { Server: IOServer } = require('socket.io');
 const server = http.createServer(app);
-const io = new IOServer(server, { cors: { origin: '*', credentials: true } });
+const io = new IOServer(server, {
+  cors: {
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['https://nvme.live', 'https://www.nvme.live', 'http://localhost:3000'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
+});
 
 global.io = io; // expose for route handlers & guest system
 
@@ -413,8 +420,6 @@ const db = new Pool({
 // ── Middleware ───────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.ALLOWED_ORIGINS || '*', credentials: true }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false }));
 app.get('/shop', (req, res) => {
@@ -616,6 +621,8 @@ app.get('/merch', (req, res) => res.sendFile(require('path').join(__dirname, 'pu
 
 // ── Landing: 3D-enhanced NVME design served from public/index.html via static middleware below.
 // (Next.js static export retired 2026-08-02 — kept in public/next/ for reference; Digital King chose the 3D design.)
+// Redirect old /public/ links to root (fixes cached SW / broken links)
+app.use('/public', (req, res) => res.redirect(301, req.path));
 app.use(require('express').static(require('path').join(__dirname, 'public')));
 
 // ── Auth helper ──────────────────────────────────────────────

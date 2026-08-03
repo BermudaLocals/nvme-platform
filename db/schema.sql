@@ -39,19 +39,6 @@ CREATE TABLE videos (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE gifts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name VARCHAR(100) NOT NULL,
-  emoji VARCHAR(20),
-  icon_url TEXT,
-  credit_cost NUMERIC(10,2) NOT NULL,
-  usd_value NUMERIC(10,2) NOT NULL,
-  creator_pct NUMERIC(5,2) DEFAULT 70.00,
-  platform_pct NUMERIC(5,2) DEFAULT 30.00,
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE livestreams (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -71,6 +58,9 @@ CREATE TABLE livestreams (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Backward-compat view for any external tools referencing live_streams
+CREATE OR REPLACE VIEW live_streams AS SELECT * FROM livestreams;
 
 CREATE TABLE subscriptions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -92,4 +82,51 @@ CREATE TABLE transactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   type VARCHAR(50) NOT NULL CHECK (type IN ('credit_purchase','gift_sent','gift_received','subscription','withdrawal','refund','tip')),
-  amount_usd NUMERIC(
+  amount_usd NUMERIC(10,2) NOT NULL,
+  credits_amount NUMERIC(10,2),
+  status VARCHAR(20) DEFAULT 'completed',
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE gifts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(100) NOT NULL,
+  emoji VARCHAR(20),
+  icon_url TEXT,
+  credit_cost NUMERIC(10,2) NOT NULL,
+  usd_value NUMERIC(10,2) NOT NULL,
+  creator_pct NUMERIC(5,2) DEFAULT 70.00,
+  platform_pct NUMERIC(5,2) DEFAULT 30.00,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE stream_guests (
+  id SERIAL PRIMARY KEY,
+  stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
+  guest_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  guest_username VARCHAR(100),
+  guest_avatar TEXT,
+  status VARCHAR(20) DEFAULT 'invited',
+  slot INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(stream_id, guest_user_id)
+);
+
+CREATE TABLE livestream_chat (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE jackpot_pool (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  pool NUMERIC(12,2) DEFAULT 25000,
+  total_entries INTEGER DEFAULT 0,
+  total_paid NUMERIC(12,2) DEFAULT 0,
+  last_winner_username VARCHAR(100),
+  last_won_at TIMESTAMPTZ
+);

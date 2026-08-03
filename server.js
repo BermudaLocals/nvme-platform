@@ -705,6 +705,29 @@ async function initDB() {
       credits NUMERIC NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    -- schema drift repair: follows / gifts / users (older deploys created these with different shapes;
+    -- CREATE TABLE IF NOT EXISTS is a no-op on existing tables, so every column the code touches needs an explicit ALTER)
+    ALTER TABLE follows ADD COLUMN IF NOT EXISTS follower_id UUID;
+    ALTER TABLE follows ADD COLUMN IF NOT EXISTS followee_id UUID;
+    ALTER TABLE follows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE gifts ADD COLUMN IF NOT EXISTS sender_id UUID;
+    ALTER TABLE gifts ADD COLUMN IF NOT EXISTS receiver_id UUID;
+    ALTER TABLE gifts ADD COLUMN IF NOT EXISTS video_id UUID;
+    ALTER TABLE gifts ADD COLUMN IF NOT EXISTS credits NUMERIC DEFAULT 0;
+    ALTER TABLE gifts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS follower_count INTEGER DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS following_count INTEGER DEFAULT 0;
+    -- legacy drift guard: drop NOT NULL on any pre-existing follows/gifts columns our INSERTs don't provide
+    DO $$ DECLARE r RECORD;
+    BEGIN
+      FOR r IN SELECT c.table_name, c.column_name FROM information_schema.columns c
+        WHERE c.table_name IN ('follows','gifts') AND c.is_nullable='NO'
+          AND c.column_name NOT IN ('id','credits','sender_id','receiver_id','video_id','follower_id','followee_id')
+          AND c.column_default IS NULL
+      LOOP
+        EXECUTE format('ALTER TABLE %I ALTER COLUMN %I DROP NOT NULL', r.table_name, r.column_name);
+      END LOOP;
+    END $$;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_credits NUMERIC DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'free';

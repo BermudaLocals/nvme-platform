@@ -2819,7 +2819,7 @@ app.post('/api/live/start', authMiddleware, async (req, res) => {
   try {
     const streamKey = require('crypto').randomBytes(16).toString('hex');
     const { rows } = await db.query(
-      'INSERT INTO livestreams (id,user_id,title,stream_key,status,created_at) VALUES (gen_random_uuid(),$1,$2,$3,'live',NOW()) RETURNING *',
+      `INSERT INTO livestreams (id,user_id,title,stream_key,status,created_at) VALUES (gen_random_uuid(),$1,$2,$3,'live',NOW()) RETURNING *`,
       [req.user.id, title || 'Live Stream', streamKey]
     );
     res.json({ ok: true, stream: rows[0], streamKey, rtmpUrl: `rtmp://nvme.live/live/${streamKey}` });

@@ -18,6 +18,14 @@ const http = require('http');
 const { Server: IOServer } = require('socket.io');
 const server = http.createServer(app);
 const io = new IOServer(server, { cors: { origin: '*', credentials: true } });
+
+// ⚠️ CRITICAL: body parsers MUST be registered before ANY route.
+// Routes declared above the parser receive req.body === undefined and 500.
+// (Bug 2026-08-02: express.json() sat at line ~406 while /api/profile,
+//  /api/profile/avatar, /api/streams/:id/invite-guest were declared earlier,
+//  breaking profile saves and go-live guest invites for every user.)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // ============ PROGRESSIVE JACKPOT ============
 // GET jackpot pool (public)
 app.get('/api/jackpot', async (req, res) => {

@@ -130,3 +130,72 @@ CREATE TABLE jackpot_pool (
   last_winner_username VARCHAR(100),
   last_won_at TIMESTAMPTZ
 );
+
+
+-- ── BATTLE SYSTEM ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS stream_battles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
+  host_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  battle_type VARCHAR(20) DEFAULT 'ffa' CHECK (battle_type IN ('ffa','team')),
+  status VARCHAR(20) DEFAULT 'waiting' CHECK (status IN ('waiting','active','ended')),
+  max_participants INTEGER DEFAULT 20,
+  team_a_name VARCHAR(50) DEFAULT 'Team A',
+  team_b_name VARCHAR(50) DEFAULT 'Team B',
+  elimination_interval_seconds INTEGER DEFAULT 60,
+  started_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ,
+  winner_id UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS battle_participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  battle_id UUID NOT NULL REFERENCES stream_battles(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  team VARCHAR(10) DEFAULT 'a' CHECK (team IN ('a','b')),
+  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','eliminated','winner')),
+  gifts_received NUMERIC(12,2) DEFAULT 0,
+  votes INTEGER DEFAULT 0,
+  eliminated_at TIMESTAMPTZ,
+  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(battle_id, user_id)
+);
+
+-- ── PRIVACY ─────────────────────────────────────────────────────────────────
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT FALSE;
+
+-- ── EPIC STUDIOS TRANSFER ───────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS epic_transfers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  epic_username VARCHAR(100) NOT NULL,
+  epic_diamonds INTEGER DEFAULT 0,
+  epic_level INTEGER DEFAULT 1,
+  diamonds_converted NUMERIC(12,2) DEFAULT 0,
+  transfer_status VARCHAR(20) DEFAULT 'pending' CHECK (transfer_status IN ('pending','completed','failed')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── FOUNDER BADGES & LEVELS ─────────────────────────────────────────────────
+ALTER TABLE users ADD COLUMN IF NOT EXISTS join_rank INTEGER;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS founder_badge VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS diamond_balance NUMERIC(12,2) DEFAULT 0;
+
+-- Auto-assign founder badges to first 100/1000 users (silent, no error if already set)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM users WHERE join_rank IS NULL LIMIT 1) THEN
+    UPDATE users SET 
+      join_rank = sub.rank,
+      founder_badge = CASE 
+        WHEN sub.rank <= 100 THEN 'founder-100'
+        WHEN sub.rank <= 1000 THEN 'founder-1000'
+        ELSE NULL
+      END
+    FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY created_at) as rank FROM users) sub
+    WHERE users.id = sub.id AND users.join_rank IS NULL;
+  END IF;
+END $$;

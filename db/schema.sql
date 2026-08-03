@@ -199,3 +199,20 @@ BEGIN
     WHERE users.id = sub.id AND users.join_rank IS NULL;
   END IF;
 END $$;
+
+-- ── BATTLE INVITES (live user → live user) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS battle_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  from_stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
+  from_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
+  to_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','accepted','declined','expired')),
+  battle_id UUID REFERENCES stream_battles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  responded_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_battle_invites_to_user ON battle_invites(to_user_id, status);
+CREATE INDEX IF NOT EXISTS idx_battle_invites_from_user ON battle_invites(from_user_id, status);
+

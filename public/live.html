@@ -162,7 +162,52 @@
       #app { flex-direction:column; }
       #stream-area { height:55vh; }
     }
-  </style>
+  
+/* ── HUGE GIFT ANIMATIONS ─────────────────────────────────────────── */
+.gift-overlay-anim {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+}
+.gift-anim-small { animation: giftPop 0.6s ease-out; font-size: 3rem; }
+.gift-anim-medium { animation: giftShake 0.8s ease-in-out; font-size: 6rem; filter: drop-shadow(0 0 20px gold); }
+.gift-anim-large { 
+  animation: giftTakeover 2s ease-in-out; 
+  font-size: 10rem; 
+  filter: drop-shadow(0 0 60px gold) drop-shadow(0 0 120px magenta);
+}
+.gift-anim-huge {
+  animation: giftEpic 3s ease-in-out;
+  font-size: 16rem;
+  filter: drop-shadow(0 0 100px gold) drop-shadow(0 0 200px cyan);
+  background: radial-gradient(circle, rgba(255,215,0,0.3), transparent 70%);
+  border-radius: 50%; padding: 2rem;
+}
+@keyframes giftPop {
+  0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+  50% { transform: scale(1.3) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 0; }
+}
+@keyframes giftShake {
+  0%,100% { transform: translateX(0) scale(1); }
+  20% { transform: translateX(-20px) scale(1.1) rotate(-5deg); }
+  40% { transform: translateX(20px) scale(1.1) rotate(5deg); }
+  60% { transform: translateX(-10px) scale(1.05); }
+  80% { transform: translateX(10px) scale(1.05); }
+}
+@keyframes giftTakeover {
+  0% { transform: scale(0) translateY(100vh); opacity: 0; }
+  30% { transform: scale(1.2) translateY(0); opacity: 1; }
+  70% { transform: scale(1) translateY(0); opacity: 1; }
+  100% { transform: scale(0.5) translateY(-50vh); opacity: 0; }
+}
+@keyframes giftEpic {
+  0% { transform: scale(0); opacity: 0; filter: hue-rotate(0deg); }
+  25% { transform: scale(1.5); opacity: 1; filter: hue-rotate(90deg); }
+  50% { transform: scale(1.2); opacity: 1; filter: hue-rotate(180deg); }
+  75% { transform: scale(1.3); opacity: 1; filter: hue-rotate(270deg); }
+  100% { transform: scale(0); opacity: 0; filter: hue-rotate(360deg); }
+}
+</style>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#e91e8c">
 </head>

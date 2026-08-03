@@ -1612,5 +1612,38 @@ if (socket) {
 }
 
 </script>
+
+<!-- PWA INSTALL + AUTO-UPDATE -->
+<script>
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const btn = document.createElement('button');
+  btn.id = 'pwa-install-btn';
+  btn.innerHTML = '📲 Install NVME App';
+  btn.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#e91e8c,#00d4ff);color:#fff;border:none;border-radius:30px;padding:14px 28px;font-weight:700;font-size:1rem;box-shadow:0 8px 30px rgba(233,30,140,0.4);cursor:pointer;animation:slideUp 0.5s ease-out;';
+  btn.onclick = () => { deferredPrompt.prompt(); deferredPrompt = null; btn.remove(); };
+  document.body.appendChild(btn);
+  setTimeout(() => { const b = document.getElementById('pwa-install-btn'); if (b) b.remove(); }, 15000);
+});
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(reg => {
+    setInterval(() => reg.update(), 30000);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) {
+          const toast = document.createElement('div');
+          toast.innerHTML = '🔄 <b>Update available!</b> <button onclick="location.reload()" style="margin-left:8px;padding:4px 12px;border-radius:8px;border:none;background:var(--gold);color:#000;font-weight:700;cursor:pointer;">Reload</button>';
+          toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;background:var(--card);border:1px solid var(--gold);padding:12px 20px;border-radius:12px;font-weight:600;box-shadow:0 10px 40px rgba(0,0,0,0.8);';
+          document.body.appendChild(toast);
+        }
+      });
+    });
+  });
+}
+</script>
 </body>
 </html>

@@ -4,7 +4,150 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NVME.LIVE — Creator Dashboard</title>
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="/socket.io/socket.io.js">
+
+// ── BATTLE SYSTEM ───────────────────────────────────────────────────────────
+let currentBattleId = null;
+let battleTimer = null;
+let battleParticipants = [];
+
+function toggleTeamNames() {
+  const show = document.getElementById('battle-type').value === 'team';
+  document.getElementById('team-names').style.display = show ? 'block' : 'none';
+}
+
+async function createBattle() {
+  if (!currentStreamId) { showNotification('Create a stream first', '', 'warning'); return; }
+  const type = document.getElementById('battle-type').value;
+  const aName = document.getElementById('team-a-name').value || 'Team A';
+  const bName = document.getElementById('team-b-name').value || 'Team B';
+  try {
+    const r = await fetch(`${API}/api/streams/${currentStreamId}/battle`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ battle_type: type, team_a_name: aName, team_b_name: bName })
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    currentBattleId = d.battle.id;
+    document.getElementById('battle-controls').style.display = 'none';
+    document.getElementById('battle-lobby').style.display = 'block';
+    showNotification('⚔️ Battle Created!', 'Participants can join from /live', 'success');
+    if (socket) socket.emit('join_battle', { battleId: currentBattleId });
+    pollBattleLobby();
+  } catch(e) { showNotification('Error', e.message, 'error'); }
+}
+
+async function pollBattleLobby() {
+  if (!currentBattleId) return;
+  try {
+    const r = await fetch(`${API}/api/battles/${currentBattleId}`);
+    const d = await r.json();
+    if (d.ok) renderBattleLobby(d.participants);
+  } catch(e) {}
+  if (document.getElementById('battle-lobby').style.display !== 'none') {
+    setTimeout(pollBattleLobby, 3000);
+  }
+}
+
+function renderBattleLobby(parts) {
+  battleParticipants = parts;
+  const el = document.getElementById('battle-participants');
+  if (!parts.length) { el.innerHTML = '<div style="color:var(--muted);text-align:center;">Waiting for warriors...</div>'; return; }
+  el.innerHTML = parts.map(p => `
+    <div style="display:flex;align-items:center;gap:8px;padding:4px;border-bottom:1px solid var(--border);">
+      <img src="${p.avatar_url || '/img/default-avatar.png'}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">
+      <span style="font-weight:600;font-size:0.85rem;">${esc(p.username)}</span>
+      <span style="margin-left:auto;font-size:0.75rem;color:var(--cyan);">${p.team === 'b' ? '🔵' : '🔴'} ${esc(p.display_name || p.username)}</span>
+    </div>
+  `).join('');
+}
+
+async function startBattle() {
+  if (!currentBattleId) return;
+  const r = await fetch(`${API}/api/battles/${currentBattleId}/start`, { method: 'POST', headers });
+  const d = await r.json();
+  if (!d.ok) return showNotification('Error', d.error, 'error');
+  document.getElementById('battle-lobby').style.display = 'none';
+  document.getElementById('battle-active').style.display = 'block';
+  startBattleTimer(60);
+  showNotification('🔥 BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
+  pollBattleLeaderboard();
+}
+
+function startBattleTimer(seconds) {
+  let remaining = seconds;
+  const el = document.getElementById('battle-timer');
+  if (battleTimer) clearInterval(battleTimer);
+  battleTimer = setInterval(() => {
+    remaining--;
+    el.textContent = `⏱ ${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`;
+    if (remaining <= 0) { clearInterval(battleTimer); eliminateLowest(); }
+  }, 1000);
+}
+
+async function pollBattleLeaderboard() {
+  if (!currentBattleId) return;
+  try {
+    const r = await fetch(`${API}/api/battles/${currentBattleId}`);
+    const d = await r.json();
+    if (d.ok) renderBattleLeaderboard(d.participants);
+  } catch(e) {}
+  if (document.getElementById('battle-active').style.display !== 'none') {
+    setTimeout(pollBattleLeaderboard, 2000);
+  }
+}
+
+function renderBattleLeaderboard(parts) {
+  const el = document.getElementById('battle-leaderboard');
+  const active = parts.filter(p => p.status === 'active').sort((a,b) => b.gifts_received - a.gifts_received);
+  const eliminated = parts.filter(p => p.status === 'eliminated');
+  el.innerHTML = `
+    <div style="font-weight:700;margin-bottom:4px;">🏆 Leaderboard</div>
+    ${active.map((p,i) => `
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 0;${i===0?'color:gold;font-weight:700;':''}">
+        <span style="width:20px;text-align:center;">${i+1}</span>
+        <span style="flex:1;">${esc(p.username)}</span>
+        <span style="color:var(--gold);">💎 ${p.gifts_received}</span>
+      </div>
+    `).join('')}
+    ${eliminated.length ? `<div style="margin-top:8px;color:var(--red);font-size:0.75rem;">💀 Eliminated: ${eliminated.map(e => esc(e.username)).join(', ')}</div>` : ''}
+  `;
+}
+
+async function eliminateLowest() {
+  if (!currentBattleId) return;
+  const r = await fetch(`${API}/api/battles/${currentBattleId}`);
+  const d = await r.json();
+  const active = d.participants.filter(p => p.status === 'active');
+  if (active.length > 1) {
+    const lowest = active[active.length - 1];
+    showNotification(`💀 ${lowest.username} ELIMINATED!`, 'Keep those gifts coming!', 'warning');
+  }
+  if (active.length <= 1) {
+    showNotification('🏆 BATTLE WINNER!', `${active[0]?.username || 'Unknown'} wins!`, 'success');
+  }
+}
+
+async function endBattle() {
+  if (!currentBattleId) return;
+  if (battleTimer) clearInterval(battleTimer);
+  const r = await fetch(`${API}/api/battles/${currentBattleId}/end`, { method: 'POST', headers });
+  const d = await r.json();
+  document.getElementById('battle-active').style.display = 'none';
+  document.getElementById('battle-controls').style.display = 'block';
+  currentBattleId = null;
+  showNotification('🏆 Battle Ended!', 'Winners announced!', 'success');
+}
+
+// Show battle card when live
+const _origUpdateLiveState = updateLiveState;
+updateLiveState = function(live) {
+  _origUpdateLiveState(live);
+  document.getElementById('battle-card').style.display = live ? 'block' : 'none';
+  if (!live && battleTimer) { clearInterval(battleTimer); battleTimer = null; }
+};
+
+</script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
@@ -523,7 +666,10 @@
     <div class="card">
       <div class="card-title"><span class="icon">📡</span> Stream Control</div>
       <div class="go-live-panel">
-        <div class="live-ring" id="live-ring">📹</div>
+        <div class="live-ring" id="live-ring">
+    <video id="host-preview" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:none;"></video>
+    <span id="ring-emoji" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;">📹</span>
+  </div>
         <div class="live-status-text" id="live-status-text">Not streaming</div>
         <div>
           <div class="viewer-count-big" id="viewer-count-big">0</div>
@@ -790,17 +936,22 @@ let hostCameraStream = null;
 
 async function activateHostCamera() {
   try {
-    hostCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
-    const ring = document.getElementById('live-ring');
-    if (ring) {
-      ring.innerHTML = '<video id="host-preview" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></video>';
-      const v = document.getElementById('host-preview');
+    stopHostCamera();
+    hostCameraStream = await navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, 
+      audio: true 
+    });
+    const v = document.getElementById('host-preview');
+    const emoji = document.getElementById('ring-emoji');
+    if (v) {
+      v.style.display = 'block';
       v.srcObject = hostCameraStream;
       v.play().catch(() => {});
     }
+    if (emoji) emoji.style.display = 'none';
     return true;
   } catch(e) {
-    showNotification('📷 Camera needed', 'Allow camera + mic access so viewers can see you — check browser permissions', 'warning');
+    showNotification('📷 Camera needed', 'Allow camera + mic access — check browser permissions', 'warning');
     return false;
   }
 }
@@ -810,8 +961,10 @@ function stopHostCamera() {
     hostCameraStream.getTracks().forEach(t => t.stop());
     hostCameraStream = null;
   }
-  const ring = document.getElementById('live-ring');
-  if (ring) ring.textContent = '📹';
+  const v = document.getElementById('host-preview');
+  const emoji = document.getElementById('ring-emoji');
+  if (v) { v.style.display = 'none'; v.srcObject = null; }
+  if (emoji) emoji.style.display = 'flex';
 }
 
 async function goLive() {
@@ -889,6 +1042,7 @@ async function endLive() {
       const d = await r.json().catch(() => ({}));
       throw new Error(d.message || 'Failed to end stream');
     }
+    stopHostCamera();
     updateLiveState(false);
     loadStreams();
     showNotification('✅ Stream Ended', 'Your stream has ended. Great job!', 'success');
@@ -911,7 +1065,6 @@ function updateLiveState(live) {
   if (live) {
     badge.classList.add('visible');
     ring.classList.add('pulsing');
-    ring.textContent = '🔴';
     statusT.textContent = '● Streaming LIVE';
     statusT.style.color = 'var(--red)';
     btnGo.style.display  = 'none';
@@ -920,7 +1073,6 @@ function updateLiveState(live) {
   } else {
     badge.classList.remove('visible');
     ring.classList.remove('pulsing');
-    ring.textContent = '📹';
     statusT.textContent = 'Stream ended';
     statusT.style.color = 'var(--muted)';
     btnGo.style.display  = 'inline-flex';
@@ -1201,6 +1353,149 @@ function statusLabel(s) {
   const m = { live: '● LIVE', active: '● LIVE', ended: '✓ Ended', completed: '✓ Ended', pending: '⏳ Pending', scheduled: '🕐 Scheduled' };
   return m[(s||'').toLowerCase()] || s || 'ended';
 }
+
+
+// ── BATTLE SYSTEM ───────────────────────────────────────────────────────────
+let currentBattleId = null;
+let battleTimer = null;
+let battleParticipants = [];
+
+function toggleTeamNames() {
+  const show = document.getElementById('battle-type').value === 'team';
+  document.getElementById('team-names').style.display = show ? 'block' : 'none';
+}
+
+async function createBattle() {
+  if (!currentStreamId) { showNotification('Create a stream first', '', 'warning'); return; }
+  const type = document.getElementById('battle-type').value;
+  const aName = document.getElementById('team-a-name').value || 'Team A';
+  const bName = document.getElementById('team-b-name').value || 'Team B';
+  try {
+    const r = await fetch(`${API}/api/streams/${currentStreamId}/battle`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ battle_type: type, team_a_name: aName, team_b_name: bName })
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    currentBattleId = d.battle.id;
+    document.getElementById('battle-controls').style.display = 'none';
+    document.getElementById('battle-lobby').style.display = 'block';
+    showNotification('⚔️ Battle Created!', 'Participants can join from /live', 'success');
+    if (socket) socket.emit('join_battle', { battleId: currentBattleId });
+    pollBattleLobby();
+  } catch(e) { showNotification('Error', e.message, 'error'); }
+}
+
+async function pollBattleLobby() {
+  if (!currentBattleId) return;
+  try {
+    const r = await fetch(`${API}/api/battles/${currentBattleId}`);
+    const d = await r.json();
+    if (d.ok) renderBattleLobby(d.participants);
+  } catch(e) {}
+  if (document.getElementById('battle-lobby').style.display !== 'none') {
+    setTimeout(pollBattleLobby, 3000);
+  }
+}
+
+function renderBattleLobby(parts) {
+  battleParticipants = parts;
+  const el = document.getElementById('battle-participants');
+  if (!parts.length) { el.innerHTML = '<div style="color:var(--muted);text-align:center;">Waiting for warriors...</div>'; return; }
+  el.innerHTML = parts.map(p => `
+    <div style="display:flex;align-items:center;gap:8px;padding:4px;border-bottom:1px solid var(--border);">
+      <img src="${p.avatar_url || '/img/default-avatar.png'}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">
+      <span style="font-weight:600;font-size:0.85rem;">${esc(p.username)}</span>
+      <span style="margin-left:auto;font-size:0.75rem;color:var(--cyan);">${p.team === 'b' ? '🔵' : '🔴'} ${esc(p.display_name || p.username)}</span>
+    </div>
+  `).join('');
+}
+
+async function startBattle() {
+  if (!currentBattleId) return;
+  const r = await fetch(`${API}/api/battles/${currentBattleId}/start`, { method: 'POST', headers });
+  const d = await r.json();
+  if (!d.ok) return showNotification('Error', d.error, 'error');
+  document.getElementById('battle-lobby').style.display = 'none';
+  document.getElementById('battle-active').style.display = 'block';
+  startBattleTimer(60);
+  showNotification('🔥 BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
+  pollBattleLeaderboard();
+}
+
+function startBattleTimer(seconds) {
+  let remaining = seconds;
+  const el = document.getElementById('battle-timer');
+  if (battleTimer) clearInterval(battleTimer);
+  battleTimer = setInterval(() => {
+    remaining--;
+    el.textContent = `⏱ ${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`;
+    if (remaining <= 0) { clearInterval(battleTimer); eliminateLowest(); }
+  }, 1000);
+}
+
+async function pollBattleLeaderboard() {
+  if (!currentBattleId) return;
+  try {
+    const r = await fetch(`${API}/api/battles/${currentBattleId}`);
+    const d = await r.json();
+    if (d.ok) renderBattleLeaderboard(d.participants);
+  } catch(e) {}
+  if (document.getElementById('battle-active').style.display !== 'none') {
+    setTimeout(pollBattleLeaderboard, 2000);
+  }
+}
+
+function renderBattleLeaderboard(parts) {
+  const el = document.getElementById('battle-leaderboard');
+  const active = parts.filter(p => p.status === 'active').sort((a,b) => b.gifts_received - a.gifts_received);
+  const eliminated = parts.filter(p => p.status === 'eliminated');
+  el.innerHTML = `
+    <div style="font-weight:700;margin-bottom:4px;">🏆 Leaderboard</div>
+    ${active.map((p,i) => `
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 0;${i===0?'color:gold;font-weight:700;':''}">
+        <span style="width:20px;text-align:center;">${i+1}</span>
+        <span style="flex:1;">${esc(p.username)}</span>
+        <span style="color:var(--gold);">💎 ${p.gifts_received}</span>
+      </div>
+    `).join('')}
+    ${eliminated.length ? `<div style="margin-top:8px;color:var(--red);font-size:0.75rem;">💀 Eliminated: ${eliminated.map(e => esc(e.username)).join(', ')}</div>` : ''}
+  `;
+}
+
+async function eliminateLowest() {
+  if (!currentBattleId) return;
+  const r = await fetch(`${API}/api/battles/${currentBattleId}`);
+  const d = await r.json();
+  const active = d.participants.filter(p => p.status === 'active');
+  if (active.length > 1) {
+    const lowest = active[active.length - 1];
+    showNotification(`💀 ${lowest.username} ELIMINATED!`, 'Keep those gifts coming!', 'warning');
+  }
+  if (active.length <= 1) {
+    showNotification('🏆 BATTLE WINNER!', `${active[0]?.username || 'Unknown'} wins!`, 'success');
+  }
+}
+
+async function endBattle() {
+  if (!currentBattleId) return;
+  if (battleTimer) clearInterval(battleTimer);
+  const r = await fetch(`${API}/api/battles/${currentBattleId}/end`, { method: 'POST', headers });
+  const d = await r.json();
+  document.getElementById('battle-active').style.display = 'none';
+  document.getElementById('battle-controls').style.display = 'block';
+  currentBattleId = null;
+  showNotification('🏆 Battle Ended!', 'Winners announced!', 'success');
+}
+
+// Show battle card when live
+const _origUpdateLiveState = updateLiveState;
+updateLiveState = function(live) {
+  _origUpdateLiveState(live);
+  document.getElementById('battle-card').style.display = live ? 'block' : 'none';
+  if (!live && battleTimer) { clearInterval(battleTimer); battleTimer = null; }
+};
+
 </script>
 </body>
 </html>

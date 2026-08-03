@@ -144,8 +144,134 @@ const _origUpdateLiveState = updateLiveState;
 updateLiveState = function(live) {
   _origUpdateLiveState(live);
   document.getElementById('battle-card').style.display = live ? 'block' : 'none';
+  document.getElementById('live-now-card').style.display = live ? 'block' : 'none';
+  if (live) { loadLiveNow(); startLiveNowPolling(); }
+  else { stopLiveNowPolling(); hideBattleInviteToast(); }
   if (!live && battleTimer) { clearInterval(battleTimer); battleTimer = null; }
 };
+
+// ── LIVE NOW PANEL ──────────────────────────────────────────────────────────
+let liveNowPoll = null;
+let currentBattleInvite = null;
+
+function startLiveNowPolling() {
+  if (liveNowPoll) clearInterval(liveNowPoll);
+  liveNowPoll = setInterval(loadLiveNow, 8000);
+}
+function stopLiveNowPolling() {
+  if (liveNowPoll) { clearInterval(liveNowPoll); liveNowPoll = null; }
+}
+
+async function loadLiveNow() {
+  try {
+    const r = await fetch(`${API}/api/streams/live/now`);
+    const d = await r.json();
+    if (!d.ok) return;
+    const list = document.getElementById('live-now-list');
+    const count = document.getElementById('live-now-count');
+    const others = (d.liveUsers || []).filter(u => u.user_id !== currentUserId);
+    count.textContent = others.length ? `(${others.length} online)` : '';
+    if (!others.length) {
+      list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem;">No one else is live right now. You're the star! ⭐</div>';
+      return;
+    }
+    list.innerHTML = others.map(u => `
+      <div class="live-now-item">
+        <div class="live-dot"></div>
+        <img src="${u.avatar_url || '/img/default-avatar.png'}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.display_name || u.username)} ${u.is_verified ? '✓' : ''}</div>
+          <div style="font-size:0.7rem;color:var(--muted);">${esc(u.title || 'Live Stream')} • ${u.viewer_count} watching</div>
+        </div>
+        <button class="btn btn-cyan btn-sm" onclick="sendBattleInvite('${u.stream_id}', '${u.user_id}', '${esc(u.username)}')" style="padding:4px 10px;font-size:0.7rem;white-space:nowrap;">⚔️ Battle</button>
+      </div>
+    `).join('');
+  } catch(e) { console.warn('loadLiveNow error', e); }
+}
+
+async function sendBattleInvite(toStreamId, toUserId, toUsername) {
+  try {
+    const r = await fetch(`${API}/api/battles/invite`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ to_stream_id: toStreamId, to_user_id: toUserId })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      showNotification('⚔️ Battle Invite Sent!', `Waiting for ${esc(toUsername)} to accept...`, 'info');
+    } else {
+      showNotification('Invite Failed', d.error || 'Could not send invite', 'error');
+    }
+  } catch(e) { showNotification('Error', e.message, 'error'); }
+}
+
+// ── BATTLE INVITE TOAST ─────────────────────────────────────────────────────
+function showBattleInviteToast(invite) {
+  currentBattleInvite = invite;
+  const toast = document.getElementById('battle-invite-toast');
+  document.getElementById('invite-avatar').src = invite.fromUser?.avatar_url || '/img/default-avatar.png';
+  document.getElementById('invite-username').textContent = invite.fromUser?.username || 'Someone';
+  document.getElementById('invite-stream-title').textContent = invite.fromStream?.title || 'Live Stream';
+  toast.style.display = 'block';
+  // Auto-hide after 30 seconds
+  setTimeout(() => { if (currentBattleInvite?.id === invite.id) hideBattleInviteToast(); }, 30000);
+}
+
+function hideBattleInviteToast() {
+  document.getElementById('battle-invite-toast').style.display = 'none';
+  currentBattleInvite = null;
+}
+
+async function acceptBattleInvite() {
+  if (!currentBattleInvite) return;
+  try {
+    const r = await fetch(`${API}/api/battles/invite/${currentBattleInvite.id}/accept`, {
+      method: 'POST', headers
+    });
+    const d = await r.json();
+    if (d.ok) {
+      hideBattleInviteToast();
+      currentBattleId = d.battle.id;
+      showNotification('🔥 BATTLE ACCEPTED!', 'You're now in a head-to-head battle!', 'live');
+      document.getElementById('battle-controls').style.display = 'none';
+      document.getElementById('battle-lobby').style.display = 'none';
+      document.getElementById('battle-active').style.display = 'block';
+      startBattleTimer(60);
+      pollBattleLeaderboard();
+    } else {
+      showNotification('Error', d.error, 'error');
+    }
+  } catch(e) { showNotification('Error', e.message, 'error'); }
+}
+
+async function declineBattleInvite() {
+  if (!currentBattleInvite) return;
+  try {
+    await fetch(`${API}/api/battles/invite/${currentBattleInvite.id}/decline`, {
+      method: 'POST', headers
+    });
+    hideBattleInviteToast();
+    showNotification('Invite Declined', '', 'info');
+  } catch(e) {}
+}
+
+// Socket listeners for battle invites
+if (socket) {
+  socket.on('battle_invite_received', (data) => {
+    showBattleInviteToast(data.invite);
+  });
+  socket.on('battle_invite_accepted', (data) => {
+    showNotification('🔥 Battle Started!', 'Your invite was accepted!', 'live');
+    if (data.battle) {
+      currentBattleId = data.battle.id;
+      document.getElementById('battle-active').style.display = 'block';
+      startBattleTimer(60);
+      pollBattleLeaderboard();
+    }
+  });
+  socket.on('battle_invite_declined', (data) => {
+    showNotification('Invite Declined', 'They declined your battle invite', 'warning');
+  });
+}
 
 </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -1493,8 +1619,134 @@ const _origUpdateLiveState = updateLiveState;
 updateLiveState = function(live) {
   _origUpdateLiveState(live);
   document.getElementById('battle-card').style.display = live ? 'block' : 'none';
+  document.getElementById('live-now-card').style.display = live ? 'block' : 'none';
+  if (live) { loadLiveNow(); startLiveNowPolling(); }
+  else { stopLiveNowPolling(); hideBattleInviteToast(); }
   if (!live && battleTimer) { clearInterval(battleTimer); battleTimer = null; }
 };
+
+// ── LIVE NOW PANEL ──────────────────────────────────────────────────────────
+let liveNowPoll = null;
+let currentBattleInvite = null;
+
+function startLiveNowPolling() {
+  if (liveNowPoll) clearInterval(liveNowPoll);
+  liveNowPoll = setInterval(loadLiveNow, 8000);
+}
+function stopLiveNowPolling() {
+  if (liveNowPoll) { clearInterval(liveNowPoll); liveNowPoll = null; }
+}
+
+async function loadLiveNow() {
+  try {
+    const r = await fetch(`${API}/api/streams/live/now`);
+    const d = await r.json();
+    if (!d.ok) return;
+    const list = document.getElementById('live-now-list');
+    const count = document.getElementById('live-now-count');
+    const others = (d.liveUsers || []).filter(u => u.user_id !== currentUserId);
+    count.textContent = others.length ? `(${others.length} online)` : '';
+    if (!others.length) {
+      list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem;">No one else is live right now. You're the star! ⭐</div>';
+      return;
+    }
+    list.innerHTML = others.map(u => `
+      <div class="live-now-item">
+        <div class="live-dot"></div>
+        <img src="${u.avatar_url || '/img/default-avatar.png'}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.display_name || u.username)} ${u.is_verified ? '✓' : ''}</div>
+          <div style="font-size:0.7rem;color:var(--muted);">${esc(u.title || 'Live Stream')} • ${u.viewer_count} watching</div>
+        </div>
+        <button class="btn btn-cyan btn-sm" onclick="sendBattleInvite('${u.stream_id}', '${u.user_id}', '${esc(u.username)}')" style="padding:4px 10px;font-size:0.7rem;white-space:nowrap;">⚔️ Battle</button>
+      </div>
+    `).join('');
+  } catch(e) { console.warn('loadLiveNow error', e); }
+}
+
+async function sendBattleInvite(toStreamId, toUserId, toUsername) {
+  try {
+    const r = await fetch(`${API}/api/battles/invite`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ to_stream_id: toStreamId, to_user_id: toUserId })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      showNotification('⚔️ Battle Invite Sent!', `Waiting for ${esc(toUsername)} to accept...`, 'info');
+    } else {
+      showNotification('Invite Failed', d.error || 'Could not send invite', 'error');
+    }
+  } catch(e) { showNotification('Error', e.message, 'error'); }
+}
+
+// ── BATTLE INVITE TOAST ─────────────────────────────────────────────────────
+function showBattleInviteToast(invite) {
+  currentBattleInvite = invite;
+  const toast = document.getElementById('battle-invite-toast');
+  document.getElementById('invite-avatar').src = invite.fromUser?.avatar_url || '/img/default-avatar.png';
+  document.getElementById('invite-username').textContent = invite.fromUser?.username || 'Someone';
+  document.getElementById('invite-stream-title').textContent = invite.fromStream?.title || 'Live Stream';
+  toast.style.display = 'block';
+  // Auto-hide after 30 seconds
+  setTimeout(() => { if (currentBattleInvite?.id === invite.id) hideBattleInviteToast(); }, 30000);
+}
+
+function hideBattleInviteToast() {
+  document.getElementById('battle-invite-toast').style.display = 'none';
+  currentBattleInvite = null;
+}
+
+async function acceptBattleInvite() {
+  if (!currentBattleInvite) return;
+  try {
+    const r = await fetch(`${API}/api/battles/invite/${currentBattleInvite.id}/accept`, {
+      method: 'POST', headers
+    });
+    const d = await r.json();
+    if (d.ok) {
+      hideBattleInviteToast();
+      currentBattleId = d.battle.id;
+      showNotification('🔥 BATTLE ACCEPTED!', 'You're now in a head-to-head battle!', 'live');
+      document.getElementById('battle-controls').style.display = 'none';
+      document.getElementById('battle-lobby').style.display = 'none';
+      document.getElementById('battle-active').style.display = 'block';
+      startBattleTimer(60);
+      pollBattleLeaderboard();
+    } else {
+      showNotification('Error', d.error, 'error');
+    }
+  } catch(e) { showNotification('Error', e.message, 'error'); }
+}
+
+async function declineBattleInvite() {
+  if (!currentBattleInvite) return;
+  try {
+    await fetch(`${API}/api/battles/invite/${currentBattleInvite.id}/decline`, {
+      method: 'POST', headers
+    });
+    hideBattleInviteToast();
+    showNotification('Invite Declined', '', 'info');
+  } catch(e) {}
+}
+
+// Socket listeners for battle invites
+if (socket) {
+  socket.on('battle_invite_received', (data) => {
+    showBattleInviteToast(data.invite);
+  });
+  socket.on('battle_invite_accepted', (data) => {
+    showNotification('🔥 Battle Started!', 'Your invite was accepted!', 'live');
+    if (data.battle) {
+      currentBattleId = data.battle.id;
+      document.getElementById('battle-active').style.display = 'block';
+      startBattleTimer(60);
+      pollBattleLeaderboard();
+    }
+  });
+  socket.on('battle_invite_declined', (data) => {
+    showNotification('Invite Declined', 'They declined your battle invite', 'warning');
+  });
+}
 
 </script>
 </body>

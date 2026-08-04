@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>NVME.LIVE — Creator Dashboard</title>
   <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -215,6 +215,270 @@ async function endBattle() {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
+    /* ═══════════════════════════════════════════════════════════════════════
+       MOBILE-FIRST RESPONSIVE DESIGN
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    /* Base mobile styles */
+    :root {
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --touch-min: 44px;
+    }
+
+    * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+    body {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: none;
+      padding-bottom: calc(60px + var(--safe-bottom));
+    }
+
+    /* Mobile grid - single column default */
+    .grid-2, .grid-3, .grid-4 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    /* Tablet: 2 columns */
+    @media (min-width: 640px) {
+      .grid-2 { grid-template-columns: 1fr 1fr; }
+      .grid-3 { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* Desktop: full grids */
+    @media (min-width: 1024px) {
+      .grid-2 { grid-template-columns: 1fr 1fr; }
+      .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+      .grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    }
+
+    /* Touch-friendly buttons */
+    .btn, button, [onclick] {
+      min-height: var(--touch-min);
+      min-width: var(--touch-min);
+    }
+
+    /* Mobile topbar */
+    .topbar {
+      padding: 8px 12px;
+      height: auto;
+      min-height: 52px;
+    }
+
+    .topbar-user {
+      gap: 6px;
+    }
+
+    .topbar-user span {
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Mobile cards */
+    .card {
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 0.85rem;
+    }
+
+    /* Mobile stream control */
+    .go-live-panel {
+      padding: 16px;
+    }
+
+    .live-ring {
+      width: 140px;
+      height: 140px;
+    }
+
+    /* Mobile filter carousel */
+    .filter-carousel {
+      gap: 10px;
+      padding: 10px 4px;
+    }
+
+    .filter-chip {
+      min-width: 68px;
+    }
+
+    .filter-preview {
+      width: 60px;
+      height: 60px;
+    }
+
+    .filter-chip span {
+      font-size: 0.65rem;
+    }
+
+    /* Mobile sound effects */
+    #sound-effects-section .btn {
+      font-size: 0.7rem !important;
+      padding: 8px 10px;
+    }
+
+    /* Mobile voice effects */
+    #voice-effects-section {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #voice-effects-section .btn {
+      font-size: 0.7rem !important;
+      padding: 8px 10px;
+      white-space: nowrap;
+    }
+
+    /* Mobile battle split-screen */
+    .battle-split-screen {
+      grid-template-columns: 1fr !important;
+      gap: 12px;
+    }
+
+    @media (min-width: 640px) {
+      .battle-split-screen {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+      }
+    }
+
+    .battle-slot {
+      aspect-ratio: 9 / 16;
+      min-height: 400px;
+    }
+
+    /* Mobile bottom nav */
+    .mobile-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding: 8px 0 calc(8px + var(--safe-bottom));
+      z-index: 1000;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .mobile-nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 12px;
+      color: var(--muted);
+      font-size: 0.65rem;
+      text-decoration: none;
+      transition: color 0.2s;
+      min-width: 60px;
+    }
+
+    .mobile-nav-item.active {
+      color: var(--cyan);
+    }
+
+    .mobile-nav-item svg, .mobile-nav-item .icon {
+      font-size: 1.3rem;
+    }
+
+    /* Hide mobile nav on desktop */
+    @media (min-width: 1024px) {
+      .mobile-nav { display: none; }
+      body { padding-bottom: 0; }
+    }
+
+    /* Mobile modals */
+    #wallet-modal > div,
+    #battle-invite-toast {
+      max-width: 95vw !important;
+      width: 95% !important;
+      margin: 10px !important;
+    }
+
+    /* Mobile form inputs */
+    input, textarea, select {
+      font-size: 16px !important; /* Prevents iOS zoom */
+      min-height: var(--touch-min);
+    }
+
+    /* Mobile notifications */
+    .notification-toast {
+      left: 10px !important;
+      right: 10px !important;
+      max-width: none !important;
+    }
+
+    /* Mobile gift toast */
+    .gift-toast {
+      left: 10px !important;
+      right: 10px !important;
+    }
+
+    /* Mobile pinned comment */
+    #pinned-comment-bar {
+      padding: 10px 12px;
+    }
+
+    /* Mobile poll options */
+    .poll-result-bar {
+      height: 36px;
+    }
+
+    /* Mobile Q&A */
+    .qa-item {
+      padding: 12px;
+    }
+
+    /* Smooth scrolling */
+    html {
+      scroll-behavior: smooth;
+    }
+
+    /* Prevent text selection on UI elements */
+    .btn, .filter-chip, .mobile-nav-item, .card-title {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Swipe gestures */
+    .swipe-container {
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .swipe-container::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Mobile landscape adjustments */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .live-ring {
+        width: 100px;
+        height: 100px;
+      }
+      .card {
+        padding: 12px;
+      }
+    }
+
+    /* iPhone notch support */
+    @supports (padding-top: env(safe-area-inset-top)) {
+      .topbar {
+        padding-top: calc(8px + env(safe-area-inset-top));
+      }
+    }
+
     :root {
       --bg:        #07070d;
       --bg2:       #0d0d1a;
@@ -959,7 +1223,7 @@ async function endBattle() {
     <canvas id="host-canvas" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:none;"></canvas>
     <span id="ring-emoji" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;">📹</span>
   </div>
-        <div class="filter-carousel" style="display:flex;gap:8px;overflow-x:auto;padding:8px 4px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+        <div class="filter-carousel swipe-container" style="display:flex;gap:10px;overflow-x:auto;padding:10px 4px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
           <div class="filter-chip active" onclick="setCameraFilter('none', this)" data-filter="none"><div class="filter-preview" style="background:linear-gradient(135deg,#f093fb,#f5576c);"></div><span>Original</span></div>
           <div class="filter-chip" onclick="setCameraFilter('beauty', this)" data-filter="beauty"><div class="filter-preview" style="background:linear-gradient(135deg,#ffecd2,#fcb69f);"></div><span>Beauty</span></div>
           <div class="filter-chip" onclick="setCameraFilter('glow', this)" data-filter="glow"><div class="filter-preview" style="background:linear-gradient(135deg,#a8edea,#fed6e3);"></div><span>Glow</span></div>
@@ -1016,7 +1280,7 @@ async function endBattle() {
         <!-- VOICE EFFECTS -->
         <div id="voice-effects-section" style="width:100%;margin-top:16px;">
           <div class="card-title" style="margin-bottom:8px;"><span class="icon">🎙️</span> Voice Effects</div>
-          <div style="display:flex;gap:6px;overflow-x:auto;padding:4px 0;scrollbar-width:none;">
+          <div class="swipe-container" style="display:flex;gap:6px;overflow-x:auto;padding:4px 0;scrollbar-width:none;">
             <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('none')" style="white-space:nowrap;font-size:0.75rem;">🎙️ Normal</button>
             <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('chipmunk')" style="white-space:nowrap;font-size:0.75rem;">🐿️ Chipmunk</button>
             <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('robot')" style="white-space:nowrap;font-size:0.75rem;">🤖 Robot</button>
@@ -1030,6 +1294,8 @@ async function endBattle() {
         </div>
 
         <!-- SOUND EFFECTS (Host-controlled, viewers hear it) -->
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin:0 -4px;">
+          <style>.sound-scroll::-webkit-scrollbar { display: none; }</style>
         <div id="sound-effects-section" style="width:100%;margin-top:16px;">
           <div class="card-title" style="margin-bottom:8px;"><span class="icon">🔊</span> Sound Effects <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">(Viewers hear these!)</span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
@@ -1057,6 +1323,7 @@ async function endBattle() {
             <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('whistle')" style="font-size:0.75rem;">📯 Whistle</button>
             <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('ping')" style="font-size:0.75rem;">🔔 Ping</button>
           </div>
+        </div>
         </div>
 
         <!-- LIVE GOAL -->
@@ -3011,6 +3278,30 @@ if ('serviceWorker' in navigator) {
     <div>728x90</div>
   </div>
 </div>
+
+<!-- MOBILE BOTTOM NAVIGATION -->
+<nav class="mobile-nav">
+  <a href="/app" class="mobile-nav-item">
+    <span class="icon">🏠</span>
+    <span>Home</span>
+  </a>
+  <a href="/live" class="mobile-nav-item">
+    <span class="icon">📺</span>
+    <span>Live</span>
+  </a>
+  <a href="/creator" class="mobile-nav-item active">
+    <span class="icon" style="font-size:1.6rem;">➕</span>
+    <span>Create</span>
+  </a>
+  <a href="/battles" class="mobile-nav-item">
+    <span class="icon">⚔️</span>
+    <span>Battles</span>
+  </a>
+  <a href="/profile" class="mobile-nav-item">
+    <span class="icon">👤</span>
+    <span>Profile</span>
+  </a>
+</nav>
 
 </body>
 </html>

@@ -224,6 +224,29 @@ input,textarea{font-family:inherit}
 .back-row .bk{cursor:pointer;font-size:1.3rem;color:var(--muted)}
 .wallet-card{margin:8px 16px;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:20px;text-align:center}
 .wallet-num{font-size:2.4rem;font-weight:900;background:linear-gradient(135deg,var(--gold),#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+
+    /* MOBILE-FIRST */
+    :root { --safe-bottom: env(safe-area-inset-bottom, 0px); --touch-min: 44px; }
+    * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    body { -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; padding-bottom: calc(60px + var(--safe-bottom)); }
+    .btn, button, [onclick] { min-height: var(--touch-min); min-width: var(--touch-min); }
+    input, textarea, select { font-size: 16px !important; min-height: var(--touch-min); }
+    .grid-2, .grid-3, .grid-4 { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 640px) { .grid-2 { grid-template-columns: 1fr 1fr; } .grid-3 { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1024px) { .grid-3 { grid-template-columns: 1fr 1fr 1fr; } .grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; } }
+    .topbar { padding: 8px 12px; height: auto; min-height: 52px; }
+    .card { padding: 16px; }
+    .notification-toast { left: 10px !important; right: 10px !important; max-width: none !important; }
+    .gift-toast { left: 10px !important; right: 10px !important; }
+    .mobile-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; justify-content: space-around; align-items: center; padding: 8px 0 calc(8px + var(--safe-bottom)); z-index: 1000; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+    .mobile-nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 12px; color: var(--muted); font-size: 0.65rem; text-decoration: none; transition: color 0.2s; min-width: 60px; }
+    .mobile-nav-item.active { color: var(--cyan); }
+    .mobile-nav-item .icon { font-size: 1.3rem; }
+    @media (min-width: 1024px) { .mobile-nav { display: none; } body { padding-bottom: 0; } }
+    .swipe-container { overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .swipe-container::-webkit-scrollbar { display: none; }
+    .btn, .filter-chip, .mobile-nav-item { user-select: none; -webkit-user-select: none; }
+    html { scroll-behavior: smooth; }
 </style>
 </head>
 <body>
@@ -966,5 +989,12 @@ if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').cat
   if(!currentUser){ /* guests can watch the feed; auth wall appears on interaction */ }
 })();
 </script>
+<nav class="mobile-nav">
+  <a href="/app" class="mobile-nav-item active"><span class="icon">🏠</span><span>Home</span></a>
+  <a href="/live" class="mobile-nav-item"><span class="icon">📺</span><span>Live</span></a>
+  <a href="/creator" class="mobile-nav-item"><span class="icon" style="font-size:1.6rem;">➕</span><span>Create</span></a>
+  <a href="/battles" class="mobile-nav-item"><span class="icon">⚔️</span><span>Battles</span></a>
+  <a href="/profile" class="mobile-nav-item"><span class="icon">👤</span><span>Profile</span></a>
+</nav>
 </body>
 </html>

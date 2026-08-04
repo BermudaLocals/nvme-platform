@@ -502,5 +502,25 @@ socket.on('gift_received', (data) => {
   });
 });
 </script>
+
+<!-- MOBILE BOTTOM NAVIGATION -->
+<nav class="mobile-nav mobile-only">
+  <div class="mobile-nav-item active" onclick="window.location.href='/live'">
+    <span>📹</span>
+    <span>Go Live</span>
+  </div>
+  <div class="mobile-nav-item" onclick="window.location.href='/app'">
+    <span>🔍</span>
+    <span>Discover</span>
+  </div>
+  <div class="mobile-nav-item" onclick="openWallet()">
+    <span>💎</span>
+    <span>Wallet</span>
+  </div>
+  <div class="mobile-nav-item" onclick="window.location.href='/profile'">
+    <span>👤</span>
+    <span>Profile</span>
+  </div>
+</nav>
 </body>
 </html>

@@ -541,7 +541,7 @@ app.get('/api/users/:username', async (req, res) => {
       const tok = req.cookies?.token || req.headers.authorization?.split(' ')[1];
       if (tok) {
         const jwt = require('jsonwebtoken');
-        const dec = jwt.verify(tok, process.env.JWT_SECRET || 'nvme-secret');
+        const dec = jwt.verify(tok, process.env.JWT_SECRET || 'nvme-empire-2026-jwt-kush-dollar-double-empire-secret-key');
         viewerId = dec.userId;
       }
     } catch {}
@@ -626,7 +626,7 @@ app.use('/public', (req, res) => res.redirect(301, req.path));
 app.use(require('express').static(require('path').join(__dirname, 'public')));
 
 // ── Auth helper ──────────────────────────────────────────────
-const JWT_SECRET = process.env.JWT_SECRET || 'kush-empire-jwt-secret-2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'nvme-empire-2026-jwt-kush-dollar-double-empire-secret-key';
 function signToken(payload) { return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' }); }
 function authMiddleware(req, res, next) {
   const h = req.headers.authorization;
@@ -2779,7 +2779,7 @@ app.post('/api/auth/signup', async (req, res) => {
       [uuidv4(), email.toLowerCase().trim(), username.trim(), hash]
     );
     const user = r.rows[0];
-    const token = require('jsonwebtoken').sign({ id: user.id, email: user.email }, process.env.JWT_SECRET || 'nvme-secret', { expiresIn: '30d' });
+    const token = require('jsonwebtoken').sign({ id: user.id, email: user.email }, process.env.JWT_SECRET || 'nvme-empire-2026-jwt-kush-dollar-double-empire-secret-key', { expiresIn: '30d' });
     res.json({ ok: true, token, user });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

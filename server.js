@@ -3553,6 +3553,63 @@ app.get('/api/wallet/history', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+
+// ── BATTLE ATTACK / SABOTAGE GIFTS ──────────────────────────────────────────
+app.post('/api/battles/:id/attack', authMiddleware, async (req, res) => {
+  try {
+    const battleId = req.params.id;
+    const { gift_type, cost, damage, stream_id } = req.body;
+
+    // Verify user has enough credits
+    const { rows: userRows } = await db.query(`SELECT credits FROM users WHERE id=$1`, [req.user.id]);
+    const balance = userRows[0]?.credits || 0;
+    if (balance < cost) return res.status(400).json({ ok: false, error: 'Insufficient credits' });
+
+    // Deduct credits from attacker
+    await db.query(`UPDATE users SET credits = credits - $1 WHERE id=$2`, [cost, req.user.id]);
+
+    // Find opponent in battle (not the attacker)
+    const { rows: battleRows } = await db.query(
+      `SELECT * FROM battle_participants WHERE battle_id=$1 AND user_id != $2 AND status='active' ORDER BY gifts_received DESC LIMIT 1`,
+      [battleId, req.user.id]
+    );
+
+    if (battleRows.length === 0) {
+      return res.status(400).json({ ok: false, error: 'No active opponent found' });
+    }
+
+    const opponent = battleRows[0];
+
+    // Reduce opponent's gifts (can't go below 0)
+    const newOpponentGifts = Math.max(0, (opponent.gifts_received || 0) - damage);
+    await db.query(
+      `UPDATE battle_participants SET gifts_received = $1 WHERE id=$2`,
+      [newOpponentGifts, opponent.id]
+    );
+
+    // Record transaction
+    await db.query(
+      `INSERT INTO credit_transactions (user_id, type, amount, gift_type, stream_id, recipient_id, created_at)
+       VALUES ($1, 'attack_gift', $2, $3, $4, $5, NOW())`,
+      [req.user.id, -cost, gift_type, stream_id, opponent.user_id]
+    );
+
+    // Emit attack event
+    if (global.io) {
+      global.io.to(`battle:${battleId}`).emit('attack_received', {
+        attacker: req.user.username,
+        target: opponent.username,
+        gift_type,
+        damage,
+        new_score: newOpponentGifts
+      });
+    }
+
+    const { rows: newBalanceRows } = await db.query(`SELECT credits FROM users WHERE id=$1`, [req.user.id]);
+    res.json({ ok: true, new_balance: newBalanceRows[0].credits, damage_dealt: damage });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ── PRIVACY ─────────────────────────────────────────────────────────────────
 
 app.post('/api/profile/privacy', authMiddleware, async (req, res) => {

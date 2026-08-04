@@ -1510,7 +1510,7 @@ async function loadLiveNow() {
     const others = (d.liveUsers || []).filter(u => u.user_id !== currentUserId);
     count.textContent = others.length ? `(${others.length} online)` : '';
     if (!others.length) {
-      list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem;">No one else is live right now. You're the star! ⭐</div>';
+      list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem;">No one else is live right now. You\'re the star! ⭐</div>';
       return;
     }
     list.innerHTML = others.map(u => `
@@ -1571,7 +1571,7 @@ async function acceptBattleInvite() {
     if (d.ok) {
       hideBattleInviteToast();
       currentBattleId = d.battle.id;
-      showNotification('🔥 BATTLE ACCEPTED!', 'You're now in a head-to-head battle!', 'live');
+      showNotification('🔥 BATTLE ACCEPTED!', 'You\'re now in a head-to-head battle!', 'live');
       document.getElementById('battle-controls').style.display = 'none';
       document.getElementById('battle-lobby').style.display = 'none';
       document.getElementById('battle-active').style.display = 'block';

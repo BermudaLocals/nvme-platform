@@ -793,7 +793,7 @@ async function endBattle() {
    ════════════════════════════════════════════════ */
 
 const API   = '';
-const TOKEN = localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token') || localStorage.getItem('empire_token');
+const TOKEN = localStorage.getItem('token') || localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token') || localStorage.getItem('empire_token') || sessionStorage.getItem('token') || localStorage.getItem('jwt') || localStorage.getItem('auth_token');
 const headers = {
   'Content-Type':  'application/json',
   'Authorization': `Bearer ${TOKEN}`

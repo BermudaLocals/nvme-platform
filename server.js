@@ -3424,6 +3424,135 @@ app.post('/api/battles/:id/background', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  WALLET / CREDITS SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Get wallet balance ────────────────────────────────────────────────────────
+app.get('/api/wallet', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT credits FROM users WHERE id=$1`, [req.user.id]
+    );
+    const balance = rows[0]?.credits || 0;
+    res.json({ ok: true, balance });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Purchase credits (Stripe checkout) ──────────────────────────────────────
+app.post('/api/wallet/purchase', authMiddleware, async (req, res) => {
+  try {
+    const { amount, payment_method } = req.body;
+    if (!amount || amount < 1) return res.status(400).json({ ok: false, error: 'Invalid amount' });
+
+    // Pricing tiers
+    const pricing = { 100: 0.99, 500: 4.99, 1200: 9.99, 2500: 19.99, 5000: 39.99, 10000: 74.99 };
+    const usdAmount = pricing[amount] || (amount * 0.01);
+
+    // Create Stripe checkout session (placeholder - integrate real Stripe)
+    // const session = await stripe.checkout.sessions.create({...});
+    // For now, simulate direct credit add (REMOVE IN PRODUCTION)
+    await db.query(`UPDATE users SET credits = COALESCE(credits, 0) + $1 WHERE id=$2`, [amount, req.user.id]);
+    await db.query(
+      `INSERT INTO credit_transactions (user_id, type, amount, usd_amount, status, created_at)
+       VALUES ($1, 'purchase', $2, $3, 'completed', NOW())`,
+      [req.user.id, amount, usdAmount]
+    );
+
+    const { rows } = await db.query(`SELECT credits FROM users WHERE id=$1`, [req.user.id]);
+    res.json({ ok: true, new_balance: rows[0].credits, message: 'Credits purchased (Stripe integration pending)' });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Withdraw credits (creator payout) ───────────────────────────────────────
+app.post('/api/wallet/withdraw', authMiddleware, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    if (!amount || amount < 1000) return res.status(400).json({ ok: false, error: 'Minimum 1,000 credits' });
+
+    const { rows } = await db.query(`SELECT credits FROM users WHERE id=$1`, [req.user.id]);
+    const balance = rows[0]?.credits || 0;
+    if (balance < amount) return res.status(400).json({ ok: false, error: 'Insufficient credits' });
+
+    const usdAmount = (amount * 0.01) * (1 - 0.30); // 30% platform fee
+
+    await db.query(`UPDATE users SET credits = credits - $1 WHERE id=$2`, [amount, req.user.id]);
+    await db.query(
+      `INSERT INTO credit_transactions (user_id, type, amount, usd_amount, status, created_at)
+       VALUES ($1, 'withdrawal', $2, $3, 'pending', NOW())`,
+      [req.user.id, -amount, usdAmount]
+    );
+
+    const { rows: newRows } = await db.query(`SELECT credits FROM users WHERE id=$1`, [req.user.id]);
+    res.json({ ok: true, new_balance: newRows[0].credits, usd_amount: usdAmount.toFixed(2) });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Gift someone (uses credits) ─────────────────────────────────────────────
+app.post('/api/streams/:id/gift', authMiddleware, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const { gift_type, recipient_id } = req.body;
+
+    // Gift pricing in credits
+    const giftPrices = { rose: 1, heart: 5, star: 10, diamond: 50, crown: 100, rocket: 500 };
+    const cost = giftPrices[gift_type] || 1;
+
+    // Deduct from sender
+    const { rows: senderRows } = await db.query(`SELECT credits FROM users WHERE id=$1`, [req.user.id]);
+    const senderBalance = senderRows[0]?.credits || 0;
+    if (senderBalance < cost) return res.status(400).json({ ok: false, error: 'Insufficient credits' });
+
+    await db.query(`UPDATE users SET credits = credits - $1 WHERE id=$2`, [cost, req.user.id]);
+
+    // Credit recipient (creator gets 70%)
+    const creatorEarnings = Math.floor(cost * 0.70);
+    await db.query(`UPDATE users SET credits = COALESCE(credits, 0) + $1 WHERE id=$2`, [creatorEarnings, recipient_id]);
+
+    // Record transaction
+    await db.query(
+      `INSERT INTO credit_transactions (user_id, type, amount, gift_type, stream_id, recipient_id, created_at)
+       VALUES ($1, 'gift_sent', $2, $3, $4, $5, NOW())`,
+      [req.user.id, -cost, gift_type, streamId, recipient_id]
+    );
+    await db.query(
+      `INSERT INTO credit_transactions (user_id, type, amount, gift_type, stream_id, sender_id, created_at)
+       VALUES ($1, 'gift_received', $2, $3, $4, $5, NOW())`,
+      [recipient_id, creatorEarnings, gift_type, streamId, req.user.id]
+    );
+
+    // Update stream gift stats
+    await db.query(
+      `UPDATE livestreams SET total_gifts_received = COALESCE(total_gifts_received, 0) + $1 WHERE id=$2`,
+      [cost, streamId]
+    );
+
+    // Emit via socket
+    if (global.io) {
+      global.io.to(`stream:${streamId}`).emit('gift_received', {
+        senderId: req.user.id,
+        senderName: req.user.username,
+        gift: gift_type,
+        value: cost
+      });
+    }
+
+    res.json({ ok: true, new_balance: senderBalance - cost });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Get transaction history ───────────────────────────────────────────────────
+app.get('/api/wallet/history', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT * FROM credit_transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+      [req.user.id]
+    );
+    res.json({ ok: true, transactions: rows });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ── PRIVACY ─────────────────────────────────────────────────────────────────
 
 app.post('/api/profile/privacy', authMiddleware, async (req, res) => {
@@ -3547,5 +3676,49 @@ app.get('/api/founder-badges', async (req, res) => {
     console.log('[migration] New feature tables created successfully');
   } catch(e) {
     console.error('[migration] Error:', e.message);
+  }
+})();
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DB MIGRATIONS for Wallet / Credits System
+// ═══════════════════════════════════════════════════════════════════════════════
+(async () => {
+  try {
+    // Add credits column to users
+    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 0`);
+
+    // Credit transactions table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS credit_transactions (
+        id SERIAL PRIMARY KEY,
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT NOT NULL, -- purchase, withdrawal, gift_sent, gift_received, battle_entry
+        amount INTEGER NOT NULL,
+        usd_amount NUMERIC,
+        gift_type TEXT,
+        stream_id UUID REFERENCES livestreams(id) ON DELETE SET NULL,
+        recipient_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        sender_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        status TEXT DEFAULT 'completed',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Update gift values to use credits
+    await db.query(`
+      UPDATE livestreams SET gift_config = '{
+        "rose": 1,
+        "heart": 5,
+        "star": 10,
+        "diamond": 50,
+        "crown": 100,
+        "rocket": 500
+      }'::jsonb WHERE gift_config IS NULL
+    `);
+
+    console.log('[migration] Wallet/Credits system initialized');
+  } catch(e) {
+    console.error('[migration] Wallet error:', e.message);
   }
 })();

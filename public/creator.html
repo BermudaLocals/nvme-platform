@@ -127,8 +127,8 @@ function renderBattleLeaderboard(parts) {
       <div class="battle-slot" id="battle-slot-${p.user_id || p.id}">
         <div class="battle-slot-bg" id="battle-bg-${p.user_id || p.id}" style="background-image: url('${p.bg_url || ''}')"></div>
         <div class="battle-slot-bg-overlay"></div>
-        <label class="battle-slot-upload" title="Upload background">
-          📷
+        <label class="battle-slot-upload" title="Upload background image">
+          <span style="font-size:0.7rem;">📷 BG</span>
           <input type="file" accept="image/*" onchange="uploadBattleBg('${p.user_id || p.id}', this)" />
         </label>
         <div class="battle-slot-content">
@@ -877,6 +877,10 @@ async function endBattle() {
   <div class="topbar-user">
     <div class="avatar" id="user-avatar">?</div>
     <span id="user-display">Loading…</span>
+    <div id="wallet-display" style="display:flex;align-items:center;gap:4px;background:linear-gradient(135deg,rgba(124,92,252,0.2),rgba(233,30,140,0.2));border:1px solid rgba(124,92,252,0.3);border-radius:20px;padding:4px 12px;font-size:0.8rem;font-weight:600;margin-left:8px;cursor:pointer;" onclick="openWallet()">
+      <span>💎</span>
+      <span id="credit-balance">0</span>
+    </div>
     <button id="push-toggle" class="btn btn-ghost btn-sm" onclick="togglePushNotifications()" title="Notify followers when live" style="margin-left:8px;">🔔</button>
   </div>
 </nav>
@@ -1184,6 +1188,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStreams();
   startLeaderboardInterval();
   fetchUserProfile();
+  loadWallet();
 });
 
 // ── user profile ───────────────────────────────
@@ -1872,8 +1877,8 @@ function renderBattleLeaderboard(parts) {
       <div class="battle-slot" id="battle-slot-${p.user_id || p.id}">
         <div class="battle-slot-bg" id="battle-bg-${p.user_id || p.id}" style="background-image: url('${p.bg_url || ''}')"></div>
         <div class="battle-slot-bg-overlay"></div>
-        <label class="battle-slot-upload" title="Upload background">
-          📷
+        <label class="battle-slot-upload" title="Upload background image">
+          <span style="font-size:0.7rem;">📷 BG</span>
           <input type="file" accept="image/*" onchange="uploadBattleBg('${p.user_id || p.id}', this)" />
         </label>
         <div class="battle-slot-content">
@@ -2378,6 +2383,107 @@ if (socket) {
 
 </script>
 
+// ── WALLET / CREDITS SYSTEM ────────────────────
+let userCredits = 0;
+const CREDIT_TO_USD = 0.01; // 1 credit = $0.01
+const PLATFORM_FEE = 0.30;   // 30% platform cut
+
+async function loadWallet() {
+  try {
+    const r = await fetch(`${API}/api/wallet`, { headers });
+    if (!r.ok) return;
+    const d = await r.json();
+    userCredits = d.balance || 0;
+    updateWalletDisplay();
+  } catch(e) { console.error('loadWallet error:', e); }
+}
+
+function updateWalletDisplay() {
+  document.getElementById('credit-balance').textContent = fmt(userCredits);
+  document.getElementById('wallet-balance-big').textContent = fmt(userCredits);
+  document.getElementById('wallet-usd-value').textContent = (userCredits * CREDIT_TO_USD).toFixed(2);
+}
+
+function openWallet() {
+  document.getElementById('wallet-modal').style.display = 'flex';
+  loadWallet();
+}
+
+function closeWallet() {
+  document.getElementById('wallet-modal').style.display = 'none';
+}
+
+async function buyCredits(amount) {
+  try {
+    const r = await fetch(`${API}/api/wallet/purchase`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ amount, payment_method: 'stripe' })
+    });
+    const d = await r.json();
+    if (d.ok && d.checkout_url) {
+      window.location = d.checkout_url;
+    } else if (d.ok) {
+      userCredits = d.new_balance;
+      updateWalletDisplay();
+      showNotification('💎 Purchased!', `+${amount} credits added`, 'success');
+    } else {
+      showNotification('Error', d.error || 'Purchase failed', 'error');
+    }
+  } catch(e) { showNotification('Error', e.message, 'error'); }
+}
+
+async function withdrawCredits() {
+  const amount = parseInt(document.getElementById('withdraw-amount').value);
+  if (!amount || amount < 1000) {
+    showNotification('Error', 'Minimum withdrawal is 1,000 credits', 'error');
+    return;
+  }
+  if (amount > userCredits) {
+    showNotification('Error', 'Insufficient credits', 'error');
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/api/wallet/withdraw`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ amount })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      userCredits = d.new_balance;
+      updateWalletDisplay();
+      showNotification('💰 Withdrawal Initiated', `$${d.usd_amount} will arrive in 3-5 business days`, 'success');
+    } else {
+      showNotification('Error', d.error || 'Withdrawal failed', 'error');
+    }
+  } catch(e) { showNotification('Error', e.message, 'error'); }
+}
+
+// ── AD INTEGRATION PLACEHOLDERS ────────────────
+function loadAds() {
+  // Google AdSense - replace ca-pub-XXXXXXXX with your publisher ID
+  // const adsenseScript = document.createElement('script');
+  // adsenseScript.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXX';
+  // adsenseScript.crossOrigin = 'anonymous';
+  // document.head.appendChild(adsenseScript);
+
+  // Facebook Audience Network - replace YOUR_PLACEMENT_ID
+  // window.fbAsyncInit = function() {
+  //   FB.Event.subscribe('ad.loaded', () => console.log('FB Ad loaded'));
+  // };
+
+  // Bling Ads - replace YOUR_BLING_KEY
+  // const blingScript = document.createElement('script');
+  // blingScript.src = 'https://cdn.bling.com/ads.js?key=YOUR_BLING_KEY';
+  // document.head.appendChild(blingScript);
+
+  console.log('[ads] Ad placeholders loaded. Replace with real ad codes.');
+}
+
+// Load ads after page loads
+document.addEventListener('DOMContentLoaded', () => {
+  if (TOKEN) loadAds();
+});
+
 <!-- PWA INSTALL + AUTO-UPDATE -->
 <script>
 let deferredPrompt = null;
@@ -2410,5 +2516,75 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+
+<!-- WALLET MODAL -->
+<div id="wallet-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:10000;align-items:center;justify-content:center;">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 style="font-size:1.2rem;">💎 NVME Wallet</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeWallet()">✕</button>
+    </div>
+    <div style="text-align:center;padding:20px;background:linear-gradient(135deg,rgba(124,92,252,0.1),rgba(233,30,140,0.1));border-radius:12px;margin-bottom:20px;">
+      <div style="font-size:0.8rem;color:var(--muted);">Your Balance</div>
+      <div style="font-size:2.5rem;font-weight:800;background:linear-gradient(135deg,var(--magenta),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;" id="wallet-balance-big">0</div>
+      <div style="font-size:0.75rem;color:var(--muted);">≈ $<span id="wallet-usd-value">0.00</span> USD</div>
+    </div>
+    <div style="margin-bottom:20px;">
+      <div style="font-weight:700;font-size:0.85rem;margin-bottom:10px;">Buy Credits</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button class="btn btn-ghost" onclick="buyCredits(100)" style="flex-direction:column;gap:4px;padding:12px;">
+          <span style="font-size:1.2rem;">💎</span>
+          <span style="font-weight:700;">100</span>
+          <span style="font-size:0.7rem;color:var(--muted);">$0.99</span>
+        </button>
+        <button class="btn btn-ghost" onclick="buyCredits(500)" style="flex-direction:column;gap:4px;padding:12px;">
+          <span style="font-size:1.2rem;">💎</span>
+          <span style="font-weight:700;">500</span>
+          <span style="font-size:0.7rem;color:var(--muted);">$4.99</span>
+        </button>
+        <button class="btn btn-ghost" onclick="buyCredits(1200)" style="flex-direction:column;gap:4px;padding:12px;">
+          <span style="font-size:1.2rem;">💎</span>
+          <span style="font-weight:700;">1,200</span>
+          <span style="font-size:0.7rem;color:var(--muted);">$9.99</span>
+        </button>
+        <button class="btn btn-ghost" onclick="buyCredits(2500)" style="flex-direction:column;gap:4px;padding:12px;">
+          <span style="font-size:1.2rem;">💎</span>
+          <span style="font-weight:700;">2,500</span>
+          <span style="font-size:0.7rem;color:var(--muted);">$19.99</span>
+        </button>
+      </div>
+    </div>
+    <div style="margin-bottom:20px;">
+      <div style="font-weight:700;font-size:0.85rem;margin-bottom:10px;">Withdraw (Creators)</div>
+      <div style="display:flex;gap:8px;">
+        <input type="number" id="withdraw-amount" placeholder="Credits" style="flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:0.85rem;" />
+        <button class="btn btn-cyan" onclick="withdrawCredits()">Withdraw</button>
+      </div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-top:6px;">Min: 1,000 credits • Rate: 100 credits = $1.00 • Platform fee: 30%</div>
+    </div>
+    <div id="wallet-history" style="max-height:150px;overflow-y:auto;">
+      <div style="font-weight:700;font-size:0.85rem;margin-bottom:8px;">Recent Activity</div>
+      <div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:8px;">No transactions yet</div>
+    </div>
+  </div>
+</div>
+
+<!-- AD PLACEHOLDERS -->
+<!-- Google AdSense -->
+<div id="ad-sidebar" style="position:fixed;right:0;top:60px;width:160px;height:600px;background:var(--bg2);border-left:1px solid var(--border);z-index:50;display:none;align-items:center;justify-content:center;">
+  <div style="text-align:center;color:var(--muted);font-size:0.7rem;">
+    <div>Google AdSense</div>
+    <div>160x600</div>
+  </div>
+</div>
+
+<!-- Facebook Audience Network -->
+<div id="ad-bottom" style="position:fixed;bottom:0;left:0;right:0;height:90px;background:var(--bg2);border-top:1px solid var(--border);z-index:50;display:none;align-items:center;justify-content:center;">
+  <div style="text-align:center;color:var(--muted);font-size:0.7rem;">
+    <div>Facebook Audience Network</div>
+    <div>728x90</div>
+  </div>
+</div>
+
 </body>
 </html>

@@ -73,6 +73,7 @@ async function startBattle() {
   if (!d.ok) return showNotification('Error', d.error, 'error');
   document.getElementById('battle-lobby').style.display = 'none';
   document.getElementById('battle-active').style.display = 'block';
+  document.getElementById('battle-card').style.display = 'block';
   startBattleTimer(60);
   showNotification('🔥 BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
   pollBattleLeaderboard();
@@ -103,8 +104,11 @@ async function pollBattleLeaderboard() {
 
 function renderBattleLeaderboard(parts) {
   const el = document.getElementById('battle-leaderboard');
+  const splitEl = document.getElementById('battle-split-screen');
   const active = parts.filter(p => p.status === 'active').sort((a,b) => b.gifts_received - a.gifts_received);
   const eliminated = parts.filter(p => p.status === 'eliminated');
+
+  // Update leaderboard list
   el.innerHTML = `
     <div style="font-weight:700;margin-bottom:4px;">🏆 Leaderboard</div>
     ${active.map((p,i) => `
@@ -116,6 +120,69 @@ function renderBattleLeaderboard(parts) {
     `).join('')}
     ${eliminated.length ? `<div style="margin-top:8px;color:var(--red);font-size:0.75rem;">💀 Eliminated: ${eliminated.map(e => esc(e.username)).join(', ')}</div>` : ''}
   `;
+
+  // Update split-screen slots
+  if (splitEl) {
+    splitEl.innerHTML = active.map((p, i) => `
+      <div class="battle-slot" id="battle-slot-${p.user_id || p.id}">
+        <div class="battle-slot-bg" id="battle-bg-${p.user_id || p.id}" style="background-image: url('${p.bg_url || ''}')"></div>
+        <div class="battle-slot-bg-overlay"></div>
+        <label class="battle-slot-upload" title="Upload background">
+          📷
+          <input type="file" accept="image/*" onchange="uploadBattleBg('${p.user_id || p.id}', this)" />
+        </label>
+        <div class="battle-slot-content">
+          <div class="battle-slot-header">
+            <img class="battle-slot-avatar" src="${p.avatar_url || '/img/default-avatar.png'}" alt="" />
+            <div class="battle-slot-info">
+              <div class="battle-slot-name">${esc(p.username)}</div>
+              <div class="battle-slot-team">${esc(p.team === 'b' ? '🔵 Team B' : '🔴 Team A')}</div>
+            </div>
+          </div>
+          <div class="battle-slot-gifts">
+            <div class="battle-slot-gift-count">${p.gifts_received || 0}</div>
+            <div class="battle-slot-gift-label">gifts received</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+// ── Battle Background Upload ───────────────────
+async function uploadBattleBg(participantId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showNotification('Error', 'Please select an image file', 'error');
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showNotification('Error', 'Image must be under 5MB', 'error');
+    return;
+  }
+
+  try {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const bgEl = document.getElementById('battle-bg-' + participantId);
+      if (bgEl) {
+        bgEl.style.backgroundImage = `url('${e.target.result}')`;
+        showNotification('✅ Background Set', 'Your battle background is live!', 'success');
+      }
+      // Also persist to server if battle is active
+      if (currentBattleId) {
+        fetch(`${API}/api/battles/${currentBattleId}/background`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ participant_id: participantId, bg_data_url: e.target.result })
+        }).catch(() => {});
+      }
+    };
+    reader.readAsDataURL(file);
+  } catch(err) {
+    showNotification('Error', 'Failed to upload background', 'error');
+  }
 }
 
 async function eliminateLowest() {
@@ -139,6 +206,7 @@ async function endBattle() {
   const d = await r.json();
   document.getElementById('battle-active').style.display = 'none';
   document.getElementById('battle-controls').style.display = 'block';
+  document.getElementById('battle-card').style.display = 'none';
   currentBattleId = null;
   showNotification('🏆 Battle Ended!', 'Winners announced!', 'success');
 }
@@ -593,6 +661,142 @@ async function endBattle() {
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
+
+    /* ── BATTLE SYSTEM ── */
+    .battle-card { display: none; }
+    .battle-controls { padding: 20px; }
+    .battle-type-select { 
+      background: var(--bg2); border: 1px solid var(--border); 
+      color: var(--text); padding: 10px 14px; border-radius: 8px; 
+      width: 100%; font-size: 0.9rem; margin-bottom: 12px;
+    }
+    .battle-team-inputs { display: none; margin-bottom: 12px; }
+    .battle-team-inputs.visible { display: block; }
+    .battle-team-inputs input {
+      background: var(--bg2); border: 1px solid var(--border);
+      color: var(--text); padding: 10px 14px; border-radius: 8px;
+      width: 100%; font-size: 0.9rem; margin-bottom: 8px;
+    }
+    .battle-lobby { display: none; padding: 20px; }
+    .battle-participants { max-height: 300px; overflow-y: auto; }
+    .battle-active { display: none; padding: 20px; }
+
+    /* Split-screen 9:16 battle layout */
+    .battle-split-screen {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .battle-slot {
+      position: relative;
+      aspect-ratio: 9 / 16;
+      background: var(--bg2);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .battle-slot-bg {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-size: cover;
+      background-position: center;
+      z-index: 1;
+    }
+    .battle-slot-bg-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 40%, rgba(0,0,0,0.6) 100%);
+      z-index: 2;
+    }
+    .battle-slot-content {
+      position: relative;
+      z-index: 3;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+    }
+    .battle-slot-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .battle-slot-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      border: 2px solid var(--cyan);
+      object-fit: cover;
+    }
+    .battle-slot-info { flex: 1; }
+    .battle-slot-name { font-weight: 700; font-size: 0.95rem; }
+    .battle-slot-team { font-size: 0.75rem; color: var(--muted); }
+    .battle-slot-gifts {
+      text-align: center;
+      margin-top: auto;
+    }
+    .battle-slot-gift-count {
+      font-size: 2.5rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--gold), #f59e0b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .battle-slot-gift-label { font-size: 0.75rem; color: var(--muted); }
+    .battle-slot-upload {
+      position: absolute;
+      bottom: 12px; right: 12px;
+      z-index: 4;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 50%;
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .battle-slot-upload:hover {
+      background: rgba(124,92,252,0.8);
+      border-color: var(--magenta);
+    }
+    .battle-slot-upload input { display: none; }
+    .battle-timer {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 16px;
+      color: var(--red);
+    }
+    .battle-leaderboard-mini {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .battle-invite-toast {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      background: var(--card);
+      border: 1px solid var(--magenta);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      max-width: 320px;
+      box-shadow: var(--shadow);
+    }
+    .battle-invite-toast .invite-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+    }
+    .battle-invite-toast .invite-avatar {
+      width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+    }
+    .battle-invite-toast .invite-actions {
+      display: flex; gap: 8px; margin-top: 12px;
+    }
   </style>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#e91e8c">
@@ -799,6 +1003,66 @@ async function endBattle() {
     </div>
   </div>
 
+
+  <!-- BATTLE CARD -->
+  <div id="battle-card" class="battle-card card mb-24">
+    <div class="card-title"><span class="icon">⚔️</span> Battle Arena</div>
+
+    <!-- Battle Controls -->
+    <div id="battle-controls" class="battle-controls">
+      <label style="font-size:0.8rem;color:var(--muted);margin-bottom:6px;display:block;">Battle Type</label>
+      <select id="battle-type" class="battle-type-select" onchange="toggleTeamNames()">
+        <option value="1v1">1v1 Duel</option>
+        <option value="team">Team Battle</option>
+      </select>
+      <div id="team-names" class="battle-team-inputs">
+        <input type="text" id="team-a-name" placeholder="Team A name" value="Team A" />
+        <input type="text" id="team-b-name" placeholder="Team B name" value="Team B" />
+      </div>
+      <button class="btn btn-primary btn-full" onclick="createBattle()">⚔️ Create Battle</button>
+    </div>
+
+    <!-- Battle Lobby -->
+    <div id="battle-lobby" class="battle-lobby">
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:2rem;">⏳</div>
+        <div style="font-weight:700;">Waiting for warriors…</div>
+        <div style="font-size:0.8rem;color:var(--muted);">Share your stream so others can join</div>
+      </div>
+      <div id="battle-participants" class="battle-participants"></div>
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn btn-cyan" style="flex:1;" onclick="startBattle()">🔥 Start Battle</button>
+        <button class="btn btn-danger" style="flex:1;" onclick="endBattle()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Battle Active -->
+    <div id="battle-active" class="battle-active">
+      <div class="battle-timer" id="battle-timer">⏱ 1:00</div>
+      <div id="battle-split-screen" class="battle-split-screen"></div>
+      <div class="battle-leaderboard-mini">
+        <div style="font-weight:700;font-size:0.8rem;margin-bottom:10px;">🏆 Live Leaderboard</div>
+        <div id="battle-leaderboard"></div>
+      </div>
+      <button class="btn btn-danger btn-full" style="margin-top:16px;" onclick="endBattle()">⏹ End Battle</button>
+    </div>
+  </div>
+
+  <!-- Battle Invite Toast -->
+  <div id="battle-invite-toast" class="battle-invite-toast">
+    <div class="invite-header">
+      <img id="invite-avatar" class="invite-avatar" src="/img/default-avatar.png" alt="" />
+      <div>
+        <div style="font-weight:700;" id="invite-username">Someone</div>
+        <div style="font-size:0.75rem;color:var(--muted);" id="invite-stream-title">Live Stream</div>
+        <div style="font-size:0.7rem;color:var(--magenta);">⚔️ Battle Invite</div>
+      </div>
+    </div>
+    <div class="invite-actions">
+      <button class="btn btn-cyan btn-sm" style="flex:1;" onclick="acceptBattleInvite()">Accept</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="declineBattleInvite()">Decline</button>
+    </div>
+  </div>
 </div><!-- /#app -->
 
 <script>
@@ -1489,6 +1753,7 @@ async function startBattle() {
   if (!d.ok) return showNotification('Error', d.error, 'error');
   document.getElementById('battle-lobby').style.display = 'none';
   document.getElementById('battle-active').style.display = 'block';
+  document.getElementById('battle-card').style.display = 'block';
   startBattleTimer(60);
   showNotification('🔥 BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
   pollBattleLeaderboard();
@@ -1519,8 +1784,11 @@ async function pollBattleLeaderboard() {
 
 function renderBattleLeaderboard(parts) {
   const el = document.getElementById('battle-leaderboard');
+  const splitEl = document.getElementById('battle-split-screen');
   const active = parts.filter(p => p.status === 'active').sort((a,b) => b.gifts_received - a.gifts_received);
   const eliminated = parts.filter(p => p.status === 'eliminated');
+
+  // Update leaderboard list
   el.innerHTML = `
     <div style="font-weight:700;margin-bottom:4px;">🏆 Leaderboard</div>
     ${active.map((p,i) => `
@@ -1532,6 +1800,69 @@ function renderBattleLeaderboard(parts) {
     `).join('')}
     ${eliminated.length ? `<div style="margin-top:8px;color:var(--red);font-size:0.75rem;">💀 Eliminated: ${eliminated.map(e => esc(e.username)).join(', ')}</div>` : ''}
   `;
+
+  // Update split-screen slots
+  if (splitEl) {
+    splitEl.innerHTML = active.map((p, i) => `
+      <div class="battle-slot" id="battle-slot-${p.user_id || p.id}">
+        <div class="battle-slot-bg" id="battle-bg-${p.user_id || p.id}" style="background-image: url('${p.bg_url || ''}')"></div>
+        <div class="battle-slot-bg-overlay"></div>
+        <label class="battle-slot-upload" title="Upload background">
+          📷
+          <input type="file" accept="image/*" onchange="uploadBattleBg('${p.user_id || p.id}', this)" />
+        </label>
+        <div class="battle-slot-content">
+          <div class="battle-slot-header">
+            <img class="battle-slot-avatar" src="${p.avatar_url || '/img/default-avatar.png'}" alt="" />
+            <div class="battle-slot-info">
+              <div class="battle-slot-name">${esc(p.username)}</div>
+              <div class="battle-slot-team">${esc(p.team === 'b' ? '🔵 Team B' : '🔴 Team A')}</div>
+            </div>
+          </div>
+          <div class="battle-slot-gifts">
+            <div class="battle-slot-gift-count">${p.gifts_received || 0}</div>
+            <div class="battle-slot-gift-label">gifts received</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+// ── Battle Background Upload ───────────────────
+async function uploadBattleBg(participantId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showNotification('Error', 'Please select an image file', 'error');
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showNotification('Error', 'Image must be under 5MB', 'error');
+    return;
+  }
+
+  try {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const bgEl = document.getElementById('battle-bg-' + participantId);
+      if (bgEl) {
+        bgEl.style.backgroundImage = `url('${e.target.result}')`;
+        showNotification('✅ Background Set', 'Your battle background is live!', 'success');
+      }
+      // Also persist to server if battle is active
+      if (currentBattleId) {
+        fetch(`${API}/api/battles/${currentBattleId}/background`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ participant_id: participantId, bg_data_url: e.target.result })
+        }).catch(() => {});
+      }
+    };
+    reader.readAsDataURL(file);
+  } catch(err) {
+    showNotification('Error', 'Failed to upload background', 'error');
+  }
 }
 
 async function eliminateLowest() {
@@ -1555,6 +1886,7 @@ async function endBattle() {
   const d = await r.json();
   document.getElementById('battle-active').style.display = 'none';
   document.getElementById('battle-controls').style.display = 'block';
+  document.getElementById('battle-card').style.display = 'none';
   currentBattleId = null;
   showNotification('🏆 Battle Ended!', 'Winners announced!', 'success');
 }

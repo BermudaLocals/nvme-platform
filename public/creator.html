@@ -798,6 +798,36 @@ async function endBattle() {
       display: flex; gap: 8px; margin-top: 12px;
     }
 
+    /* ── FILTER CAROUSEL (TikTok-style) ── */
+    .filter-carousel { scrollbar-width: none; }
+    .filter-carousel::-webkit-scrollbar { display: none; }
+    .filter-chip {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      scroll-snap-align: start;
+      opacity: 0.6;
+      transition: all 0.2s;
+      min-width: 60px;
+    }
+    .filter-chip:hover { opacity: 0.9; }
+    .filter-chip.active { opacity: 1; }
+    .filter-chip.active .filter-preview { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan); }
+    .filter-preview {
+      width: 56px; height: 56px; border-radius: 50%;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .filter-chip span {
+      font-size: 0.7rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .filter-chip.active span { color: var(--cyan); font-weight: 600; }
+
     /* ── PUSH NOTIFICATIONS ── */
     #push-toggle { font-size: 1rem; opacity: 0.5; transition: opacity 0.2s; }
     #push-toggle.active { opacity: 1; }
@@ -929,15 +959,47 @@ async function endBattle() {
     <canvas id="host-canvas" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:none;"></canvas>
     <span id="ring-emoji" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;">📹</span>
   </div>
-        <div class="filter-bar" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:8px 0;">
-          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('none')" title="No filter">🚫</button>
-          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('blur')" title="Background blur">💨</button>
-          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('grayscale')" title="B&W">⚫</button>
-          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('sepia')" title="Vintage">📜</button>
-          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('invert')" title="Invert">🔄</button>
-          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('brightness')" title="Bright">☀️</button>
-          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('contrast')" title="High contrast">🔲</button>
-          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('pixelate')" title="Pixel">👾</button>
+        <div class="filter-carousel" style="display:flex;gap:8px;overflow-x:auto;padding:8px 4px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+          <div class="filter-chip active" onclick="setCameraFilter('none', this)" data-filter="none">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);"></div>
+            <span>Original</span>
+          </div>
+          <div class="filter-chip" onclick="setCameraFilter('blur', this)" data-filter="blur">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);filter:blur(2px);"></div>
+            <span>Blur</span>
+          </div>
+          <div class="filter-chip" onclick="setCameraFilter('grayscale', this)" data-filter="grayscale">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);filter:grayscale(100%);"></div>
+            <span>B&W</span>
+          </div>
+          <div class="filter-chip" onclick="setCameraFilter('sepia', this)" data-filter="sepia">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);filter:sepia(100%);"></div>
+            <span>Vintage</span>
+          </div>
+          <div class="filter-chip" onclick="setCameraFilter('invert', this)" data-filter="invert">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);filter:invert(100%);"></div>
+            <span>Invert</span>
+          </div>
+          <div class="filter-chip" onclick="setCameraFilter('brightness', this)" data-filter="brightness">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);filter:brightness(1.5);"></div>
+            <span>Bright</span>
+          </div>
+          <div class="filter-chip" onclick="setCameraFilter('contrast', this)" data-filter="contrast">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);filter:contrast(1.5);"></div>
+            <span>Contrast</span>
+          </div>
+          <div class="filter-chip" onclick="setCameraFilter('pixelate', this)" data-filter="pixelate">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);"></div>
+            <span>Pixel</span>
+          </div>
+          <div class="filter-chip" onclick="setCameraFilter('hue-rotate', this)" data-filter="hue-rotate">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);filter:hue-rotate(90deg);"></div>
+            <span>Neon</span>
+          </div>
+          <div class="filter-chip" onclick="setCameraFilter('saturate', this)" data-filter="saturate">
+            <div class="filter-preview" style="background:linear-gradient(135deg,#667eea,#764ba2);filter:saturate(2);"></div>
+            <span>Vivid</span>
+          </div>
         </div>
         <div class="live-status-text" id="live-status-text">Not streaming</div>
         <div>
@@ -1119,6 +1181,31 @@ async function endBattle() {
     <div id="battle-active" class="battle-active">
       <div class="battle-timer" id="battle-timer">⏱ 1:00</div>
       <div id="battle-split-screen" class="battle-split-screen"></div>
+
+      <!-- SABOTAGE / ATTACK GIFTS -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+        <div style="font-weight:700;font-size:0.85rem;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+          <span>⚡</span> Attack Gifts <span style="font-size:0.7rem;color:var(--red);font-weight:400;">(steal opponent points!)</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+          <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('bomb', 50, 25)" title="Bomb: -25 opponent points">
+            💣 <span style="font-size:0.7rem;">Bomb<br>50💎 / -25pts</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('lightning', 100, 50)" title="Lightning: -50 opponent points">
+            ⚡ <span style="font-size:0.7rem;">Lightning<br>100💎 / -50pts</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('virus', 250, 100)" title="Virus: -100 opponent points">
+            🦠 <span style="font-size:0.7rem;">Virus<br>250💎 / -100pts</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('nuke', 500, 250)" title="Nuke: -250 opponent points">
+            ☢️ <span style="font-size:0.7rem;">NUKE<br>500💎 / -250pts</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('blackhole', 1000, 500)" title="Black Hole: -500 opponent points">
+            🕳️ <span style="font-size:0.7rem;">Black Hole<br>1K💎 / -500pts</span>
+          </button>
+        </div>
+      </div>
+
       <div class="battle-leaderboard-mini">
         <div style="font-weight:700;font-size:0.8rem;margin-bottom:10px;">🏆 Live Leaderboard</div>
         <div id="battle-leaderboard"></div>
@@ -1195,12 +1282,19 @@ document.addEventListener('DOMContentLoaded', () => {
 async function fetchUserProfile() {
   try {
     const r = await fetch(`${API}/api/auth/me`, { headers });
-    if (!r.ok) return;
+    if (!r.ok) {
+      document.getElementById('user-display').textContent = 'Creator';
+      document.getElementById('user-avatar').textContent = 'C';
+      return;
+    }
     const d = await r.json();
     const name = d.username || d.display_name || d.email || 'Creator';
     document.getElementById('user-display').textContent = name;
     document.getElementById('user-avatar').textContent  = name.charAt(0).toUpperCase();
-  } catch { /* silent */ }
+  } catch(e) {
+    document.getElementById('user-display').textContent = 'Creator';
+    document.getElementById('user-avatar').textContent = 'C';
+  }
 }
 
 // ── socket.io ──────────────────────────────────
@@ -1329,8 +1423,17 @@ function stopHostCamera() {
 let currentCameraFilter = 'none';
 let filterAnimationId = null;
 
-function setCameraFilter(filter) {
+function setCameraFilter(filter, chipEl) {
   currentCameraFilter = filter;
+
+  // Update UI - highlight active filter
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  if (chipEl) chipEl.classList.add('active');
+  else {
+    const el = document.querySelector(`[data-filter="${filter}"]`);
+    if (el) el.classList.add('active');
+  }
+
   const video = document.getElementById('host-preview');
   const canvas = document.getElementById('host-canvas');
   if (!video || !canvas) return;
@@ -1358,6 +1461,8 @@ function setCameraFilter(filter) {
     else if (filter === 'invert') ctx.filter = 'invert(100%)';
     else if (filter === 'brightness') ctx.filter = 'brightness(1.4)';
     else if (filter === 'contrast') ctx.filter = 'contrast(1.5)';
+    else if (filter === 'hue-rotate') ctx.filter = 'hue-rotate(90deg) saturate(2)';
+    else if (filter === 'saturate') ctx.filter = 'saturate(2)';
     else if (filter === 'pixelate') {
       ctx.imageSmoothingEnabled = false;
       const w = canvas.width * 0.15;
@@ -1375,6 +1480,70 @@ function setCameraFilter(filter) {
   if (filterAnimationId) cancelAnimationFrame(filterAnimationId);
   drawFrame();
 }
+
+// ── ATTACK / SABOTAGE GIFTS ────────────────────
+async function sendAttackGift(type, cost, damage) {
+  if (!currentBattleId) {
+    showNotification('Error', 'Start a battle first!', 'error');
+    return;
+  }
+  if (!currentStreamId) {
+    showNotification('Error', 'You must be streaming to attack!', 'error');
+    return;
+  }
+
+  // Check if user has enough credits
+  if (userCredits < cost) {
+    showNotification('Insufficient Credits', `You need ${cost}💎 for this attack. Buy more credits!`, 'warning');
+    openWallet();
+    return;
+  }
+
+  try {
+    const r = await fetch(`${API}/api/battles/${currentBattleId}/attack`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ gift_type: type, cost, damage, stream_id: currentStreamId })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      userCredits = d.new_balance;
+      updateWalletDisplay();
+      showNotification(`💥 ${type.toUpperCase()} DEPLOYED!`, `-${damage} points to opponent!`, 'live');
+      // Visual effect
+      showAttackEffect(type);
+      pollBattleLeaderboard();
+    } else {
+      showNotification('Error', d.error || 'Attack failed', 'error');
+    }
+  } catch(e) { showNotification('Error', e.message, 'error'); }
+}
+
+function showAttackEffect(type) {
+  const effects = {
+    bomb: '💥',
+    lightning: '⚡',
+    virus: '🦠',
+    nuke: '☢️',
+    blackhole: '🕳️'
+  };
+  const el = document.createElement('div');
+  el.textContent = effects[type] || '💥';
+  el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);font-size:8rem;z-index:9999;animation:attackPop 1s ease forwards;pointer-events:none;';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
+// Add attack animation CSS dynamically
+const attackStyle = document.createElement('style');
+attackStyle.textContent = `
+  @keyframes attackPop {
+    0% { transform: translate(-50%,-50%) scale(0) rotate(-20deg); opacity: 0; }
+    30% { transform: translate(-50%,-50%) scale(1.5) rotate(10deg); opacity: 1; }
+    60% { transform: translate(-50%,-50%) scale(1.2) rotate(-5deg); opacity: 1; }
+    100% { transform: translate(-50%,-50%) scale(2) rotate(0deg); opacity: 0; }
+  }
+`;
+document.head.appendChild(attackStyle);
 
 async function goLive() {
   const btn = document.getElementById('btn-go-live');

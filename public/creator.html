@@ -76,6 +76,8 @@ async function startBattle() {
   document.getElementById('battle-card').style.display = 'block';
   startBattleTimer(60);
   showNotification('🔥 BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
+  playSoundEffect('drumroll');
+  setTimeout(() => playSoundEffect('airhorn'), 1500);
   pollBattleLeaderboard();
 }
 
@@ -209,6 +211,7 @@ async function endBattle() {
   document.getElementById('battle-card').style.display = 'none';
   currentBattleId = null;
   showNotification('🏆 Battle Ended!', 'Winners announced!', 'success');
+  playSoundEffect('applause');
 }
 
 </script>
@@ -1700,6 +1703,7 @@ async function sendAttackGift(type, cost, damage) {
 }
 
 function showAttackEffect(type) {
+  playSoundEffect('surprise');
   const effects = {
     bomb: '💥',
     lightning: '⚡',
@@ -2176,6 +2180,8 @@ async function startBattle() {
   document.getElementById('battle-card').style.display = 'block';
   startBattleTimer(60);
   showNotification('🔥 BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
+  playSoundEffect('drumroll');
+  setTimeout(() => playSoundEffect('airhorn'), 1500);
   pollBattleLeaderboard();
 }
 
@@ -2309,6 +2315,7 @@ async function endBattle() {
   document.getElementById('battle-card').style.display = 'none';
   currentBattleId = null;
   showNotification('🏆 Battle Ended!', 'Winners announced!', 'success');
+  playSoundEffect('applause');
 }
 
 // Show battle card when live
@@ -2548,6 +2555,7 @@ function updateGoalProgress(giftValue) {
 }
 
 function confettiEffect() {
+  playSoundEffect('cheer');
   // Simple CSS confetti
   for (let i = 0; i < 30; i++) {
     const el = document.createElement('div');
@@ -2710,6 +2718,11 @@ socket?.on('gift_received', ({ senderName, gift }) => {
   updateGoalProgress(val);
   clearTimeout(window._lbDebounce);
   window._lbDebounce = setTimeout(loadLeaderboard, 2000);
+  // Sound effects based on gift value
+  if (val >= 500) playSoundEffect('airhorn');
+  else if (val >= 100) playSoundEffect('cheer');
+  else if (val >= 50) playSoundEffect('applause');
+  else playSoundEffect('bell');
 });
 
 // Socket listeners for battle invites

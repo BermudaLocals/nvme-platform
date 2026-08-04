@@ -76,8 +76,6 @@ async function startBattle() {
   document.getElementById('battle-card').style.display = 'block';
   startBattleTimer(60);
   showNotification('🔥 BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
-  playSoundEffect('drumroll');
-  setTimeout(() => playSoundEffect('airhorn'), 1500);
   pollBattleLeaderboard();
 }
 
@@ -211,7 +209,6 @@ async function endBattle() {
   document.getElementById('battle-card').style.display = 'none';
   currentBattleId = null;
   showNotification('🏆 Battle Ended!', 'Winners announced!', 'success');
-  playSoundEffect('applause');
 }
 
 </script>
@@ -1032,20 +1029,33 @@ async function endBattle() {
           </div>
         </div>
 
-        <!-- SOUND EFFECTS -->
+        <!-- SOUND EFFECTS (Host-controlled, viewers hear it) -->
         <div id="sound-effects-section" style="width:100%;margin-top:16px;">
-          <div class="card-title" style="margin-bottom:8px;"><span class="icon">🔊</span> Sound Effects</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('applause')" style="font-size:0.75rem;">👏 Applause</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('laugh')" style="font-size:0.75rem;">😂 Laugh</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('drumroll')" style="font-size:0.75rem;">🥁 Drumroll</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('airhorn')" style="font-size:0.75rem;">📢 Airhorn</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('boo')" style="font-size:0.75rem;">👎 Boo</button>
+          <div class="card-title" style="margin-bottom:8px;"><span class="icon">🔊</span> Sound Effects <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">(Viewers hear these!)</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+            <!-- HYPE -->
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('airhorn')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(255,0,0,0.1),rgba(255,100,0,0.1));border-color:rgba(255,0,0,0.3);">📢 Air Horn</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('letsgo')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(0,255,0,0.1),rgba(0,200,0,0.1));border-color:rgba(0,255,0,0.3);">🔥 Let's Go!</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('hype')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,165,0,0.1));border-color:rgba(255,215,0,0.3);">⚡ Hype</button>
+            <!-- REACTIONS -->
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('applause')" style="font-size:0.75rem;">👏 Clap</button>
             <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('cheer')" style="font-size:0.75rem;">🎉 Cheer</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('wow')" style="font-size:0.75rem;">🤩 Wow</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('bruh')" style="font-size:0.75rem;">😒 Bruh</button>
+            <!-- TENSION -->
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('drumroll')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(124,92,252,0.1),rgba(233,30,140,0.1));">🥁 Drumroll</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('suspense')" style="font-size:0.75rem;">😰 Suspense</button>
+            <!-- FAIL -->
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('fail')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(255,0,0,0.1),rgba(200,0,0,0.1));border-color:rgba(255,0,0,0.3);">❌ Fail</button>
             <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('sad')" style="font-size:0.75rem;">😢 Sad</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('surprise')" style="font-size:0.75rem;">😲 Surprise</button>
+            <!-- MONEY -->
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('cash')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(0,255,0,0.1),rgba(0,200,0,0.1));border-color:rgba(0,255,0,0.3);">💰 Cash</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('success')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(0,255,0,0.1),rgba(0,200,0,0.1));border-color:rgba(0,255,0,0.3);">✅ Success</button>
+            <!-- FUN -->
             <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('magic')" style="font-size:0.75rem;">✨ Magic</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('bell')" style="font-size:0.75rem;">🔔 Bell</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('boing')" style="font-size:0.75rem;">🌀 Boing</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('whistle')" style="font-size:0.75rem;">📯 Whistle</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('ping')" style="font-size:0.75rem;">🔔 Ping</button>
           </div>
         </div>
 
@@ -1303,6 +1313,7 @@ document.addEventListener('DOMContentLoaded', () => {
   startLeaderboardInterval();
   fetchUserProfile();
   loadWallet();
+  initSoundEffectListener();
 });
 
 // ── user profile ───────────────────────────────
@@ -1623,17 +1634,34 @@ async function applyVoiceEffect(effect) {
 }
 
 // ── SOUND EFFECTS ──────────────────────────────
+// ── SOUND EFFECTS (Host-controlled, broadcasts to ALL viewers) ───────────────
 const soundEffects = {
-  applause:  'https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3',
-  laugh:     'https://assets.mixkit.co/active_storage/sfx/2001/2001-preview.mp3',
-  drumroll:  'https://assets.mixkit.co/active_storage/sfx/2002/2002-preview.mp3',
-  airhorn:   'https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3',
-  boo:       'https://assets.mixkit.co/active_storage/sfx/2004/2004-preview.mp3',
-  cheer:     'https://assets.mixkit.co/active_storage/sfx/2005/2005-preview.mp3',
-  sad:       'https://assets.mixkit.co/active_storage/sfx/2006/2006-preview.mp3',
-  surprise:  'https://assets.mixkit.co/active_storage/sfx/2007/2007-preview.mp3',
-  magic:     'https://assets.mixkit.co/active_storage/sfx/2008/2008-preview.mp3',
-  bell:      'https://assets.mixkit.co/active_storage/sfx/2009/2009-preview.mp3'
+  // HYPE / ENERGY
+  airhorn:     'https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=airhorn-21480.mp3',
+  letsgo:      'https://cdn.pixabay.com/download/audio/2022/03/10/audio_5673a1b6c4.mp3?filename=crowd-cheering-143103.mp3',
+  hype:        'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=success-1-6297.mp3',
+  // REACTIONS
+  applause:    'https://cdn.pixabay.com/download/audio/2022/03/24/audio_5c3cecf05e.mp3?filename=applause-36478.mp3',
+  cheer:       'https://cdn.pixabay.com/download/audio/2022/03/10/audio_5673a1b6c4.mp3?filename=crowd-cheering-143103.mp3',
+  wow:         'https://cdn.pixabay.com/download/audio/2022/03/15/audio_63764ea3f2.mp3?filename=wow-113128.mp3',
+  bruh:        'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=error-126627.mp3',
+  laugh:       'https://cdn.pixabay.com/download/audio/2022/03/24/audio_5c3cecf05e.mp3?filename=applause-36478.mp3',
+  // TENSION / DRAMA
+  drumroll:    'https://cdn.pixabay.com/download/audio/2022/01/27/audio_d0c6ff1a1b.mp3?filename=drumroll-129592.mp3',
+  suspense:    'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=suspense-6711.mp3',
+  // FAIL / SAD
+  fail:        'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=error-126627.mp3',
+  sad:         'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=sad-trombone-171898.mp3',
+  // SUCCESS / MONEY
+  cash:        'https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=cash-register-purchase-87313.mp3',
+  success:     'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=success-1-6297.mp3',
+  // ALERTS
+  bell:        'https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=notification-126968.mp3',
+  ping:        'https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=notification-126968.mp3',
+  // FUN
+  magic:       'https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=magic-spell-6005.mp3',
+  boing:       'https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=boing-101318.mp3',
+  whistle:     'https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=whistle-124056.mp3'
 };
 
 const preloadedSounds = {};
@@ -1646,20 +1674,39 @@ function preloadSounds() {
   });
 }
 
+// HOST plays sound → broadcasts to ALL viewers in stream
 function playSoundEffect(name) {
+  // Play locally for host
   const sound = preloadedSounds[name];
   if (sound) {
     sound.currentTime = 0;
     sound.play().catch(() => {});
-    showNotification('🔊 Sound', `${name} played!`, 'info');
-  } else {
-    // Fallback: create new audio
-    const url = soundEffects[name];
-    if (url) {
-      const audio = new Audio(url);
+  } else if (soundEffects[name]) {
+    const audio = new Audio(soundEffects[name]);
+    audio.play().catch(() => {});
+  }
+
+  // Broadcast to ALL viewers via Socket.io
+  if (socket && currentStreamId) {
+    socket.emit('play_sound', { stream_id: currentStreamId, sound: name });
+  }
+
+  showNotification('🔊 Sound Effect', `${name.toUpperCase()} sent to viewers!`, 'success');
+}
+
+// VIEWERS listen for host's sound effects
+function initSoundEffectListener() {
+  if (!socket) return;
+  socket.on('play_sound', ({ sound }) => {
+    const s = preloadedSounds[sound];
+    if (s) {
+      s.currentTime = 0;
+      s.play().catch(() => {});
+    } else if (soundEffects[sound]) {
+      const audio = new Audio(soundEffects[sound]);
       audio.play().catch(() => {});
     }
-  }
+  });
 }
 
 // Preload on page load
@@ -1703,7 +1750,6 @@ async function sendAttackGift(type, cost, damage) {
 }
 
 function showAttackEffect(type) {
-  playSoundEffect('surprise');
   const effects = {
     bomb: '💥',
     lightning: '⚡',
@@ -2180,8 +2226,6 @@ async function startBattle() {
   document.getElementById('battle-card').style.display = 'block';
   startBattleTimer(60);
   showNotification('🔥 BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
-  playSoundEffect('drumroll');
-  setTimeout(() => playSoundEffect('airhorn'), 1500);
   pollBattleLeaderboard();
 }
 
@@ -2315,7 +2359,6 @@ async function endBattle() {
   document.getElementById('battle-card').style.display = 'none';
   currentBattleId = null;
   showNotification('🏆 Battle Ended!', 'Winners announced!', 'success');
-  playSoundEffect('applause');
 }
 
 // Show battle card when live
@@ -2555,7 +2598,6 @@ function updateGoalProgress(giftValue) {
 }
 
 function confettiEffect() {
-  playSoundEffect('cheer');
   // Simple CSS confetti
   for (let i = 0; i < 30; i++) {
     const el = document.createElement('div');
@@ -2718,11 +2760,6 @@ socket?.on('gift_received', ({ senderName, gift }) => {
   updateGoalProgress(val);
   clearTimeout(window._lbDebounce);
   window._lbDebounce = setTimeout(loadLeaderboard, 2000);
-  // Sound effects based on gift value
-  if (val >= 500) playSoundEffect('airhorn');
-  else if (val >= 100) playSoundEffect('cheer');
-  else if (val >= 50) playSoundEffect('applause');
-  else playSoundEffect('bell');
 });
 
 // Socket listeners for battle invites

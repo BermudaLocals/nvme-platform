@@ -3211,6 +3211,219 @@ app.get('/api/streams/live/now', async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NEW FEATURES: Push Notifications, Live Goals, Polls, Q&A, Moderation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── PUSH NOTIFICATIONS ────────────────────────────────────────────────────────
+app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription || !subscription.endpoint) return res.status(400).json({ ok: false, error: 'Invalid subscription' });
+    await db.query(
+      `INSERT INTO push_subscriptions (user_id, endpoint, subscription_json, created_at)
+       VALUES ($1,$2,$3,NOW())
+       ON CONFLICT (endpoint) DO UPDATE SET subscription_json=$3, updated_at=NOW()`,
+      [req.user.id, subscription.endpoint, JSON.stringify(subscription)]
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/push/unsubscribe', authMiddleware, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    await db.query('DELETE FROM push_subscriptions WHERE user_id=$1 AND endpoint=$2', [req.user.id, endpoint]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/push/notify', authMiddleware, async (req, res) => {
+  try {
+    const { title, body, url } = req.body;
+    // Get all followers' push subscriptions
+    const { rows } = await db.query(`
+      SELECT ps.subscription_json
+      FROM push_subscriptions ps
+      JOIN follows f ON f.follower_id = ps.user_id
+      WHERE f.following_id = $1
+    `, [req.user.id]);
+
+    // Simple notification broadcast via socket.io as fallback
+    if (global.io) {
+      global.io.emit('creator_live', { userId: req.user.id, title, body, url });
+    }
+
+    res.json({ ok: true, notified: rows.length });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── LIVE GOALS ────────────────────────────────────────────────────────────────
+app.post('/api/streams/:id/goal', authMiddleware, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const { target, reward } = req.body;
+    await db.query(
+      `UPDATE livestreams SET goal_target=$1, goal_reward=$2, goal_current=0 WHERE id=$3 AND user_id=$4`,
+      [target, reward, streamId, req.user.id]
+    );
+    if (global.io) global.io.to(`stream:${streamId}`).emit('goal_set', { target, reward, current: 0 });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/streams/:id/goal/progress', authMiddleware, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const { amount } = req.body;
+    await db.query(
+      `UPDATE livestreams SET goal_current = goal_current + $1 WHERE id=$2`,
+      [amount, streamId]
+    );
+    const { rows } = await db.query(`SELECT goal_target, goal_reward, goal_current FROM livestreams WHERE id=$1`, [streamId]);
+    if (global.io) global.io.to(`stream:${streamId}`).emit('goal_progress', rows[0]);
+    res.json({ ok: true, goal: rows[0] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── LIVE POLLS ────────────────────────────────────────────────────────────────
+app.post('/api/streams/:id/poll', authMiddleware, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const { question, options } = req.body;
+    const pollId = require('uuid').v4();
+    await db.query(
+      `INSERT INTO live_polls (id, stream_id, question, options, created_at, active)
+       VALUES ($1,$2,$3,$4,NOW(),true)`,
+      [pollId, streamId, question, JSON.stringify(options)]
+    );
+    if (global.io) global.io.to(`stream:${streamId}`).emit('poll_started', { id: pollId, question, options });
+    res.json({ ok: true, pollId });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/polls/:id/vote', async (req, res) => {
+  try {
+    const pollId = req.params.id;
+    const { optionId } = req.body;
+    await db.query(
+      `UPDATE live_polls SET votes = COALESCE(votes, '{}') || jsonb_build_object($1::text, COALESCE((votes->>$1)::int, 0) + 1)
+       WHERE id=$2`,
+      [optionId, pollId]
+    );
+    const { rows } = await db.query(`SELECT * FROM live_polls WHERE id=$1`, [pollId]);
+    if (global.io && rows[0]) global.io.to(`stream:${rows[0].stream_id}`).emit('poll_update', rows[0]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/polls/:id/end', authMiddleware, async (req, res) => {
+  try {
+    const pollId = req.params.id;
+    const { rows } = await db.query(`UPDATE live_polls SET active=false WHERE id=$1 RETURNING *`, [pollId]);
+    if (global.io && rows[0]) global.io.to(`stream:${rows[0].stream_id}`).emit('poll_ended');
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Q&A ───────────────────────────────────────────────────────────────────────
+app.post('/api/streams/:id/question', async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const { text, author } = req.body;
+    const qId = require('uuid').v4();
+    await db.query(
+      `INSERT INTO live_questions (id, stream_id, text, author, created_at, answered)
+       VALUES ($1,$2,$3,$4,NOW(),false)`,
+      [qId, streamId, text, author]
+    );
+    if (global.io) global.io.to(`stream:${streamId}`).emit('new_question', { id: qId, text, author, time: new Date() });
+    res.json({ ok: true, questionId: qId });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/questions/:id/answer', authMiddleware, async (req, res) => {
+  try {
+    const qId = req.params.id;
+    const { answer } = req.body;
+    const { rows } = await db.query(
+      `UPDATE live_questions SET answer=$1, answered=true WHERE id=$2 RETURNING *`,
+      [answer, qId]
+    );
+    if (global.io && rows[0]) global.io.to(`stream:${rows[0].stream_id}`).emit('question_answered', rows[0]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.get('/api/streams/:id/questions', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT * FROM live_questions WHERE stream_id=$1 ORDER BY created_at DESC`,
+      [req.params.id]
+    );
+    res.json({ ok: true, questions: rows });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── MODERATION ────────────────────────────────────────────────────────────────
+app.post('/api/streams/:id/moderation', authMiddleware, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const { blockedWords } = req.body;
+    await db.query(
+      `UPDATE livestreams SET blocked_words=$1 WHERE id=$2 AND user_id=$3`,
+      [JSON.stringify(blockedWords), streamId, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.get('/api/streams/:id/moderation', async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT blocked_words FROM livestreams WHERE id=$1`, [req.params.id]);
+    res.json({ ok: true, blockedWords: rows[0]?.blocked_words || [] });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── PINNED COMMENTS ───────────────────────────────────────────────────────────
+app.post('/api/streams/:id/pin', authMiddleware, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const { author, text } = req.body;
+    await db.query(
+      `UPDATE livestreams SET pinned_comment=$1 WHERE id=$2 AND user_id=$3`,
+      [JSON.stringify({ author, text, pinnedAt: new Date() }), streamId, req.user.id]
+    );
+    if (global.io) global.io.to(`stream:${streamId}`).emit('comment_pinned', { author, text });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/streams/:id/unpin', authMiddleware, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    await db.query(`UPDATE livestreams SET pinned_comment=NULL WHERE id=$1 AND user_id=$2`, [streamId, req.user.id]);
+    if (global.io) global.io.to(`stream:${streamId}`).emit('comment_unpinned');
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── BATTLE BACKGROUND UPLOAD ──────────────────────────────────────────────────
+app.post('/api/battles/:id/background', authMiddleware, async (req, res) => {
+  try {
+    const battleId = req.params.id;
+    const { participant_id, bg_data_url } = req.body;
+    await db.query(
+      `UPDATE battle_participants SET bg_url=$1 WHERE battle_id=$2 AND user_id=$3`,
+      [bg_data_url, battleId, participant_id]
+    );
+    if (global.io) global.io.to(`battle:${battleId}`).emit('bg_updated', { participant_id, bg_url: bg_data_url });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ── PRIVACY ─────────────────────────────────────────────────────────────────
 
 app.post('/api/profile/privacy', authMiddleware, async (req, res) => {
@@ -3276,3 +3489,63 @@ app.get('/api/founder-badges', async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 // ── END ROUTE ALIASES ────────────────────────────────────────────────────────
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DB MIGRATIONS for new features
+// ═══════════════════════════════════════════════════════════════════════════════
+(async () => {
+  try {
+    // Push subscriptions
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        endpoint TEXT UNIQUE NOT NULL,
+        subscription_json JSONB NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Live polls
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS live_polls (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        stream_id UUID REFERENCES livestreams(id) ON DELETE CASCADE,
+        question TEXT NOT NULL,
+        options JSONB NOT NULL DEFAULT '[]',
+        votes JSONB NOT NULL DEFAULT '{}',
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Live questions (Q&A)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS live_questions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        stream_id UUID REFERENCES livestreams(id) ON DELETE CASCADE,
+        text TEXT NOT NULL,
+        author TEXT NOT NULL,
+        answer TEXT,
+        answered BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Add columns to livestreams for goals, pinned comments, moderation
+    await db.query(`ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS goal_target INTEGER`);
+    await db.query(`ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS goal_reward TEXT`);
+    await db.query(`ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS goal_current INTEGER DEFAULT 0`);
+    await db.query(`ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS pinned_comment JSONB`);
+    await db.query(`ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS blocked_words JSONB DEFAULT '[]'`);
+
+    // Add bg_url to battle_participants
+    await db.query(`ALTER TABLE battle_participants ADD COLUMN IF NOT EXISTS bg_url TEXT`);
+
+    console.log('[migration] New feature tables created successfully');
+  } catch(e) {
+    console.error('[migration] Error:', e.message);
+  }
+})();

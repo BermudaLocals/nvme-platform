@@ -996,5 +996,25 @@ if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').cat
   <a href="/battles" class="mobile-nav-item"><span class="icon">⚔️</span><span>Battles</span></a>
   <a href="/profile" class="mobile-nav-item"><span class="icon">👤</span><span>Profile</span></a>
 </nav>
+
+<!-- MOBILE BOTTOM NAVIGATION -->
+<nav class="mobile-nav mobile-only">
+  <div class="mobile-nav-item active" onclick="window.location.href='/app'">
+    <span>📹</span>
+    <span>Go Live</span>
+  </div>
+  <div class="mobile-nav-item" onclick="window.location.href='/app'">
+    <span>🔍</span>
+    <span>Discover</span>
+  </div>
+  <div class="mobile-nav-item" onclick="openWallet()">
+    <span>💎</span>
+    <span>Wallet</span>
+  </div>
+  <div class="mobile-nav-item" onclick="window.location.href='/profile'">
+    <span>👤</span>
+    <span>Profile</span>
+  </div>
+</nav>
 </body>
 </html>

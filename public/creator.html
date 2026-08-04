@@ -1320,6 +1320,15 @@ document.addEventListener('DOMContentLoaded', () => {
 async function fetchUserProfile() {
   try {
     const r = await fetch(`${API}/api/auth/me`, { headers });
+    if (r.status === 401) {
+      // Token expired or invalid - clear and redirect to login
+      localStorage.removeItem('token');
+      localStorage.removeItem('nvme_token');
+      sessionStorage.removeItem('nvme_token');
+      showNotification('Session Expired', 'Please sign in again', 'warning');
+      setTimeout(() => window.location.href = '/app', 2000);
+      return;
+    }
     if (!r.ok) {
       document.getElementById('user-display').textContent = 'Creator';
       document.getElementById('user-avatar').textContent = 'C';
@@ -1334,6 +1343,23 @@ async function fetchUserProfile() {
     document.getElementById('user-avatar').textContent = 'C';
   }
 }
+
+// Intercept all fetch calls to handle 401 globally
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+  const response = await originalFetch.apply(this, args);
+  if (response.status === 401) {
+    const url = args[0];
+    if (typeof url === 'string' && url.includes('/api/') && !url.includes('/api/auth/')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('nvme_token');
+      sessionStorage.removeItem('nvme_token');
+      showNotification('Session Expired', 'Please sign in again', 'warning');
+      setTimeout(() => window.location.href = '/app', 2000);
+    }
+  }
+  return response;
+};
 
 // ── socket.io ──────────────────────────────────
 function initSocket() {

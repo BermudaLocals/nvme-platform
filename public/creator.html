@@ -796,7 +796,17 @@ async function endBattle() {
    ════════════════════════════════════════════════ */
 
 const API   = '';
-const TOKEN = localStorage.getItem('token') || localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token') || localStorage.getItem('empire_token') || sessionStorage.getItem('token') || localStorage.getItem('jwt') || localStorage.getItem('auth_token');
+// ── token detection ────────────────────────────
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+const TOKEN = localStorage.getItem('token') || localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token') || localStorage.getItem('empire_token') || sessionStorage.getItem('token') || localStorage.getItem('jwt') || localStorage.getItem('auth_token') || getCookie('token') || getCookie('nvme_token');
+console.log('[creator] TOKEN found:', TOKEN ? 'yes (length ' + TOKEN.length + ')' : 'no');
+console.log('[creator] localStorage keys:', Object.keys(localStorage));
+console.log('[creator] sessionStorage keys:', Object.keys(sessionStorage));
+console.log('[creator] cookie token:', getCookie('token'));
+console.log('[creator] cookie nvme_token:', getCookie('nvme_token'));
 const headers = {
   'Content-Type':  'application/json',
   'Authorization': `Bearer ${TOKEN}`

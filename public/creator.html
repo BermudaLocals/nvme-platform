@@ -664,8 +664,19 @@ async function endBattle() {
       <div class="go-live-panel">
         <div class="live-ring" id="live-ring">
     <video id="host-preview" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:none;"></video>
+    <canvas id="host-canvas" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:none;"></canvas>
     <span id="ring-emoji" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;">📹</span>
   </div>
+        <div class="filter-bar" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:8px 0;">
+          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('none')" title="No filter">🚫</button>
+          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('blur')" title="Background blur">💨</button>
+          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('grayscale')" title="B&W">⚫</button>
+          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('sepia')" title="Vintage">📜</button>
+          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('invert')" title="Invert">🔄</button>
+          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('brightness')" title="Bright">☀️</button>
+          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('contrast')" title="High contrast">🔲</button>
+          <button class="btn btn-ghost btn-sm" onclick="setCameraFilter('pixelate')" title="Pixel">👾</button>
+        </div>
         <div class="live-status-text" id="live-status-text">Not streaming</div>
         <div>
           <div class="viewer-count-big" id="viewer-count-big">0</div>
@@ -950,9 +961,13 @@ async function activateHostCamera() {
     const v = document.getElementById('host-preview');
     const emoji = document.getElementById('ring-emoji');
     if (v) {
-      v.style.display = 'block';
       v.srcObject = hostCameraStream;
       v.play().catch(() => {});
+      if (currentCameraFilter !== 'none') {
+        setTimeout(() => setCameraFilter(currentCameraFilter), 500);
+      } else {
+        v.style.display = 'block';
+      }
     }
     if (emoji) emoji.style.display = 'none';
     return true;
@@ -968,9 +983,63 @@ function stopHostCamera() {
     hostCameraStream = null;
   }
   const v = document.getElementById('host-preview');
+  const canvas = document.getElementById('host-canvas');
   const emoji = document.getElementById('ring-emoji');
   if (v) { v.style.display = 'none'; v.srcObject = null; }
+  if (canvas) { canvas.style.display = 'none'; }
   if (emoji) emoji.style.display = 'flex';
+  if (filterAnimationId) { cancelAnimationFrame(filterAnimationId); filterAnimationId = null; }
+}
+
+// ── Camera Filters ─────────────────────────────
+let currentCameraFilter = 'none';
+let filterAnimationId = null;
+
+function setCameraFilter(filter) {
+  currentCameraFilter = filter;
+  const video = document.getElementById('host-preview');
+  const canvas = document.getElementById('host-canvas');
+  if (!video || !canvas) return;
+
+  if (filter === 'none') {
+    video.style.display = 'block';
+    canvas.style.display = 'none';
+    if (filterAnimationId) { cancelAnimationFrame(filterAnimationId); filterAnimationId = null; }
+    return;
+  }
+
+  video.style.display = 'none';
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+
+  function drawFrame() {
+    if (currentCameraFilter === 'none') return;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+
+    ctx.filter = 'none';
+    if (filter === 'blur') ctx.filter = 'blur(8px)';
+    else if (filter === 'grayscale') ctx.filter = 'grayscale(100%)';
+    else if (filter === 'sepia') ctx.filter = 'sepia(100%)';
+    else if (filter === 'invert') ctx.filter = 'invert(100%)';
+    else if (filter === 'brightness') ctx.filter = 'brightness(1.4)';
+    else if (filter === 'contrast') ctx.filter = 'contrast(1.5)';
+    else if (filter === 'pixelate') {
+      ctx.imageSmoothingEnabled = false;
+      const w = canvas.width * 0.15;
+      const h = canvas.height * 0.15;
+      ctx.drawImage(video, 0, 0, w, h);
+      ctx.drawImage(canvas, 0, 0, w, h, 0, 0, canvas.width, canvas.height);
+      filterAnimationId = requestAnimationFrame(drawFrame);
+      return;
+    }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    filterAnimationId = requestAnimationFrame(drawFrame);
+  }
+
+  if (filterAnimationId) cancelAnimationFrame(filterAnimationId);
+  drawFrame();
 }
 
 async function goLive() {
@@ -1494,8 +1563,10 @@ async function endBattle() {
 const _origUpdateLiveState = updateLiveState;
 updateLiveState = function(live) {
   _origUpdateLiveState(live);
-  document.getElementById('battle-card').style.display = live ? 'block' : 'none';
-  document.getElementById('live-now-card').style.display = live ? 'block' : 'none';
+  const battleCard = document.getElementById('battle-card');
+  const liveNowCard = document.getElementById('live-now-card');
+  if (battleCard) battleCard.style.display = live ? 'block' : 'none';
+  if (liveNowCard) liveNowCard.style.display = live ? 'block' : 'none';
   if (live) { loadLiveNow(); startLiveNowPolling(); }
   else { stopLiveNowPolling(); hideBattleInviteToast(); }
   if (!live && battleTimer) { clearInterval(battleTimer); battleTimer = null; }

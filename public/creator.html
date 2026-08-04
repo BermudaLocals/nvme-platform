@@ -797,6 +797,59 @@ async function endBattle() {
     .battle-invite-toast .invite-actions {
       display: flex; gap: 8px; margin-top: 12px;
     }
+
+    /* ── PUSH NOTIFICATIONS ── */
+    #push-toggle { font-size: 1rem; opacity: 0.5; transition: opacity 0.2s; }
+    #push-toggle.active { opacity: 1; }
+    #push-toggle.subscribed { opacity: 1; color: var(--green); }
+
+    /* ── LIVE GOAL ── */
+    #goal-display { animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+    /* ── POLLS ── */
+    .poll-result-bar {
+      width: 100%; height: 28px; background: var(--bg2); border-radius: 6px;
+      overflow: hidden; position: relative; margin-bottom: 6px;
+    }
+    .poll-result-fill {
+      height: 100%; background: linear-gradient(90deg, var(--cyan), var(--magenta));
+      border-radius: 6px; transition: width 0.5s ease;
+      display: flex; align-items: center; padding: 0 10px;
+    }
+    .poll-result-label {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 10px; font-size: 0.8rem; z-index: 2;
+    }
+
+    /* ── Q&A ── */
+    .qa-item {
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .qa-item:last-child { border-bottom: none; }
+    .qa-question { font-size: 0.85rem; }
+    .qa-author { font-size: 0.7rem; color: var(--muted); }
+    .qa-answer {
+      background: rgba(124, 92, 252, 0.1); border-left: 3px solid var(--magenta);
+      padding: 8px 10px; border-radius: 0 8px 8px 0; font-size: 0.8rem; margin-top: 4px;
+    }
+    .qa-actions { display: flex; gap: 6px; margin-top: 4px; }
+
+    /* ── PINNED COMMENT ── */
+    #pinned-comment-bar { animation: slideUp 0.3s; }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: none; } }
+
+    /* ── NOTIFICATION TOAST ── */
+    .push-toast {
+      position: fixed; top: 20px; right: 20px; z-index: 9999;
+      background: var(--card); border: 1px solid var(--cyan);
+      border-radius: var(--radius); padding: 14px 18px;
+      box-shadow: var(--shadow); max-width: 320px;
+      animation: slideInRight 0.3s;
+    }
+    @keyframes slideInRight { from { transform: translateX(120%); } to { transform: none; } }
   </style>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#e91e8c">
@@ -824,6 +877,7 @@ async function endBattle() {
   <div class="topbar-user">
     <div class="avatar" id="user-avatar">?</div>
     <span id="user-display">Loading…</span>
+    <button id="push-toggle" class="btn btn-ghost btn-sm" onclick="togglePushNotifications()" title="Notify followers when live" style="margin-left:8px;">🔔</button>
   </div>
 </nav>
 
@@ -900,6 +954,27 @@ async function endBattle() {
             <button class="btn btn-ghost btn-sm" id="btn-copy-key" onclick="copyKey()">Copy</button>
           </div>
           <span class="copy-success" id="copy-success">✓ Copied!</span>
+        </div>
+
+        <!-- LIVE GOAL -->
+        <div id="live-goal-section" style="width:100%;margin-top:16px;">
+          <div class="card-title" style="margin-bottom:8px;"><span class="icon">🎯</span> Live Goal</div>
+          <div id="goal-setter">
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input type="number" id="goal-target" placeholder="Target gifts" style="flex:1;min-width:80px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:0.85rem;" />
+              <input type="text" id="goal-reward" placeholder="Reward (e.g. Dance)" style="flex:2;min-width:120px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:0.85rem;" />
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="setLiveGoal()">🎯 Set Goal</button>
+          </div>
+          <div id="goal-display" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span id="goal-text" style="font-size:0.85rem;font-weight:600;"></span>
+              <span id="goal-progress-text" style="font-size:0.8rem;color:var(--muted);">0 / 0</span>
+            </div>
+            <div style="width:100%;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden;">
+              <div id="goal-bar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--gold),#f59e0b);border-radius:4px;transition:width 0.5s;"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1139,17 +1214,7 @@ function initSocket() {
       document.getElementById('viewer-count-big').textContent = fmt(viewerCount);
     });
 
-    socket.on('gift_received', ({ senderName, gift }) => {
-      totalGifts++;
-      const val = giftValue(gift);
-      totalGiftValue += val;
-      document.getElementById('stat-gifts').textContent    = fmt(totalGifts);
-      document.getElementById('stat-earnings').textContent = fmtUSD(totalGiftValue);
-      showGiftToast(senderName, gift);
-      // debounce leaderboard refresh
-      clearTimeout(window._lbDebounce);
-      window._lbDebounce = setTimeout(loadLeaderboard, 2000);
-    });
+    // Gift handling moved to unified listener above
 
     socket.on('stream_ended', () => {
       if (isLive) updateLiveState(false);
@@ -2009,6 +2074,288 @@ async function declineBattleInvite() {
     showNotification('Invite Declined', '', 'info');
   } catch(e) {}
 }
+
+// ── PUSH NOTIFICATIONS ─────────────────────────
+let pushSubscription = null;
+let pushEnabled = false;
+
+async function togglePushNotifications() {
+  const btn = document.getElementById('push-toggle');
+  if (!('Notification' in window)) {
+    showNotification('Error', 'Push notifications not supported in this browser', 'error');
+    return;
+  }
+
+  if (Notification.permission === 'denied') {
+    showNotification('Error', 'Notifications blocked. Enable in browser settings.', 'error');
+    return;
+  }
+
+  if (!pushEnabled) {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      try {
+        // Register service worker for push
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array('BEl62iTMq3DH8z8j9e--Z58Wj6lW8x8L8w0K3l3l3l3') // placeholder, will be replaced
+        });
+        pushSubscription = sub;
+        pushEnabled = true;
+        btn.classList.add('subscribed');
+        btn.innerHTML = '🔔';
+        // Send subscription to server
+        await fetch(`${API}/api/push/subscribe`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ subscription: sub.toJSON() })
+        });
+        showNotification('✅ Subscribed', 'Followers will be notified when you go live!', 'success');
+      } catch(e) {
+        console.error('Push subscribe error:', e);
+        showNotification('Error', 'Could not enable notifications', 'error');
+      }
+    }
+  } else {
+    // Unsubscribe
+    if (pushSubscription) {
+      await pushSubscription.unsubscribe();
+      await fetch(`${API}/api/push/unsubscribe`, { method: 'POST', headers });
+    }
+    pushEnabled = false;
+    btn.classList.remove('subscribed');
+    btn.innerHTML = '🔔';
+    showNotification('Unsubscribed', 'Push notifications disabled', 'info');
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+}
+
+async function notifyFollowers() {
+  if (!pushEnabled) {
+    showNotification('Enable Notifications', 'Click the 🔔 bell to notify followers when live', 'warning');
+    return;
+  }
+  try {
+    await fetch(`${API}/api/push/notify`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ title: '🔴 LIVE NOW!', body: document.getElementById('user-display').textContent + ' is streaming on NVME.LIVE', url: 'https://nvme.live/live/' + currentStreamId })
+    });
+  } catch(e) { console.error('Notify error:', e); }
+}
+
+// ── LIVE GOALS ───────────────────────────────────
+let currentGoal = null;
+
+function setLiveGoal() {
+  const target = parseInt(document.getElementById('goal-target').value);
+  const reward = document.getElementById('goal-reward').value.trim();
+  if (!target || target < 1) {
+    showNotification('Error', 'Enter a valid gift target', 'error');
+    return;
+  }
+  currentGoal = { target, reward, current: 0 };
+  document.getElementById('goal-setter').style.display = 'none';
+  document.getElementById('goal-display').style.display = 'block';
+  document.getElementById('goal-text').textContent = reward || `Reach ${target} gifts!`;
+  updateGoalDisplay();
+  showNotification('🎯 Goal Set!', `${target} gifts for: ${reward || 'the goal'}`, 'success');
+  // Send to server
+  fetch(`${API}/api/streams/${currentStreamId}/goal`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ target, reward })
+  }).catch(() => {});
+}
+
+function updateGoalDisplay() {
+  if (!currentGoal) return;
+  const pct = Math.min(100, Math.round((currentGoal.current / currentGoal.target) * 100));
+  document.getElementById('goal-progress-text').textContent = `${currentGoal.current} / ${currentGoal.target}`;
+  document.getElementById('goal-bar').style.width = pct + '%';
+}
+
+function updateGoalProgress(giftValue) {
+  if (!currentGoal) return;
+  currentGoal.current += giftValue || 1;
+  updateGoalDisplay();
+  if (currentGoal.current >= currentGoal.target) {
+    showNotification('🎉 GOAL REACHED!', currentGoal.reward || 'Target achieved!', 'success');
+    confettiEffect();
+    currentGoal = null;
+    document.getElementById('goal-setter').style.display = 'block';
+    document.getElementById('goal-display').style.display = 'none';
+  }
+}
+
+function confettiEffect() {
+  // Simple CSS confetti
+  for (let i = 0; i < 30; i++) {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;z-index:9999;width:8px;height:8px;background:hsl(${Math.random()*360},80%,60%);border-radius:50%;left:${Math.random()*100}vw;top:-10px;animation:confettiFall ${1+Math.random()*2}s linear forwards;`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+  const style = document.createElement('style');
+  style.textContent = '@keyframes confettiFall { to { transform: translateY(100vh) rotate(720deg); opacity:0; } }';
+  document.head.appendChild(style);
+}
+
+// ── LIVE POLLS ───────────────────────────────────
+let activePoll = null;
+
+function addPollOption() {
+  const container = document.getElementById('poll-options');
+  const count = container.querySelectorAll('.poll-option-input').length;
+  if (count >= 6) { showNotification('Max Options', 'Maximum 6 options allowed', 'warning'); return; }
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'poll-option-input';
+  input.placeholder = `Option ${count + 1}`;
+  input.style.cssText = 'width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:0.85rem;';
+  container.appendChild(input);
+}
+
+function createPoll() {
+  const question = document.getElementById('poll-question').value.trim();
+  const optionInputs = document.querySelectorAll('.poll-option-input');
+  const options = Array.from(optionInputs).map(i => i.value.trim()).filter(v => v);
+  if (!question || options.length < 2) {
+    showNotification('Error', 'Enter a question and at least 2 options', 'error');
+    return;
+  }
+  activePoll = { question, options: options.map((text, i) => ({ id: i, text, votes: 0 })), totalVotes: 0 };
+  document.getElementById('poll-creator').style.display = 'none';
+  document.getElementById('poll-active').style.display = 'block';
+  document.getElementById('poll-question-display').textContent = question;
+  renderPollResults();
+  showNotification('📊 Poll Launched!', question, 'success');
+  if (socket) socket.emit('poll_started', activePoll);
+}
+
+function renderPollResults() {
+  if (!activePoll) return;
+  const el = document.getElementById('poll-results');
+  el.innerHTML = activePoll.options.map(opt => {
+    const pct = activePoll.totalVotes > 0 ? Math.round((opt.votes / activePoll.totalVotes) * 100) : 0;
+    return `
+      <div class="poll-result-bar">
+        <div class="poll-result-fill" style="width:${pct}%"></div>
+        <div class="poll-result-label">
+          <span>${esc(opt.text)}</span>
+          <span>${pct}% (${opt.votes})</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function endPoll() {
+  activePoll = null;
+  document.getElementById('poll-creator').style.display = 'block';
+  document.getElementById('poll-active').style.display = 'none';
+  document.getElementById('poll-question').value = '';
+  document.querySelectorAll('.poll-option-input').forEach((el, i) => { if (i > 1) el.remove(); else el.value = ''; });
+  showNotification('Poll Ended', 'Poll has been closed', 'info');
+  if (socket) socket.emit('poll_ended');
+}
+
+// ── Q&A MODE ─────────────────────────────────────
+let qaMode = false;
+let qaQuestions = [];
+
+function toggleQAMode() {
+  qaMode = document.getElementById('qa-toggle').checked;
+  showNotification(qaMode ? '❓ Q&A Enabled' : 'Q&A Disabled', qaMode ? 'Viewers can now ask questions' : 'Questions are paused', 'info');
+  if (socket) socket.emit('qa_mode', { enabled: qaMode });
+}
+
+function addQuestion(q) {
+  qaQuestions.push(q);
+  renderQAList();
+}
+
+function renderQAList() {
+  const el = document.getElementById('qa-list');
+  if (!qaQuestions.length) {
+    el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem;font-size:0.8rem;">No questions yet</div>';
+    return;
+  }
+  el.innerHTML = qaQuestions.map((q, i) => `
+    <div class="qa-item">
+      <div class="qa-question">${esc(q.text)}</div>
+      <div class="qa-author">${esc(q.author)} • ${new Date(q.time).toLocaleTimeString()}</div>
+      ${q.answer ? `<div class="qa-answer">💬 ${esc(q.answer)}</div>` : ''}
+      <div class="qa-actions">
+        <button class="btn btn-ghost btn-sm" onclick="answerQuestion(${i})">💬 Answer</button>
+        <button class="btn btn-ghost btn-sm" onclick="pinComment('${esc(q.author)}', '${esc(q.text)}')">📌 Pin</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function answerQuestion(index) {
+  const answer = prompt('Your answer:');
+  if (!answer) return;
+  qaQuestions[index].answer = answer;
+  renderQAList();
+  showNotification('💬 Answered', 'Question answered', 'success');
+}
+
+// ── MODERATION ───────────────────────────────────
+let blockedWords = [];
+
+function saveBlockedWords() {
+  const text = document.getElementById('blocked-words').value;
+  blockedWords = text.split(',').map(w => w.trim().toLowerCase()).filter(w => w);
+  showNotification('🛡️ Filter Saved', `${blockedWords.length} words blocked`, 'success');
+  if (socket) socket.emit('mod_settings', { blockedWords });
+}
+
+function filterMessage(text) {
+  if (!blockedWords.length) return text;
+  let filtered = text;
+  blockedWords.forEach(word => {
+    const regex = new RegExp(word, 'gi');
+    filtered = filtered.replace(regex, '█'.repeat(word.length));
+  });
+  return filtered;
+}
+
+// ── PINNED COMMENTS ──────────────────────────────
+let pinnedComment = null;
+
+function pinComment(author, text) {
+  pinnedComment = { author, text };
+  document.getElementById('pinned-author').textContent = author;
+  document.getElementById('pinned-text').textContent = text;
+  document.getElementById('pinned-comment-bar').style.display = 'block';
+  showNotification('📌 Pinned', 'Comment pinned to top', 'success');
+  if (socket) socket.emit('pin_comment', pinnedComment);
+}
+
+function unpinComment() {
+  pinnedComment = null;
+  document.getElementById('pinned-comment-bar').style.display = 'none';
+  if (socket) socket.emit('unpin_comment');
+}
+
+// Override gift handler to track goal progress
+socket?.on('gift_received', ({ senderName, gift }) => {
+  totalGifts++;
+  const val = giftValue(gift);
+  totalGiftValue += val;
+  document.getElementById('stat-gifts').textContent    = fmt(totalGifts);
+  document.getElementById('stat-earnings').textContent = fmtUSD(totalGiftValue);
+  showGiftToast(senderName, gift);
+  updateGoalProgress(val);
+  clearTimeout(window._lbDebounce);
+  window._lbDebounce = setTimeout(loadLeaderboard, 2000);
+});
 
 // Socket listeners for battle invites
 if (socket) {

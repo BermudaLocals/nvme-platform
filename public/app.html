@@ -29,6 +29,16 @@ input,textarea{font-family:inherit}
 .screen.active{display:block}
 #feed-screen{padding-bottom:0}
 
+/* ===== SLIDING FILTER BAR (mobile-first, swipe left/right) ===== */
+.fbar{position:fixed;top:calc(58px + env(safe-area-inset-top));left:0;right:0;z-index:85;display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;padding:6px 14px 8px;scrollbar-width:none;-ms-overflow-style:none;background:linear-gradient(rgba(0,0,0,.55),transparent);touch-action:pan-x pan-y}
+.fbar::-webkit-scrollbar{display:none}
+.fbar::after{content:'';flex:0 0 2px}
+.fchip{flex:0 0 auto;scroll-snap-align:start;min-height:44px;display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:22px;border:1px solid var(--border);background:rgba(10,10,20,.72);backdrop-filter:blur(10px);color:#e9e9f2;font-size:.82rem;font-weight:800;letter-spacing:.02em;white-space:nowrap;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;transition:background .18s,border-color .18s,transform .12s}
+.fchip:active{transform:scale(.95)}
+.fchip.on{background:linear-gradient(135deg,var(--purple),var(--pink));border-color:transparent;color:#fff;box-shadow:0 4px 18px rgba(124,58,237,.45)}
+.fchip .dot{width:7px;height:7px;border-radius:50%;background:#ff2e5b;box-shadow:0 0 8px #ff2e5b;animation:liveBlink 1.6s ease-in-out infinite}
+@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:.35}}
+
 /* ===== FEED (TikTok snap + autoplay) ===== */
 #feedContainer{height:100%;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none}
 .feed-item{height:100%;scroll-snap-align:start;scroll-snap-stop:always;position:relative;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -264,6 +274,18 @@ input,textarea{font-family:inherit}
 
 <!-- ================= FEED ================= -->
 <div class="screen active" id="feed-screen">
+  <div class="fbar" id="filterBar">
+    <div class="fchip on" data-f="all" onclick="setFeedFilter('all',this)">✨ For You</div>
+    <div class="fchip" data-f="following" onclick="setFeedFilter('following',this)">👥 Following</div>
+    <div class="fchip" data-f="live" onclick="setFeedFilter('live',this)"><span class="dot"></span>LIVE</div>
+    <div class="fchip" data-f="battles" onclick="setFeedFilter('battles',this)">⚔️ Battles</div>
+    <div class="fchip" data-f="new" onclick="setFeedFilter('new',this)">🆕 New</div>
+    <div class="fchip" data-f="trending" onclick="setFeedFilter('trending',this)">🔥 Trending</div>
+    <div class="fchip" data-f="music" onclick="setFeedFilter('music',this)">🎵 Music</div>
+    <div class="fchip" data-f="comedy" onclick="setFeedFilter('comedy',this)">😂 Comedy</div>
+    <div class="fchip" data-f="gaming" onclick="setFeedFilter('gaming',this)">🎮 Gaming</div>
+    <div class="fchip" data-f="fitness" onclick="setFeedFilter('fitness',this)">💪 Fitness</div>
+  </div>
   <div id="feedContainer"></div>
 </div>
 <div class="mute-pill" id="mutePill" onclick="toggleGlobalMute()" style="display:none">🔇 Tap for sound</div>
@@ -564,16 +586,57 @@ async function bootUser(){
 
 /* ================= FEED ================= */
 let feedObs = null;
+let feedFilter = 'all';
+let feedCache = [];
 async function loadFeed(){
   const c = $('feedContainer');
   try{
     const r = await fetch(API+'/api/feed', {headers:authHeaders()});
     const d = await r.json();
-    const vids = d.feed || d.videos || (Array.isArray(d)?d:[]);
-    if(!vids.length){ c.innerHTML = emptyFeedHtml(); loadRailInto('feedRailSlot'); return; }
-    c.innerHTML = vids.map(feedItemHtml).join('');
-    wireFeedObserver();
+    feedCache = d.feed || d.videos || (Array.isArray(d)?d:[]);
+    renderFeedWithFilter();
   }catch(e){ c.innerHTML = '<div class="feed-state"><div class="big">📡</div><div style="font-weight:700">Connection hiccup</div><span class="rail-btn" onclick="loadFeed()" style="padding:8px 22px">Retry</span></div>'; }
+}
+function setFeedFilter(f, el){
+  feedFilter = f;
+  document.querySelectorAll('.fchip').forEach(ch=>ch.classList.toggle('on', ch.dataset.f===f));
+  if(el) el.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
+  renderFeedWithFilter();
+}
+async function renderFeedWithFilter(){
+  const c = $('feedContainer');
+  let vids = feedCache.slice();
+  if(feedFilter==='following'){
+    vids = vids.filter(v=>v.is_following || v.followed || (currentUser && v.username===currentUser.username));
+  } else if(feedFilter==='live'){
+    c.innerHTML = '<div class="feed-state"><div class="spinner"></div><div style="font-weight:700">Finding live creators…</div></div>';
+    try{
+      const r = await fetch(API+'/api/streams/live');
+      const d = await r.json();
+      const streams = d.streams||[];
+      c.innerHTML = streams.length ? streams.map(s=>{
+        const sid = esc(s.id), uname = esc(s.username||s.user_id||'creator');
+        return '<div class="feed-item" data-vid="live_'+sid+'">' +
+          '<div class="feed-empty-bg">🔴</div><div class="feed-grad"></div>' +
+          '<div class="feed-info"><div class="feed-user"><span class="feed-uname">@'+uname+'</span></div>' +
+          '<div class="feed-cap">'+esc(s.title||'Live now')+'</div><div class="feed-desc">👀 '+num(s.viewer_count||0)+' watching</div></div>' +
+          '<div class="feed-actions"><div class="fact" onclick="event.stopPropagation();location.href=\'/live?id='+sid+'\'"><div class="fact-ic">▶️</div><div class="fact-n">Watch</div></div></div></div>';
+      }).join('') : '<div class="feed-state"><div class="big">🔴</div><div style="font-weight:800;color:#fff">Nobody is live right now</div><div>Be the first — tap ＋ then Go Live</div></div>';
+    }catch(e){ c.innerHTML = '<div class="feed-state"><div class="big">📡</div><div style="font-weight:700">Could not load live streams</div></div>'; }
+    return;
+  } else if(feedFilter==='battles'){
+    vids = vids.filter(v=>/battle|vs\.?|⚔/i.test((v.title||'')+' '+(v.description||'')+' '+((v.tags||[]).join? v.tags.join(' '):'')));
+  } else if(feedFilter==='new'){
+    vids.sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+  } else if(feedFilter==='trending'){
+    vids.sort((a,b)=>((b.like_count||0)+(b.views||0))-((a.like_count||0)+(a.views||0)));
+  } else if(feedFilter!=='all'){
+    const kw = feedFilter;
+    vids = vids.filter(v=>{ const t=((v.title||'')+' '+(v.description||'')+' '+((v.tags||[]).join? v.tags.join(' '):(v.tags||''))).toLowerCase(); return t.includes(kw); });
+  }
+  if(!vids.length){ c.innerHTML = '<div class="feed-state"><div class="big">🎬</div><div style="font-weight:800;color:#fff">Nothing here yet</div><div>Try another filter or tap ＋ to post</div><span class="rail-btn" onclick="setFeedFilter(\'all\',document.querySelector(\'.fchip\'))" style="padding:8px 22px">✨ For You</span></div>'; return; }
+  c.innerHTML = vids.map(feedItemHtml).join('');
+  wireFeedObserver();
 }
 function feedItemHtml(v){
   const vid = esc(v.id), uname = esc(v.username||'creator');

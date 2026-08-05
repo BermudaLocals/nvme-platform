@@ -46,6 +46,36 @@ input,textarea{font-family:inherit}
 .feed-empty-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:5rem;opacity:.15}
 .feed-grad{position:absolute;inset:0;background:linear-gradient(transparent 55%,rgba(0,0,0,.8));pointer-events:none}
 .feed-info{position:absolute;left:12px;right:76px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:2}
+
+/* ===== TIKTOK PARITY UX (user side) ===== */
+/* per-video progress bar (TikTok signature) */
+.fprog{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.22);z-index:3}
+.fprog-in{height:100%;width:0%;background:#fff;border-radius:0 2px 2px 0;transition:width .15s linear}
+.fprog-in.playing{background:linear-gradient(90deg,var(--purple),var(--pink))}
+/* music ticker + spinning disc (TikTok signature) */
+.fticker{display:flex;align-items:center;gap:8px;margin-top:7px;max-width:100%;overflow:hidden}
+.fticker .note{font-size:.85rem;flex-shrink:0}
+.fticker .track{flex:1;overflow:hidden;white-space:nowrap;font-size:.78rem;color:rgba(255,255,255,.9)}
+.fticker .track span{display:inline-block;padding-right:48px;animation:tick 9s linear infinite}
+@keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.fdisc{width:30px;height:30px;border-radius:50%;flex-shrink:0;background:conic-gradient(#1a1a2e,#3a3a55,#1a1a2e,#3a3a55,#1a1a2e);border:2px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;font-size:.7rem;animation:spin 4s linear infinite;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* caption expand */
+.feed-desc.clamped{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.feed-desc .more{color:#fff;font-weight:800}
+/* right action rail — TikTok sizing */
+.feed-actions{gap:20px;bottom:calc(110px + env(safe-area-inset-bottom))}
+.fact .fact-ic{width:46px;height:46px;display:flex;align-items:center;justify-content:center;font-size:1.55rem;filter:drop-shadow(0 2px 6px rgba(0,0,0,.55));transition:transform .15s}
+.fact:active .fact-ic{transform:scale(1.25)}
+.fact .fact-n{font-size:.72rem;font-weight:800;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+/* avatar + follow badge in rail (TikTok style) */
+.fact-ava{position:relative;width:48px;height:48px;border-radius:50%;border:2px solid #fff;cursor:pointer}
+.fbadge{position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);width:18px;height:18px;border-radius:50%;background:#ff2e5b;color:#fff;font-size:.8rem;font-weight:900;line-height:18px;text-align:center;box-shadow:0 2px 8px rgba(255,46,91,.6);cursor:pointer}
+.fbadge.done{background:#25F4EE}
+/* pull-to-refresh indicator */
+.ptr{position:fixed;top:calc(104px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:86;width:38px;height:38px;border-radius:50%;background:rgba(10,10,20,.8);border:1px solid var(--border);display:none;align-items:center;justify-content:center;font-size:1.05rem;backdrop-filter:blur(8px)}
+.ptr.on{display:flex}
+.ptr.spin{animation:spin .7s linear infinite}
 .feed-user{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .feed-ava{width:36px;height:36px;border-radius:50%;background:#2a0a4a;display:flex;align-items:center;justify-content:center;font-weight:800;overflow:hidden;border:1.5px solid rgba(255,255,255,.3);flex-shrink:0}
 .feed-ava img{width:100%;height:100%;object-fit:cover}
@@ -289,6 +319,7 @@ input,textarea{font-family:inherit}
   <div id="feedContainer"></div>
 </div>
 <div class="mute-pill" id="mutePill" onclick="toggleGlobalMute()" style="display:none">🔇 Tap for sound</div>
+<div class="ptr" id="ptrPill">↓</div>
 
 <!-- ================= EXPLORE ================= -->
 <div class="screen" id="explore-screen">
@@ -646,18 +677,18 @@ function feedItemHtml(v){
       : '<div class="feed-empty-bg">🎬</div>') +
     '<div class="feed-grad"></div>' +
     '<div class="feed-info">' +
-      '<div class="feed-user">'+avatarHtml(v,'feed-ava')+'<span class="feed-uname">@'+uname+'</span>' +
-      (currentUser && currentUser.username===v.username ? '' : '<button class="follow-btn" id="fb_'+vid+'" onclick="event.stopPropagation();followUser(\''+esc(v.author_id||'')+'\',\''+uname.replace(/'/g,'')+'\',this)">Follow</button>')+'</div>' +
+      '<div class="feed-user">'+avatarHtml(v,'feed-ava')+'<span class="feed-uname">@'+uname+'</span></div>' +
       (v.title?'<div class="feed-cap">'+esc(v.title)+'</div>':'') +
-      (v.description?'<div class="feed-desc">'+esc(String(v.description).slice(0,90))+'</div>':'') +
+      (v.description?'<div class="feed-desc clamped" onclick="event.stopPropagation();this.classList.remove(\'clamped\')">'+esc(String(v.description).slice(0,180))+' <span class="more">more</span></div>':'') +
+      '<div class="fticker"><span class="note">♪</span><div class="track"><span>'+esc(v.title||('original sound · @'+uname))+' · @'+uname+' · '+esc(v.title||'original sound')+' · @'+uname+'</span></div><div class="fdisc">🎵</div></div>' +
     '</div>' +
     '<div class="feed-actions">' +
-      '<div class="fact-ava" style="margin-bottom:6px">'+(v.avatar_url?'<img src="'+esc(v.avatar_url)+'">':((v.username||'U')[0].toUpperCase()))+'</div>' +
+      '<div class="fact-ava" style="margin-bottom:10px">'+(v.avatar_url?'<img src="'+esc(v.avatar_url)+'">':((v.username||'U')[0].toUpperCase()))+(currentUser && currentUser.username===v.username ? '' : '<div class="fbadge" id="fb_'+vid+'" onclick="event.stopPropagation();this.classList.add(\'done\');this.textContent=\'✓\';followUser(\''+esc(v.author_id||'')+'\',\''+uname.replace(/'/g,'')+'\',this)">+</div>')+'</div>' +
       '<div class="fact" onclick="event.stopPropagation();likeVideo(\''+vid+'\',this)"><div class="fact-ic">❤️</div><div class="fact-n" id="lk_'+vid+'">'+num(v.like_count)+'</div></div>' +
       '<div class="fact" onclick="event.stopPropagation();openComments(\''+vid+'\')"><div class="fact-ic">💬</div><div class="fact-n" id="cc_'+vid+'">'+num(v.comment_count)+'</div></div>' +
       '<div class="fact" onclick="event.stopPropagation();shareVideo(\''+vid+'\')"><div class="fact-ic">↗️</div><div class="fact-n">Share</div></div>' +
       '<div class="fact" onclick="event.stopPropagation();toast(\'🎁 Gifts open during LIVE streams — go LIVE from the ＋ button\')"><div class="fact-ic">🎁</div><div class="fact-n">Gift</div></div>' +
-    '</div></div>';
+    '</div><div class="fprog"><div class="fprog-in"></div></div></div>';
 }
 function emptyFeedHtml(){
   return '<div class="feed-state"><div class="big">🎬</div><div style="font-weight:800;font-size:1.05rem;color:#fff">No videos yet — be the first!</div><div>Tap ＋ to record your first clip</div><div style="width:100%;max-width:420px"><div class="sect" style="padding-left:0">✨ Creators to follow</div><div class="rail" id="feedRailSlot"></div></div></div>';
@@ -673,6 +704,11 @@ function wireFeedObserver(){
         v.play().catch(()=>{});
         const item = v.closest('.feed-item');
         if(item && !item._viewed){ item._viewed = true; fetch(API+'/api/videos/'+item.dataset.vid+'/view',{method:'POST'}).catch(()=>{}); }
+        if(item && !item._prog){
+          item._prog = true;
+          const bar = item.querySelector('.fprog-in');
+          v.addEventListener('timeupdate', ()=>{ if(bar && v.duration){ bar.style.width = ((v.currentTime/v.duration)*100).toFixed(1)+'%'; bar.classList.add('playing'); } });
+        }
       } else v.pause();
     });
   },{threshold:[0,0.6,1]});
@@ -686,6 +722,29 @@ function toggleGlobalMute(){
   $('mutePill').textContent = soundOn ? '🔊 Sound on' : '🔇 Tap for sound';
   $('mutePill').style.display = soundOn ? 'none' : 'block';
 }
+/* pull-to-refresh (TikTok style) */
+(function(){
+  let startY = 0, pulling = false;
+  const fc = () => $('feedContainer');
+  document.addEventListener('touchstart', e=>{
+    const c = fc();
+    if(c && c.scrollTop <= 0 && $('feed-screen').classList.contains('active')){ startY = e.touches[0].clientY; pulling = true; }
+  }, {passive:true});
+  document.addEventListener('touchmove', e=>{
+    if(!pulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if(dy > 60){ $('ptrPill').classList.add('on'); $('ptrPill').textContent = dy > 130 ? '↻' : '↓'; }
+  }, {passive:true});
+  document.addEventListener('touchend', e=>{
+    if(!pulling) return;
+    pulling = false;
+    const pill = $('ptrPill');
+    if(pill.classList.contains('on')){
+      if(pill.textContent === '↻'){ pill.classList.add('spin'); loadFeed().finally(()=>setTimeout(()=>{ pill.classList.remove('on','spin'); }, 600)); }
+      else pill.classList.remove('on');
+    }
+  }, {passive:true});
+})();
 function dblLike(e, vid){ likeVideo(vid, null); const h=document.createElement('div'); h.className='heart-pop'; h.textContent='❤️'; h.style.left=(e.clientX-44)+'px'; h.style.top=(e.clientY-44)+'px'; document.body.appendChild(h); setTimeout(()=>h.remove(),900); }
 async function likeVideo(vid, el){
   const n = $('lk_'+vid); if(n) n.textContent = num(parseInt(n.textContent.replace(/,/g,''))+1);
@@ -707,7 +766,10 @@ async function followUser(userId, username, btn){
     const d = await r.json();
     if(d.ok){
       const on = !!d.following;
-      if(btn){ btn.textContent = on?'Following ✓':'Follow'; btn.classList.toggle('on', on); }
+      if(btn){
+        if(btn.classList && btn.classList.contains('fbadge')){ btn.textContent = on?'✓':'+'; btn.classList.toggle('done', on); }
+        else { btn.textContent = on?'Following ✓':'Follow'; btn.classList.toggle('on', on); }
+      }
       toast(on ? 'Following @'+username+' 🎉' : 'Unfollowed @'+username);
     } else toast(d.error || 'Follow failed');
   }catch(e){ toast('Network error — try again'); }

@@ -12,6 +12,7 @@ const { Pool } = require('pg');
 const passport = require('passport');
 const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 const session = require('express-session');
+const path = require('path');
 
 const app = express();
 app.set('trust proxy', 1);  // required behind Cloudflare proxy
@@ -575,6 +576,14 @@ app.get('/api/users/:username', async (req, res) => {
       }
     }
 
+    let canSeeContent = true;
+    if (user.is_private && viewerId !== user.id) {
+      const { rows: frows } = await db.query(
+        'SELECT 1 FROM follows WHERE follower_id=$1 AND followee_id=$2', [viewerId, user.id]
+      );
+      canSeeContent = frows.length > 0;
+    }
+
     let videos = [];
     if (canSeeContent) {
       const { rows: vrows } = await db.query(`
@@ -827,6 +836,8 @@ async function initDB() {
     ('DIGITAL KING', '🔱', '/gifts/king.png',        10000,100.00, 70, 30, 7, true)
     ON CONFLICT (name) DO NOTHING
   `).catch(() => {});
+
+
   // ── Missing tables for battles, messages, jackpot, etc. ──
   await db.query(`CREATE TABLE IF NOT EXISTS jackpot_pool (
     id SERIAL PRIMARY KEY,
@@ -2312,7 +2323,9 @@ io.on('connection', (socket) => {
     onlineUsers.set(userId, socket.id);
     socket.join(`user:${userId}`);
     io.emit('user_online', { userId });
-    // ── WebRTC Broadcast Signaling ───────────────────────────────────────────
+  }
+
+  // ── WebRTC Broadcast Signaling ───────────────────────────────────────────
   socket.on('broadcaster', (streamId) => {
     socket.join('broadcast:' + streamId);
     socket.broadcast.to('stream:' + streamId).emit('broadcaster');
@@ -2337,7 +2350,7 @@ io.on('connection', (socket) => {
 
   socket.on('end_stream', (streamId) => {
     socket.to('stream:' + streamId).emit('stream_ended', { streamId });
-  });}
+  });
 
   // ── LIVE STREAMING ──────────────────────────────────────────────────────
   socket.on('join_stream', async ({ streamId }) => {
@@ -2716,8 +2729,6 @@ app.post('/api/games/roll', authMiddleware, async (req, res) => {
 
 
 // ── File Upload — Supabase Storage (persistent) with disk fallback ──
-const multer = require('multer');
-const path = require('path');
 const uploadDir = __dirname + '/public/uploads';
 require('fs').mkdirSync(uploadDir, { recursive: true });
 
@@ -2885,10 +2896,7 @@ try {
 }
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[nvme.live] ONLINE :${PORT} | Empire: Dollar Double Empire`);
-  });
-}).catch(e => {
-  console.error('[nvme.live] DB init failed:', e.message);
+  console.log(`[nvme.live] ONLINE :${PORT} | Empire: Dollar Double Empire`);
 });
 
 

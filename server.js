@@ -827,6 +827,113 @@ async function initDB() {
     ('DIGITAL KING', '🔱', '/gifts/king.png',        10000,100.00, 70, 30, 7, true)
     ON CONFLICT (name) DO NOTHING
   `).catch(() => {});
+  // ── Missing tables for battles, messages, jackpot, etc. ──
+  await db.query(`CREATE TABLE IF NOT EXISTS jackpot_pool (
+    id SERIAL PRIMARY KEY,
+    pool INTEGER DEFAULT 25000,
+    total_entries INTEGER DEFAULT 0,
+    total_paid INTEGER DEFAULT 0,
+    last_winner_username TEXT,
+    last_won_at TIMESTAMPTZ
+  )`).catch(() => {});
+  await db.query(`INSERT INTO jackpot_pool (id, pool) VALUES (1, 25000) ON CONFLICT DO NOTHING`).catch(() => {});
+
+  await db.query(`CREATE TABLE IF NOT EXISTS stream_battles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    stream_id UUID REFERENCES livestreams(id) ON DELETE CASCADE,
+    host_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    battle_type TEXT DEFAULT 'ffa',
+    max_participants INTEGER DEFAULT 20,
+    team_a_name TEXT DEFAULT 'Team A',
+    team_b_name TEXT DEFAULT 'Team B',
+    elimination_interval_seconds INTEGER DEFAULT 60,
+    status TEXT DEFAULT 'waiting',
+    winner_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    started_at TIMESTAMPTZ,
+    ended_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`).catch(() => {});
+
+  await db.query(`CREATE TABLE IF NOT EXISTS battle_participants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    battle_id UUID REFERENCES stream_battles(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    team TEXT DEFAULT 'a',
+    status TEXT DEFAULT 'active',
+    gifts_received NUMERIC DEFAULT 0,
+    votes INTEGER DEFAULT 0,
+    bg_url TEXT,
+    UNIQUE(battle_id, user_id)
+  )`).catch(() => {});
+
+  await db.query(`CREATE TABLE IF NOT EXISTS battle_invites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    from_stream_id UUID REFERENCES livestreams(id) ON DELETE CASCADE,
+    from_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    to_stream_id UUID REFERENCES livestreams(id) ON DELETE CASCADE,
+    to_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    battle_id UUID REFERENCES stream_battles(id) ON DELETE SET NULL,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    responded_at TIMESTAMPTZ
+  )`).catch(() => {});
+
+  await db.query(`CREATE TABLE IF NOT EXISTS epic_transfers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    epic_username TEXT NOT NULL,
+    epic_diamonds INTEGER DEFAULT 0,
+    epic_level INTEGER DEFAULT 1,
+    diamonds_converted INTEGER DEFAULT 0,
+    transfer_status TEXT DEFAULT 'completed',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`).catch(() => {});
+
+  await db.query(`CREATE TABLE IF NOT EXISTS messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID,
+    sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`).catch(() => {});
+
+  await db.query(`CREATE TABLE IF NOT EXISTS conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user1_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user2_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user1_id, user2_id)
+  )`).catch(() => {});
+
+  await db.query(`CREATE TABLE IF NOT EXISTS transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    type TEXT,
+    amount_usd NUMERIC,
+    credits_delta INTEGER,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`).catch(() => {});
+
+  await db.query(`CREATE TABLE IF NOT EXISTS user_activity (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    target_id UUID,
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`).catch(() => {});
+
+  await db.query(`CREATE TABLE IF NOT EXISTS stream_guests (
+    id SERIAL PRIMARY KEY,
+    stream_id TEXT NOT NULL,
+    guest_user_id TEXT NOT NULL,
+    guest_username VARCHAR(100),
+    guest_avatar TEXT,
+    status VARCHAR(20) DEFAULT 'invited',
+    slot INTEGER DEFAULT 1,
+    invited_at TIMESTAMP DEFAULT NOW()
+  )`).catch(() => {});
 }
 
 // ── Routes: Health ───────────────────────────────────────────
@@ -2205,7 +2312,32 @@ io.on('connection', (socket) => {
     onlineUsers.set(userId, socket.id);
     socket.join(`user:${userId}`);
     io.emit('user_online', { userId });
-  }
+    // ── WebRTC Broadcast Signaling ───────────────────────────────────────────
+  socket.on('broadcaster', (streamId) => {
+    socket.join('broadcast:' + streamId);
+    socket.broadcast.to('stream:' + streamId).emit('broadcaster');
+  });
+
+  socket.on('watcher', (streamId) => {
+    socket.join('stream:' + streamId);
+    socket.to('broadcast:' + streamId).emit('watcher', socket.id);
+  });
+
+  socket.on('offer', (id, message) => {
+    socket.to(id).emit('offer', socket.id, message);
+  });
+
+  socket.on('answer', (id, message) => {
+    socket.to(id).emit('answer', socket.id, message);
+  });
+
+  socket.on('candidate', (id, message) => {
+    socket.to(id).emit('candidate', socket.id, message);
+  });
+
+  socket.on('end_stream', (streamId) => {
+    socket.to('stream:' + streamId).emit('stream_ended', { streamId });
+  });}
 
   // ── LIVE STREAMING ──────────────────────────────────────────────────────
   socket.on('join_stream', async ({ streamId }) => {

@@ -2897,6 +2897,9 @@ try {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[nvme.live] ONLINE :${PORT} | Empire: Dollar Double Empire`);
+  });
+}).catch(e => {
+  console.error('[nvme.live] DB init failed:', e.message);
 });
 
 

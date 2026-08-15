@@ -684,4 +684,21 @@ io.on('connection', (socket) => {
 
 // ========================================
 // 🏠 Serve Frontend
-// =======================================
+// ========================================
+
+app.get('*', (req, res) => {
+  res.sendFile('index.html', { root: 'public' });
+});
+
+// ========================================
+// 🚀 Start Server
+// ========================================
+
+server.listen(PORT, () => {
+  console.log(`🚀 NVME.live running on http://localhost:${PORT}`);
+  console.log(`💰 Creator Payouts: 70% / 30% split`);
+  console.log(`🤖 AI Studio: NVIDIA + Kimi (auto-fallback)`);
+});
+
+process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));
+process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));

@@ -32,6 +32,11 @@ const paypal = require('@paypal/checkout-server-sdk');
 // ========================================
 
 const app = express();
+// Railway terminates TLS and forwards over plain HTTP internally. Without
+// this, Express can't tell the original request was HTTPS — req.protocol
+// reads as 'http', which was making the Google OAuth callback URL resolve
+// to http://nvme.live/... instead of https://, causing redirect_uri_mismatch.
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
@@ -281,7 +286,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: '/auth/google/callback'
+    // Absolute URL, not relative — belt-and-suspenders alongside trust
+    // proxy above, so this doesn't silently break again if that setting
+    // ever gets removed or Railway's proxy behavior changes.
+    callbackURL: `${FRONTEND_URL}/auth/google/callback`
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       const email = profile.emails?.[0]?.value;
@@ -525,6 +533,10 @@ app.post('/api/videos/:id/view', optionalAuth, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'Video not found' });
     res.json({ success: true, views: result.rows[0].view_count });
   } catch (error) {
+    // Was silently swallowed before — logging so the actual cause (e.g. a
+    // malformed non-UUID :id) shows up in Railway's deploy logs instead of
+    // just a bare "500" with no trace.
+    console.error('View count error:', error.message);
     res.status(500).json({ error: 'Failed to record view' });
   }
 });
@@ -774,44 +786,123 @@ app.get('/api/streams/live', async (req, res) => {
   }
 });
 
-app.post('/api/streams/start', authenticateToken, async (req, res) => {
+// creator.html calls /api/streams/live/now instead of /api/streams/live —
+// same query, different path.
+app.get('/api/streams/live/now', async (req, res) => {
   try {
-    const user = req.user;
-    const { title, description } = req.body;
-
-    const existing = await pool.query("SELECT id FROM livestreams WHERE user_id = $1 AND status = 'live'", [user.id]);
-    if (existing.rows.length > 0) return res.status(400).json({ error: 'You already have an active stream' });
-
-    const streamKey = uuidv4();
     const result = await pool.query(
-      `INSERT INTO livestreams (user_id, title, description, stream_key, status, started_at)
-       VALUES ($1, $2, $3, $4, 'live', NOW()) RETURNING *`,
-      [user.id, title || 'Live Stream', description || '', streamKey]
+      `SELECT s.id, s.title, s.description, s.thumbnail_url, s.viewer_count, s.started_at,
+              u.id AS host_id, u.username, u.display_name, u.avatar_url, u.is_verified
+       FROM livestreams s JOIN users u ON s.user_id = u.id
+       WHERE s.status = 'live'
+       ORDER BY s.viewer_count DESC LIMIT 50`
     );
-
-    io.emit('stream-started', { streamId: result.rows[0].id, username: user.username, title: result.rows[0].title });
-    res.json({ success: true, stream: result.rows[0] });
+    res.json(result.rows);
   } catch (error) {
-    console.error('Stream start error:', error);
-    res.status(500).json({ error: 'Failed to start stream' });
+    res.status(500).json({ error: 'Failed to fetch live streams' });
   }
 });
 
-app.post('/api/streams/end', authenticateToken, async (req, res) => {
+// The creator's own stream history (Creator Studio dashboard list).
+app.get('/api/creator/streams', authenticateToken, async (req, res) => {
   try {
-    const { streamId } = req.body;
+    const limit = parseInt(req.query.limit) || 20;
     const result = await pool.query(
-      `UPDATE livestreams SET status = 'ended', ended_at = NOW()
+      `SELECT id, title, description, thumbnail_url, status, viewer_count, peak_viewer_count,
+              total_gifts_received, started_at, ended_at, created_at
+       FROM livestreams WHERE user_id = $1
+       ORDER BY created_at DESC LIMIT $2`,
+      [req.user.id, limit]
+    );
+    res.json({ streams: result.rows });
+  } catch (error) {
+    console.error('Creator streams error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch streams' });
+  }
+});
+
+// Create a stream (does NOT go live yet — creator.html calls this, then
+// separately POSTs go-live once the broadcast actually starts).
+app.post('/api/streams', authenticateToken, async (req, res) => {
+  try {
+    const { title, description, is_premium, price_credits } = req.body;
+    const streamKey = uuidv4();
+    const result = await pool.query(
+      `INSERT INTO livestreams (user_id, title, description, stream_key, is_premium, price_credits, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'offline') RETURNING *`,
+      [req.user.id, title || 'Live Stream', description || '', streamKey, !!is_premium, price_credits || 0]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Create stream error:', error.message);
+    res.status(500).json({ error: 'Failed to create stream' });
+  }
+});
+
+app.post('/api/streams/:id/go-live', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE livestreams SET status = 'live', started_at = NOW()
        WHERE id = $1 AND user_id = $2 RETURNING *`,
-      [streamId, req.user.id]
+      [req.params.id, req.user.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Stream not found' });
 
-    io.emit('stream-ended', { streamId });
+    io.emit('stream-started', { streamId: result.rows[0].id, username: req.user.username, title: result.rows[0].title });
     res.json({ success: true, stream: result.rows[0] });
   } catch (error) {
-    console.error('Stream end error:', error);
+    console.error('Go-live error:', error.message);
+    res.status(500).json({ error: 'Failed to go live' });
+  }
+});
+
+app.post('/api/streams/:id/end-live', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE livestreams SET status = 'ended', ended_at = NOW()
+       WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Stream not found' });
+
+    io.emit('stream-ended', { streamId: req.params.id });
+    res.json({ success: true, stream: result.rows[0] });
+  } catch (error) {
+    console.error('End-live error:', error.message);
     res.status(500).json({ error: 'Failed to end stream' });
+  }
+});
+
+app.post('/api/streams/:id/goal', authenticateToken, async (req, res) => {
+  try {
+    const { target, reward } = req.body;
+    const result = await pool.query(
+      `UPDATE livestreams SET goal_target = $1, goal_reward = $2, goal_current = 0
+       WHERE id = $3 AND user_id = $4 RETURNING id, goal_target, goal_reward, goal_current`,
+      [target, reward || null, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Stream not found' });
+    res.json({ success: true, goal: result.rows[0] });
+  } catch (error) {
+    console.error('Set goal error:', error.message);
+    res.status(500).json({ error: 'Failed to set goal' });
+  }
+});
+
+app.get('/api/streams/:id/gift-leaderboard', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.username, u.avatar_url, SUM(gt.credits_spent) AS total
+       FROM gift_transactions gt JOIN users u ON gt.from_user_id = u.id
+       WHERE gt.stream_id = $1
+       GROUP BY u.id, u.username, u.avatar_url
+       ORDER BY total DESC LIMIT 20`,
+      [req.params.id]
+    );
+    res.json({ leaderboard: result.rows });
+  } catch (error) {
+    console.error('Leaderboard error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
   }
 });
 
@@ -891,10 +982,230 @@ app.post('/api/gifts/send', authenticateToken, async (req, res) => {
 });
 
 // ========================================
+// ⚔️ LIVE Battles
+// ========================================
+
+app.post('/api/battles/invite', authenticateToken, async (req, res) => {
+  try {
+    const { to_stream_id, to_user_id } = req.body;
+    if (!to_stream_id || !to_user_id) return res.status(400).json({ error: 'to_stream_id and to_user_id are required' });
+
+    const myStream = await pool.query(
+      "SELECT id FROM livestreams WHERE user_id = $1 AND status = 'live' ORDER BY started_at DESC LIMIT 1",
+      [req.user.id]
+    );
+    if (myStream.rows.length === 0) return res.status(400).json({ ok: false, error: 'You must be live to send a battle invite' });
+
+    const result = await pool.query(
+      `INSERT INTO battle_invites (from_stream_id, from_user_id, to_stream_id, to_user_id)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [myStream.rows[0].id, req.user.id, to_stream_id, to_user_id]
+    );
+
+    io.to(`user-${to_user_id}`).emit('battle-invite', { invite: result.rows[0], fromUsername: req.user.username });
+    res.json({ ok: true, invite: result.rows[0] });
+  } catch (error) {
+    console.error('Battle invite error:', error.message);
+    res.status(500).json({ ok: false, error: 'Failed to send invite' });
+  }
+});
+
+app.post('/api/battles/invite/:id/accept', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const inviteResult = await client.query(
+      "SELECT * FROM battle_invites WHERE id = $1 AND to_user_id = $2 AND status = 'pending' FOR UPDATE",
+      [req.params.id, req.user.id]
+    );
+    if (inviteResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Invite not found or already handled' });
+    }
+    const invite = inviteResult.rows[0];
+
+    const battleResult = await client.query(
+      `INSERT INTO stream_battles (stream_id, host_id, status) VALUES ($1, $2, 'waiting') RETURNING *`,
+      [invite.from_stream_id, invite.from_user_id]
+    );
+    const battle = battleResult.rows[0];
+
+    await client.query(
+      `INSERT INTO battle_participants (battle_id, user_id, team) VALUES ($1, $2, 'a'), ($1, $3, 'b')`,
+      [battle.id, invite.from_user_id, invite.to_user_id]
+    );
+
+    await client.query(
+      "UPDATE battle_invites SET status = 'accepted', responded_at = NOW(), battle_id = $1 WHERE id = $2",
+      [battle.id, invite.id]
+    );
+
+    await client.query('COMMIT');
+
+    io.to(`user-${invite.from_user_id}`).emit('battle-invite-accepted', { battle });
+    res.json({ ok: true, battle });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Accept invite error:', error.message);
+    res.status(500).json({ ok: false, error: 'Failed to accept invite' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/battles/invite/:id/decline', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "UPDATE battle_invites SET status = 'declined', responded_at = NOW() WHERE id = $1 AND to_user_id = $2 RETURNING *",
+      [req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ ok: false, error: 'Invite not found' });
+    io.to(`user-${result.rows[0].from_user_id}`).emit('battle-invite-declined', { inviteId: req.params.id });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Decline invite error:', error.message);
+    res.status(500).json({ ok: false, error: 'Failed to decline invite' });
+  }
+});
+
+app.get('/api/battles/:id', authenticateToken, async (req, res) => {
+  try {
+    const battleResult = await pool.query('SELECT * FROM stream_battles WHERE id = $1', [req.params.id]);
+    if (battleResult.rows.length === 0) return res.status(404).json({ error: 'Battle not found' });
+
+    const participants = await pool.query(
+      `SELECT bp.*, u.username, u.avatar_url FROM battle_participants bp
+       JOIN users u ON bp.user_id = u.id WHERE bp.battle_id = $1`,
+      [req.params.id]
+    );
+    res.json({ ...battleResult.rows[0], participants: participants.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch battle' });
+  }
+});
+
+app.post('/api/battles/:id/start', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "UPDATE stream_battles SET status = 'active', started_at = NOW() WHERE id = $1 AND host_id = $2 RETURNING *",
+      [req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ ok: false, error: 'Battle not found' });
+    io.emit('battle-started', { battleId: req.params.id });
+    res.json({ ok: true, battle: result.rows[0] });
+  } catch (error) {
+    console.error('Battle start error:', error.message);
+    res.status(500).json({ ok: false, error: 'Failed to start battle' });
+  }
+});
+
+app.post('/api/battles/:id/end', authenticateToken, async (req, res) => {
+  try {
+    const participants = await pool.query(
+      'SELECT * FROM battle_participants WHERE battle_id = $1 ORDER BY gifts_received DESC',
+      [req.params.id]
+    );
+    const winnerId = participants.rows[0]?.user_id || null;
+
+    const result = await pool.query(
+      "UPDATE stream_battles SET status = 'ended', ended_at = NOW(), winner_id = $1 WHERE id = $2 AND host_id = $3 RETURNING *",
+      [winnerId, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ ok: false, error: 'Battle not found' });
+
+    io.emit('battle-ended', { battleId: req.params.id, winnerId });
+    res.json({ ok: true, battle: result.rows[0] });
+  } catch (error) {
+    console.error('Battle end error:', error.message);
+    res.status(500).json({ ok: false, error: 'Failed to end battle' });
+  }
+});
+
+// The "attack" mechanic: spend credits to deal damage to the opposing
+// participant. Deducts the attacker's balance, adds to the target's
+// gifts_received tally (drives the leaderboard/elimination), and logs the
+// attack. Elimination-at-zero-votes logic lives client-side in creator.html
+// today (see startBattleTimer / pollBattleLeaderboard) — this endpoint just
+// provides the authoritative credit + damage transaction.
+app.post('/api/battles/:id/attack', authenticateToken, async (req, res) => {
+  const { gift_type, cost, damage, stream_id } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const senderResult = await client.query('SELECT balance_credits FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+    if (parseFloat(senderResult.rows[0].balance_credits) < cost) {
+      await client.query('ROLLBACK');
+      return res.json({ ok: false, error: 'Insufficient credits' });
+    }
+
+    const targetResult = await client.query(
+      `SELECT bp.id FROM battle_participants bp
+       WHERE bp.battle_id = $1 AND bp.user_id != $2 AND bp.status = 'active' LIMIT 1`,
+      [req.params.id, req.user.id]
+    );
+    if (targetResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.json({ ok: false, error: 'No active opponent found' });
+    }
+    const targetParticipantId = targetResult.rows[0].id;
+
+    const updated = await client.query(
+      'UPDATE users SET balance_credits = balance_credits - $1 WHERE id = $2 RETURNING balance_credits',
+      [cost, req.user.id]
+    );
+
+    await client.query(
+      'UPDATE battle_participants SET gifts_received = gifts_received + $1, votes = votes + 1 WHERE id = $2',
+      [cost, targetParticipantId]
+    );
+
+    await client.query(
+      `INSERT INTO battle_attacks (battle_id, attacker_id, target_participant_id, gift_type, cost, damage)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.params.id, req.user.id, targetParticipantId, gift_type || null, cost, damage || 0]
+    );
+
+    await client.query('COMMIT');
+
+    io.emit('battle-attack', { battleId: req.params.id, targetParticipantId, damage, gift_type });
+    res.json({ ok: true, new_balance: parseFloat(updated.rows[0].balance_credits) });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Battle attack error:', error.message);
+    res.json({ ok: false, error: 'Attack failed' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/battles/:id/background', authenticateToken, async (req, res) => {
+  try {
+    const { participant_id, bg_data_url } = req.body;
+    await pool.query(
+      'UPDATE battle_participants SET background_url = $1 WHERE id = $2 AND user_id = $3',
+      [bg_data_url, participant_id, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Battle background error:', error.message);
+    res.status(500).json({ ok: false, error: 'Failed to save background' });
+  }
+});
+
+// ========================================
 // 💰 Wallet
 // ========================================
 
 app.get('/api/wallet/balance', authenticateToken, async (req, res) => {
+  const result = await pool.query('SELECT balance_credits, total_earned FROM users WHERE id = $1', [req.user.id]);
+  res.json({ balance: parseFloat(result.rows[0].balance_credits), total_earned: parseFloat(result.rows[0].total_earned) });
+});
+
+// creator.html calls the bare /api/wallet (not /api/wallet/balance) — same
+// data, different path. Kept both rather than changing the frontend.
+app.get('/api/wallet', authenticateToken, async (req, res) => {
   const result = await pool.query('SELECT balance_credits, total_earned FROM users WHERE id = $1', [req.user.id]);
   res.json({ balance: parseFloat(result.rows[0].balance_credits), total_earned: parseFloat(result.rows[0].total_earned) });
 });

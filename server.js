@@ -488,7 +488,7 @@ app.post('/api/calls/initiate', authenticateToken, async (req, res) => {
 });
 
 // ========================================
-// 🎁 Gifts
+// 🎁 Gifts & Gift Sounds
 // ========================================
 
 app.post('/api/gifts/send', authenticateToken, async (req, res) => {
@@ -508,19 +508,24 @@ app.post('/api/gifts/send', authenticateToken, async (req, res) => {
     const stream = streamResult.rows[0];
     const toUserId = stream.user_id;
 
+    // Process the payout split (70% to streamer)
     await processPayout(toUserId, value, 'gift', giftId);
 
+    // Save to database
     await pool.query(
       `INSERT INTO gifts (gift_id, stream_id, from_user_id, to_user_id, gift_type, value, message)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [giftId, streamId, fromUser.id, toUserId, giftType, value, message || '']
     );
 
+    // 🎵 BROADCAST THE GIFT + SOUND TO STREAM VIEWERS
     io.to(`stream-${streamId}`).emit('new-gift', {
       giftType,
       fromUser: fromUser.username,
       value,
-      creatorAmount: value * CREATOR_PERCENT
+      creatorAmount: value * CREATOR_PERCENT,
+      playSound: true, // <--- This triggers the front-end to play a sound
+      soundFile: `/sounds/gift-${giftType}.mp3` // <--- The path to your audio file
     });
 
     res.json({

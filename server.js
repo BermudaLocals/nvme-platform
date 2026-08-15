@@ -761,3 +761,324 @@ app.post('/api/calls/initiate', authenticateToken, async (req, res) => {
     );
 
     io.to(`user-${receiverId}`).emit('incoming-call', {
+      callId,
+      callerId: caller.id,
+      callerName: caller.display_name || caller.username,
+      callerAvatar: caller.avatar
+    });
+
+    res.json({
+      success: true,
+      callId,
+      message: 'Call initiated'
+    });
+
+  } catch (error) {
+    console.error('Call error:', error);
+    res.status(500).json({ error: 'Failed to initiate call' });
+  }
+});
+
+// ========================================
+// 🎁 Gifts & Tips
+// ========================================
+
+app.post('/api/gifts/send', authenticateToken, async (req, res) => {
+  try {
+    const { streamId, giftType, message } = req.body;
+    const fromUser = req.user;
+
+    const giftValues = {
+      crown: 50,
+      rocket: 100,
+      heart: 10,
+      star: 5,
+      diamond: 200
+    };
+
+    const value = giftValues[giftType] || 10;
+    const giftId = uuidv4();
+
+    const streamResult = await pool.query('SELECT * FROM streams WHERE stream_id = $1', [streamId]);
+    if (streamResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Stream not found' });
+    }
+
+    const stream = streamResult.rows[0];
+    const toUserId = stream.user_id;
+
+    const payout = await processPayout(toUserId, value, 'gift', giftId);
+
+    await pool.query(
+      `INSERT INTO gifts (gift_id, stream_id, from_user_id, to_user_id, gift_type, value, message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [giftId, streamId, fromUser.id, toUserId, giftType, value, message || '']
+    );
+
+    await pool.query(
+      `UPDATE streams 
+       SET total_gifts = total_gifts + $1, 
+           total_tips = total_tips + $1,
+           gift_breakdown = COALESCE(gift_breakdown, '{}')::jsonb || jsonb_build_object($2, COALESCE((gift_breakdown->>$2)::int, 0) + 1)
+       WHERE stream_id = $3`,
+      [value, giftType, streamId]
+    );
+
+    io.to(`stream-${streamId}`).emit('new-gift', {
+      giftId,
+      giftType,
+      fromUser: fromUser.username,
+      toUser: stream.username,
+      value,
+      creatorAmount: value * CREATOR_PERCENT,
+      platformFee: value * PLATFORM_PERCENT,
+      message: message || '',
+      time: new Date().toISOString()
+    });
+
+    res.json({
+      success: true,
+      giftId,
+      value,
+      creatorAmount: value * CREATOR_PERCENT,
+      platformFee: value * PLATFORM_PERCENT,
+      message: `🎁 ${giftType} sent! 70% ($${(value * CREATOR_PERCENT).toFixed(2)}) to creator.`
+    });
+
+  } catch (error) {
+    console.error('Gift error:', error);
+    res.status(500).json({ error: 'Failed to send gift' });
+  }
+});
+
+// ========================================
+// 🎁 Free Trial
+// ========================================
+
+app.post('/api/trial/start', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (user.trial_ends && new Date(user.trial_ends) > new Date()) {
+      return res.status(400).json({ error: 'You already have an active trial' });
+    }
+
+    const trialDays = parseInt(process.env.TRIAL_DAYS) || 7;
+    const trialEnds = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+
+    await pool.query(
+      'UPDATE users SET trial_ends = $1, plan = $2 WHERE id = $3',
+      [trialEnds, 'pro', user.id]
+    );
+
+    res.json({
+      success: true,
+      trialEnds,
+      daysRemaining: trialDays,
+      message: `🎁 ${trialDays}-day free trial started! Enjoy all Pro features.`
+    });
+
+  } catch (error) {
+    console.error('Trial error:', error);
+    res.status(500).json({ error: 'Failed to start trial' });
+  }
+});
+
+// ========================================
+// 📊 Dashboard
+// ========================================
+
+app.get('/api/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+
+    // Get stream stats
+    const streamStats = await pool.query(
+      `SELECT COUNT(*) as total_streams, 
+              SUM(viewer_count) as total_viewers,
+              SUM(duration) as total_duration,
+              SUM(total_gifts) as total_gifts
+       FROM streams WHERE user_id = $1`,
+      [user.id]
+    );
+
+    // Get video stats
+    const videoStats = await pool.query(
+      `SELECT COUNT(*) as total_videos, SUM(views) as total_views
+       FROM videos WHERE user_id = $1 AND is_processing = false`,
+      [user.id]
+    );
+
+    // Get payout stats
+    const payoutStats = await pool.query(
+      `SELECT SUM(creator_amount) as total_payouts, 
+              SUM(platform_fee) as total_platform_fees,
+              COUNT(*) as total_transactions
+       FROM payouts WHERE user_id = $1 AND status = 'completed'`,
+      [user.id]
+    );
+
+    res.json({
+      user: {
+        username: user.username,
+        display_name: user.display_name,
+        avatar: user.avatar,
+        followers: user.followers || 0,
+        plan: user.plan,
+        is_verified: user.is_verified || false,
+        trial_ends: user.trial_ends
+      },
+      earnings: {
+        total_earnings: user.total_earnings || 0,
+        total_payouts: user.total_payouts || 0,
+        platform_fees: user.platform_fees || 0,
+        payout_pending: user.payout_pending || 0
+      },
+      stats: {
+        total_streams: parseInt(streamStats.rows[0]?.total_streams || 0),
+        total_viewers: parseInt(streamStats.rows[0]?.total_viewers || 0),
+        total_duration: parseInt(streamStats.rows[0]?.total_duration || 0),
+        total_gifts: parseFloat(streamStats.rows[0]?.total_gifts || 0),
+        total_videos: parseInt(videoStats.rows[0]?.total_videos || 0),
+        total_video_views: parseInt(videoStats.rows[0]?.total_views || 0),
+        total_payouts: parseFloat(payoutStats.rows[0]?.total_payouts || 0),
+        total_platform_fees: parseFloat(payoutStats.rows[0]?.total_platform_fees || 0),
+        total_transactions: parseInt(payoutStats.rows[0]?.total_transactions || 0)
+      }
+    });
+
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.status(500).json({ error: 'Failed to load dashboard' });
+  }
+});
+
+// ========================================
+// 📡 WebSocket (Socket.io)
+// ========================================
+
+io.on('connection', (socket) => {
+  console.log('🟢 Client connected:', socket.id);
+
+  // Join user room for calls
+  socket.on('user-online', (data) => {
+    const { userId } = data;
+    socket.join(`user-${userId}`);
+  });
+
+  // Join stream
+  socket.on('join-stream', (data) => {
+    const { streamId } = data;
+    socket.join(`stream-${streamId}`);
+    
+    const streamData = activeStreams.get(streamId);
+    if (streamData) {
+      streamData.viewers.add(socket.id);
+      io.to(`stream-${streamId}`).emit('viewer-count', streamData.viewers.size);
+    }
+  });
+
+  // Leave stream
+  socket.on('leave-stream', (data) => {
+    const { streamId } = data;
+    socket.leave(`stream-${streamId}`);
+    
+    const streamData = activeStreams.get(streamId);
+    if (streamData) {
+      streamData.viewers.delete(socket.id);
+      io.to(`stream-${streamId}`).emit('viewer-count', streamData.viewers.size);
+    }
+  });
+
+  // Chat message
+  socket.on('send-message', (data) => {
+    const { streamId, message, username } = data;
+    io.to(`stream-${streamId}`).emit('new-message', {
+      username,
+      message,
+      time: new Date().toISOString()
+    });
+  });
+
+  // WebRTC signaling for streaming
+  socket.on('streamer-offer', (data) => {
+    const { streamId, offer } = data;
+    socket.to(`stream-${streamId}`).emit('streamer-offer', { offer });
+  });
+
+  socket.on('viewer-answer', (data) => {
+    const { streamId, answer } = data;
+    socket.to(`stream-${streamId}`).emit('viewer-answer', { answer });
+  });
+
+  socket.on('stream-ice-candidate', (data) => {
+    const { streamId, candidate } = data;
+    socket.to(`stream-${streamId}`).emit('stream-ice-candidate', { candidate });
+  });
+
+  // WebRTC signaling for video calls
+  socket.on('call-offer', (data) => {
+    const { targetUserId, offer } = data;
+    socket.to(`user-${targetUserId}`).emit('call-offer', { offer });
+  });
+
+  socket.on('call-answer', (data) => {
+    const { targetUserId, answer } = data;
+    socket.to(`user-${targetUserId}`).emit('call-answer', { answer });
+  });
+
+  socket.on('call-ice-candidate', (data) => {
+    const { targetUserId, candidate } = data;
+    socket.to(`user-${targetUserId}`).emit('call-ice-candidate', { candidate });
+  });
+
+  socket.on('end-call', (data) => {
+    const { targetUserId } = data;
+    socket.to(`user-${targetUserId}`).emit('call-ended');
+  });
+
+  socket.on('disconnect', () => {
+    console.log('🔴 Client disconnected:', socket.id);
+    // Clean up from streams
+    activeStreams.forEach((data, streamId) => {
+      if (data.viewers.has(socket.id)) {
+        data.viewers.delete(socket.id);
+        io.to(`stream-${streamId}`).emit('viewer-count', data.viewers.size);
+      }
+    });
+  });
+});
+
+// ========================================
+// 🏠 Serve Frontend
+// ========================================
+
+app.get('*', (req, res) => {
+  res.sendFile('index.html', { root: 'public' });
+});
+
+// ========================================
+// 🚀 Start Server
+// ========================================
+
+server.listen(PORT, () => {
+  console.log(`🚀 NVME.live upgraded server running on http://localhost:${PORT}`);
+  console.log(`🎬 Live Streaming: WebRTC + Socket.io`);
+  console.log(`📞 Video Calls: P2P WebRTC`);
+  console.log(`📹 Video Uploads: Cloudinary/S3`);
+  console.log(`💰 Creator Payouts: 70% / 30% split`);
+  console.log(`🤖 AI Studio: NVIDIA + Kimi (auto-fallback)`);
+  console.log(`🗄️ Database: PostgreSQL + Redis`);
+});
+
+// ========================================
+// 🛑 Error Handling
+// ========================================
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});

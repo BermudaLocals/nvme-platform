@@ -2,6 +2,7 @@
 // 🚀 NVME.live - Complete Server
 // Backwards compatible with existing users
 // Features: 70% Payouts, Streaming, Calls, AI (NVIDIA + Kimi)
+// Likes / Comments / Shares wired up (previously missing)
 // ========================================
 
 require('dotenv').config();
@@ -29,7 +30,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
+    origin: process.env.NODE_ENV === 'production'
       ? ['https://nvme.live', 'https://www.nvme.live', 'https://nvme-platform.up.railway.app']
       : ['http://localhost:3000', 'http://127.0.0.1:3000'],
     credentials: true
@@ -79,7 +80,7 @@ const kimiClient = new OpenAI({
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(compression());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
+  origin: process.env.NODE_ENV === 'production'
     ? ['https://nvme.live', 'https://www.nvme.live', 'https://nvme-platform.up.railway.app']
     : ['http://localhost:3000', 'http://127.0.0.1:3000'],
   credentials: true
@@ -124,6 +125,22 @@ const authenticateToken = async (req, res, next) => {
   } catch (err) {
     return res.status(403).json({ error: 'Invalid or expired token' });
   }
+};
+
+// Optional auth: attaches req.user if a valid token is present, but never blocks.
+// Used for endpoints like view-count that anonymous visitors should still hit.
+const optionalAuth = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return next();
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.id]);
+    if (result.rows.length > 0) req.user = result.rows[0];
+  } catch (err) {
+    // invalid/expired token on an optional-auth route: just proceed anonymously
+  }
+  next();
 };
 
 // ========================================
@@ -204,34 +221,44 @@ app.post('/api/ai/generate', authenticateToken, async (req, res) => {
 const CREATOR_PERCENT = parseFloat(process.env.CREATOR_PAYOUT_PERCENT || 70) / 100;
 const PLATFORM_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT || 30) / 100;
 
-const processPayout = async (userId, amount, source, sourceId) => {
+// Now accepts an optional external `client` so callers (like /api/gifts/send)
+// can run the payout and the gift-row insert in ONE transaction. Previously
+// processPayout committed on its own connection, then the gift INSERT ran on
+// a separate pool.query — if that second insert failed, the creator was
+// already paid for a gift with no record of it (and the sound never fired
+// because we'd already returned from processPayout successfully).
+const processPayout = async (userId, amount, source, sourceId, client = null) => {
   const creatorAmount = amount * CREATOR_PERCENT;
   const platformFee = amount * PLATFORM_PERCENT;
 
-  const client = await pool.connect();
+  const ownConnection = !client;
+  const dbClient = client || await pool.connect();
+
   try {
-    await client.query('BEGIN');
-    await client.query(
-      `UPDATE users 
+    if (ownConnection) await dbClient.query('BEGIN');
+
+    await dbClient.query(
+      `UPDATE users
        SET total_earnings = COALESCE(total_earnings, 0) + $1,
            total_payouts = COALESCE(total_payouts, 0) + $2,
            platform_fees = COALESCE(platform_fees, 0) + $3
        WHERE id = $4`,
       [amount, creatorAmount, platformFee, userId]
     );
-    const result = await client.query(
+    const result = await dbClient.query(
       `INSERT INTO payouts (user_id, amount, platform_fee, creator_amount, source, source_id, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        RETURNING *`,
       [userId, amount, platformFee, creatorAmount, source, sourceId]
     );
-    await client.query('COMMIT');
+
+    if (ownConnection) await dbClient.query('COMMIT');
     return result.rows[0];
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (ownConnection) await dbClient.query('ROLLBACK');
     throw err;
   } finally {
-    client.release();
+    if (ownConnection) dbClient.release();
   }
 };
 
@@ -339,7 +366,7 @@ app.post('/api/videos/upload', authenticateToken, upload.single('video'), async 
     await pool.query(
       `INSERT INTO videos (video_id, user_id, username, title, description, category, tags, video_url, thumbnail_url, is_public, is_processing)
        VALUES ($1, $2, $3, $4, $5, $6, $7::text[], $8, $9, $10, false)`,
-      [videoId, user.id, user.username, title, description || '', category || 'General', 
+      [videoId, user.id, user.username, title, description || '', category || 'General',
        tags ? tags.split(',').map(t => t.trim()) : [], videoUrl, thumbnailUrl, isPublic !== 'false']
     );
 
@@ -355,7 +382,7 @@ app.get('/api/videos/feed', async (req, res) => {
   try {
     const { limit = 20 } = req.query;
     const result = await pool.query(
-      `SELECT v.*, u.display_name, u.avatar, u.is_verified 
+      `SELECT v.*, u.display_name, u.avatar, u.is_verified
        FROM videos v
        JOIN users u ON v.user_id = u.id
        WHERE v.is_public = true AND v.is_processing = false
@@ -366,6 +393,230 @@ app.get('/api/videos/feed', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch feed' });
+  }
+});
+
+// ========================================
+// ❤️ Likes  (NEW — this is why the like button did nothing)
+// ========================================
+// Requires a `likes` table: (video_id, user_id) unique pair. See migration
+// notes at the bottom of this message. Toggle semantics: same user hitting
+// the endpoint twice removes their like (standard "unlike").
+
+app.post('/api/videos/:videoId/like', authenticateToken, async (req, res) => {
+  const { videoId } = req.params;
+  const user = req.user;
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const videoResult = await client.query('SELECT id, user_id FROM videos WHERE video_id = $1 FOR UPDATE', [videoId]);
+    if (videoResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const existing = await client.query(
+      'SELECT 1 FROM likes WHERE video_id = $1 AND user_id = $2',
+      [videoId, user.id]
+    );
+
+    let liked;
+    if (existing.rows.length > 0) {
+      await client.query('DELETE FROM likes WHERE video_id = $1 AND user_id = $2', [videoId, user.id]);
+      await client.query('UPDATE videos SET likes = GREATEST(COALESCE(likes, 0) - 1, 0) WHERE video_id = $1', [videoId]);
+      liked = false;
+    } else {
+      await client.query('INSERT INTO likes (video_id, user_id, created_at) VALUES ($1, $2, NOW())', [videoId, user.id]);
+      await client.query('UPDATE videos SET likes = COALESCE(likes, 0) + 1 WHERE video_id = $1', [videoId]);
+      liked = true;
+    }
+
+    const countResult = await client.query('SELECT likes FROM videos WHERE video_id = $1', [videoId]);
+    await client.query('COMMIT');
+
+    const likeCount = countResult.rows[0].likes;
+
+    // Live-update anyone viewing this video's stats (feed, video page, etc.)
+    io.to(`video-${videoId}`).emit('like-update', { videoId, liked, likeCount });
+
+    res.json({ success: true, liked, likeCount });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Like error:', error);
+    res.status(500).json({ error: 'Failed to update like' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/videos/:videoId/like-status', authenticateToken, async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const result = await pool.query(
+      'SELECT 1 FROM likes WHERE video_id = $1 AND user_id = $2',
+      [videoId, req.user.id]
+    );
+    res.json({ liked: result.rows.length > 0 });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch like status' });
+  }
+});
+
+// ========================================
+// 💬 Comments  (NEW — comment button had no backend at all)
+// ========================================
+// Requires a `comments` table: id, video_id, user_id, username, text,
+// created_at. See migration notes at the bottom of this message.
+
+app.post('/api/videos/:videoId/comments', authenticateToken, async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const { text } = req.body;
+    const user = req.user;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Comment text is required' });
+    }
+    if (text.length > 500) {
+      return res.status(400).json({ error: 'Comment too long (500 char max)' });
+    }
+
+    const videoResult = await pool.query('SELECT video_id FROM videos WHERE video_id = $1', [videoId]);
+    if (videoResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const commentId = uuidv4();
+    const result = await pool.query(
+      `INSERT INTO comments (comment_id, video_id, user_id, username, avatar, text, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       RETURNING *`,
+      [commentId, videoId, user.id, user.username, user.avatar || null, text.trim()]
+    );
+
+    await pool.query('UPDATE videos SET comment_count = COALESCE(comment_count, 0) + 1 WHERE video_id = $1', [videoId]);
+
+    const comment = result.rows[0];
+    io.to(`video-${videoId}`).emit('new-comment', comment);
+
+    res.json({ success: true, comment });
+  } catch (error) {
+    console.error('Comment error:', error);
+    res.status(500).json({ error: 'Failed to post comment' });
+  }
+});
+
+app.get('/api/videos/:videoId/comments', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const { limit = 50, before } = req.query;
+
+    const params = [videoId];
+    let query = `SELECT c.*, u.avatar, u.is_verified
+                 FROM comments c
+                 LEFT JOIN users u ON c.user_id = u.id
+                 WHERE c.video_id = $1`;
+
+    if (before) {
+      params.push(before);
+      query += ` AND c.created_at < $${params.length}`;
+    }
+
+    params.push(parseInt(limit));
+    query += ` ORDER BY c.created_at DESC LIMIT $${params.length}`;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Fetch comments error:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+app.delete('/api/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const user = req.user;
+
+    const result = await pool.query(
+      'DELETE FROM comments WHERE comment_id = $1 AND user_id = $2 RETURNING video_id',
+      [commentId, user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found or not yours' });
+    }
+
+    await pool.query(
+      'UPDATE videos SET comment_count = GREATEST(COALESCE(comment_count, 0) - 1, 0) WHERE video_id = $1',
+      [result.rows[0].video_id]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete comment error:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
+  }
+});
+
+// ========================================
+// 🔗 Shares  (NEW — share button had no backend at all)
+// ========================================
+// Just tracks a counter + returns a shareable URL; doesn't require a new
+// table beyond a `shares` column on videos, though a `shares` log table is
+// included in the migration notes if you want per-user share history.
+
+app.post('/api/videos/:videoId/share', optionalAuth, async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const { platform } = req.body; // 'copy_link' | 'twitter' | 'whatsapp' | etc, optional
+
+    const videoResult = await pool.query(
+      'UPDATE videos SET shares = COALESCE(shares, 0) + 1 WHERE video_id = $1 RETURNING shares',
+      [videoId]
+    );
+
+    if (videoResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    if (req.user) {
+      await pool.query(
+        'INSERT INTO shares (share_id, video_id, user_id, platform, created_at) VALUES ($1, $2, $3, $4, NOW())',
+        [uuidv4(), videoId, req.user.id, platform || 'unknown']
+      );
+    }
+
+    const shareUrl = `https://nvme.live/video/${videoId}`;
+
+    io.to(`video-${videoId}`).emit('share-update', { videoId, shareCount: videoResult.rows[0].shares });
+
+    res.json({ success: true, shareCount: videoResult.rows[0].shares, shareUrl });
+  } catch (error) {
+    console.error('Share error:', error);
+    res.status(500).json({ error: 'Failed to record share' });
+  }
+});
+
+// ========================================
+// 👁️ View counter (NEW — feed showed views but nothing incremented them)
+// ========================================
+
+app.post('/api/videos/:videoId/view', optionalAuth, async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const result = await pool.query(
+      'UPDATE videos SET views = COALESCE(views, 0) + 1 WHERE video_id = $1 RETURNING views',
+      [videoId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+    res.json({ success: true, views: result.rows[0].views });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to record view' });
   }
 });
 
@@ -413,7 +664,7 @@ app.post('/api/streams/end', authenticateToken, async (req, res) => {
     const user = req.user;
 
     const result = await pool.query(
-      `UPDATE streams 
+      `UPDATE streams
        SET is_live = false, ended_at = NOW(), duration = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
        WHERE stream_id = $1 AND user_id = $2
        RETURNING *`,
@@ -438,7 +689,7 @@ app.post('/api/streams/end', authenticateToken, async (req, res) => {
 app.get('/api/streams/live', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT s.*, u.display_name, u.avatar, u.is_verified 
+      `SELECT s.*, u.display_name, u.avatar, u.is_verified
        FROM streams s
        JOIN users u ON s.user_id = u.id
        WHERE s.is_live = true
@@ -490,42 +741,49 @@ app.post('/api/calls/initiate', authenticateToken, async (req, res) => {
 // ========================================
 // 🎁 Gifts & Gift Sounds
 // ========================================
+// FIXED: payout + gift-row insert now share ONE transaction via processPayout's
+// optional `client` param, so a failed insert rolls back the payout too.
 
 app.post('/api/gifts/send', authenticateToken, async (req, res) => {
-  try {
-    const { streamId, giftType, message } = req.body;
-    const fromUser = req.user;
+  const { streamId, giftType, message } = req.body;
+  const fromUser = req.user;
+  const client = await pool.connect();
 
+  try {
     const giftValues = { crown: 50, rocket: 100, heart: 10, star: 5, diamond: 200 };
     const value = giftValues[giftType] || 10;
     const giftId = uuidv4();
 
-    const streamResult = await pool.query('SELECT * FROM streams WHERE stream_id = $1', [streamId]);
+    await client.query('BEGIN');
+
+    const streamResult = await client.query('SELECT * FROM streams WHERE stream_id = $1', [streamId]);
     if (streamResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Stream not found' });
     }
 
     const stream = streamResult.rows[0];
     const toUserId = stream.user_id;
 
-    // Process the payout split (70% to streamer)
-    await processPayout(toUserId, value, 'gift', giftId);
+    // Payout and gift-row insert now happen on the SAME transaction/connection.
+    await processPayout(toUserId, value, 'gift', giftId, client);
 
-    // Save to database
-    await pool.query(
+    await client.query(
       `INSERT INTO gifts (gift_id, stream_id, from_user_id, to_user_id, gift_type, value, message)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [giftId, streamId, fromUser.id, toUserId, giftType, value, message || '']
     );
 
-    // 🎵 BROADCAST THE GIFT + SOUND TO STREAM VIEWERS
+    await client.query('COMMIT');
+
+    // 🎵 BROADCAST THE GIFT + SOUND TO STREAM VIEWERS (after commit succeeds)
     io.to(`stream-${streamId}`).emit('new-gift', {
       giftType,
       fromUser: fromUser.username,
       value,
       creatorAmount: value * CREATOR_PERCENT,
-      playSound: true, // <--- This triggers the front-end to play a sound
-      soundFile: `/sounds/gift-${giftType}.mp3` // <--- The path to your audio file
+      playSound: true,
+      soundFile: `/sounds/gift-${giftType}.mp3`
     });
 
     res.json({
@@ -537,8 +795,11 @@ app.post('/api/gifts/send', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Gift error:', error);
     res.status(500).json({ error: 'Failed to send gift' });
+  } finally {
+    client.release();
   }
 });
 
@@ -584,7 +845,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     const user = req.user;
 
     const streamStats = await pool.query(
-      `SELECT COUNT(*) as total_streams, 
+      `SELECT COUNT(*) as total_streams,
               SUM(viewer_count) as total_viewers,
               SUM(total_gifts) as total_gifts
        FROM streams WHERE user_id = $1`,
@@ -665,6 +926,17 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Join a video's room so like/comment/share broadcasts reach open viewers.
+  socket.on('join-video', (data) => {
+    const { videoId } = data;
+    if (videoId) socket.join(`video-${videoId}`);
+  });
+
+  socket.on('leave-video', (data) => {
+    const { videoId } = data;
+    if (videoId) socket.leave(`video-${videoId}`);
+  });
+
   socket.on('send-message', (data) => {
     const { streamId, message, username } = data;
     if (streamId && message) {
@@ -703,6 +975,7 @@ server.listen(PORT, () => {
   console.log(`🚀 NVME.live running on http://localhost:${PORT}`);
   console.log(`💰 Creator Payouts: 70% / 30% split`);
   console.log(`🤖 AI Studio: NVIDIA + Kimi (auto-fallback)`);
+  console.log(`❤️  Likes / 💬 Comments / 🔗 Shares: enabled`);
 });
 
 process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));

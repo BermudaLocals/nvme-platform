@@ -322,11 +322,10 @@ footer .cp{font-size:.72rem;color:rgba(255,255,255,.3);width:100%;text-align:cen
 </footer>
 
 <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
-}
+// ========================================
+// 🚀 NVME AUTH HANDLER (TikTok-Style)
+// ========================================
 
-/* ── AUTH HANDLER (TikTok-Style) ── */
 (function() {
     // 1. Check if the user just arrived with a token in the URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -336,33 +335,26 @@ if ('serviceWorker' in navigator) {
     const token = urlParams.get('token') || hashParams.get('token');
     
     if (token) {
-        // Save the token to browser storage (like TikTok does)
+        // Save the token to browser storage
         localStorage.setItem('auth_token', token);
         console.log('✅ Auth Handshake successful! Token saved.');
 
-        // Clean the URL so the ugly ?token= or #token= disappears from the address bar
+        // Clean the URL so the ugly ?token= or #token= disappears
         const cleanUrl = window.location.pathname;
         window.history.replaceState({}, document.title, cleanUrl);
 
-        // Immediately redirect the user to the actual App Dashboard!
-        window.location.href = '/app';
+        // 🔥 THE FIX: Reload the page so the App can detect the user is logged in
+        // If we redirect straight to /app, the token doesn't pass properly.
+        window.location.reload();
     }
 
-    // 2. Check if a user is already logged in (Has a valid token)
+    // 2. Check if a user is already logged in (Has a valid token in localStorage)
     const existingToken = localStorage.getItem('auth_token');
     if (existingToken) {
-        // If they are logged in and try to visit the homepage, redirect to /app
+        // If they are logged in and try to visit the homepage, redirect to the TikTok Feed
         if (window.location.pathname === '/' || window.location.pathname === '') {
             window.location.href = '/app';
         }
-    }
-
-    // 3. Dynamically change the "Start Free with Google" button if already logged in
-    const googleBtn = document.querySelector('.hero-ctas .btn-hero');
-    if (existingToken && googleBtn) {
-        googleBtn.innerText = "Open App →";
-        googleBtn.href = "/app";
-        googleBtn.className = "btn btn-hero"; // Keep the beautiful styling
     }
 })();
 
@@ -431,6 +423,10 @@ document.querySelectorAll('.feat').forEach(function(card){
   }, { threshold: .12 });
   document.querySelectorAll('.rv').forEach(function(el, i){ el.style.transitionDelay = (i % 6) * 60 + 'ms'; io.observe(el); });
 })();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
 </script>
 </body>
 </html>

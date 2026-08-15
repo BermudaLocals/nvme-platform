@@ -952,7 +952,7 @@ passport.use(new GoogleStrategy({
   }
 ));
 
-// Initialize Passport (this MUST come AFTER the session middleware)
+// ✅ Add these two lines to fix the "Login sessions require session support" error:
 app.use(passport.initialize());
 app.use(passport.session());
 

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Profile | NVME.live</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Smooth transition for privacy toggles */
+        .toggle-bg { transition: background 0.3s; }
+        .toggle-dot { transition: transform 0.3s; }
+        .avatar-img { object-fit: cover; border-radius: 50%; }
+    </style>
+</head>
+<body class="bg-[#0a0a0a] text-white min-h-screen flex flex-col font-sans">
+
+    <!-- Top Nav -->
+    <nav class="border-b border-gray-800 p-4 flex justify-between items-center bg-[#0a0a0a] sticky top-0 z-50">
+        <a href="/" class="text-xl font-bold tracking-wider text-white hover:text-gray-300 transition">NVME<span class="text-blue-500">.live</span></a>
+        <div id="navUserInfo" class="flex items-center gap-3 text-sm"></div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="flex-grow max-w-4xl mx-auto w-full p-4 md:p-8">
+
+        <!-- Profile Header Card -->
+        <div class="bg-[#111] border border-gray-800 rounded-2xl p-6 md:p-8 mb-6 shadow-lg relative">
+            
+            <div class="flex flex-col md:flex-row items-start gap-6">
+                <!-- Avatar -->
+                <div class="shrink-0 mx-auto md:mx-0">
+                    <div id="profileAvatar" class="w-28 h-28 md:w-32 md:h-32 rounded-full bg-gray-700 border-4 border-gray-800 avatar-img"></div>
+                </div>
+
+                <!-- Info -->
+                <div class="flex-grow w-full text-center md:text-left">
+                    <div class="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+                        <div>
+                            <h1 id="profileDisplayName" class="text-2xl md:text-3xl font-bold">Loading...</h1>
+                            <p id="profileUsername" class="text-gray-400 text-lg">@username</p>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div id="profileActions" class="flex flex-wrap gap-2 justify-center md:justify-start mt-2 md:mt-0">
+                            <!-- Buttons injected via JS -->
+                        </div>
+                    </div>
+
+                    <p id="profileBio" class="mt-3 text-gray-300 text-sm md:text-base max-w-lg mx-auto md:mx-0">No bio yet.</p>
+
+                    <!-- Stats -->
+                    <div class="flex justify-center md:justify-start gap-6 mt-4 text-sm">
+                        <div><span id="followersCount" class="font-bold text-white">0</span> <span class="text-gray-400">Followers</span></div>
+                        <div><span id="followingCount" class="font-bold text-white">0</span> <span class="text-gray-400">Following</span></div>
+                        <div><span id="videosCount" class="font-bold text-white">0</span> <span class="text-gray-400">Videos</span></div>
+                    </div>
+                    
+                    <!-- Privacy Badge -->
+                    <div id="privacyBadge" class="mt-3 inline-block text-xs font-medium px-3 py-1 rounded-full bg-gray-800 text-gray-400 border border-gray-700">🔒 Private Account</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Grid -->
+        <h2 class="text-xl font-semibold mb-4 text-white">Videos</h2>
+        <div id="videoGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <!-- Video cards injected via JS -->
+        </div>
+    </div>
+
+    <script>
+        // === CONFIG ===
+        const API_BASE = ''; // Leave empty for relative paths, or use 'https://nvme.live'
+        let viewerId = null;
+        let targetUserId = null;
+        let currentRelationship = 'none';
+
+        // === GET USERNAME FROM URL ===
+        const pathSegments = window.location.pathname.split('/');
+        const username = pathSegments[pathSegments.length - 1];
+
+        if (!username) {
+            document.body.innerHTML = '<div class="p-10 text-center text-red-500">Invalid profile URL.</div>';
+        }
+
+        // === FETCH & RENDER ===
+        async function loadProfile() {
+            try {
+                const res = await fetch(`${API_BASE}/api/users/${username}`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+
+                if (!data.ok) {
+                    document.getElementById('profileDisplayName').innerText = 'User not found';
+                    return;
+                }
+
+                const user = data.user;
+                targetUserId = user.id;
+                currentRelationship = data.relationship;
+
+                // Render Info
+                document.getElementById('profileDisplayName').innerText = user.display_name || user.username;
+                document.getElementById('profileUsername').innerText = '@' + user.username;
+                document.getElementById('profileBio').innerText = user.bio || 'No bio yet.';
+                document.getElementById('followersCount').innerText = data.stats.followers;
+                document.getElementById('followingCount').innerText = data.stats.following;
+                document.getElementById('videosCount').innerText = data.stats.videos ?? '?';
+
+                // Avatar
+                const avatarEl = document.getElementById('profileAvatar');
+                if (user.avatar_url) {
+                    avatarEl.style.backgroundImage = `url(${user.avatar_url})`;
+                    avatarEl.style.backgroundSize = 'cover';
+                    avatarEl.style.backgroundPosition = 'center';
+                } else {
+                    avatarEl.innerHTML = '<div class="w-full h-full flex items-center justify-center text-4xl text-gray-500">?</div>';
+                }
+
+                // Privacy Badge
+                const badge = document.getElementById('privacyBadge');
+                if (user.is_private) {
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+
+                // Render Buttons
+                renderButtons(data);
+
+                // Render Videos
+                renderVideos(data.videos, data.can_see_content);
+
+            } catch (err) {
+                console.error('Profile load error:', err);
+                document.getElementById('profileDisplayName').innerText = 'Error loading profile';
+            }
+        }
+
+        // === RENDER BUTTONS ===
+        function renderButtons(data) {
+            const container = document.getElementById('profileActions');
+            container.innerHTML = '';
+
+            if (data.relationship === 'self') {
+                // Show Privacy Toggle
+                const isPrivate = data.user.is_private;
+                container.innerHTML = `
+                    <button onclick="togglePrivacy()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm border border-gray-700 transition flex items-center gap-2">
+                        <span>${isPrivate ? '🔒' : '🌐'}</span>
+                        <span>${isPrivate ? 'Private' : 'Public'}</span>
+                    </button>
+                    <a href="/settings" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition">Edit Profile</a>
+                `;
+            } else if (data.relationship === 'following') {
+                container.innerHTML = `
+                    <button onclick="toggleFollow()" class="px-4 py-2 bg-gray-800 hover:bg-red-900 hover:text-red-400 rounded-lg text-sm border border-gray-700 transition">Unfollow</button>
+                    <button class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition">Message</button>
+                `;
+            } else if (data.relationship === 'requested') {
+                container.innerHTML = `
+                    <button onclick="toggleFollow()" class="px-4 py-2 bg-yellow-900 text-yellow-400 border border-yellow-800 rounded-lg text-sm transition cursor-pointer">Requested</button>
+                `;
+            } else {
+                container.innerHTML = `
+                    <button onclick="toggleFollow()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition">Follow</button>
+                    <button class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm border border-gray-700 transition">Message</button>
+                `;
+            }
+        }
+
+        // === ACTIONS ===
+        async function toggleFollow() {
+            const res = await fetch(`${API_BASE}/api/users/${targetUserId}/follow`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.ok) {
+                loadProfile(); // Reload page state
+            } else {
+                alert(data.error || 'Failed to update follow status.');
+            }
+        }
+
+        async function togglePrivacy() {
+            const current = document.querySelector('#profileActions button span:last-child').innerText === 'Private';
+            const res = await fetch(`${API_BASE}/api/profile/privacy`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ is_private: !current })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                loadProfile();
+            } else {
+                alert(data.error || 'Failed to update privacy.');
+            }
+        }
+
+        // === RENDER VIDEOS ===
+        function renderVideos(videos, canSee) {
+            const grid = document.getElementById('videoGrid');
+            grid.innerHTML = '';
+            
+            if (!canSee) {
+                grid.innerHTML = `<div class="col-span-full text-center text-gray-500 py-10">🔒 This account is private.</div>`;
+                return;
+            }
+
+            if (!videos || videos.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center text-gray-500 py-10">No videos yet.</div>`;
+                return;
+            }
+
+            videos.forEach(v => {
+                const card = document.createElement('div');
+                card.className = 'bg-[#111] rounded-xl overflow-hidden border border-gray-800 hover:border-gray-600 transition cursor-pointer';
+                card.innerHTML = `
+                    <div class="aspect-video bg-gray-800 relative">
+                        ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full h-full object-cover" alt="${v.title}" />` : '<div class="w-full h-full flex items-center justify-center text-gray-600">No Thumbnail</div>'}
+                        <div class="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">${v.views || 0} views</div>
+                    </div>
+                    <div class="p-3">
+                        <h3 class="text-sm font-semibold truncate">${v.title}</h3>
+                        <p class="text-xs text-gray-500 mt-1">${new Date(v.created_at).toLocaleDateString()}</p>
+                    </div>
+                `;
+                // Make video clickable (if you have a video player route)
+                card.onclick = () => window.location.href = `/video/${v.id}`;
+                grid.appendChild(card);
+            });
+        }
+
+        // === INIT ===
+        loadProfile();
+
+        // Quick check if user is logged in (for nav bar)
+        async function checkAuth() {
+            try {
+                const res = await fetch(`${API_BASE}/api/me`, { credentials: 'include' });
+                if (res.ok) {
+                    const me = await res.json();
+                    document.getElementById('navUserInfo').innerHTML = `
+                        <span class="text-gray-300">${me.username}</span>
+                        <a href="/profile" class="w-8 h-8 rounded-full bg-gray-700 block overflow-hidden">
+                            ${me.avatar ? `<img src="${me.avatar}" class="w-full h-full object-cover" />` : ''}
+                        </a>
+                    `;
+                }
+            } catch {}
+        }
+        checkAuth();
+
+    </script>
+</body>
+</html>

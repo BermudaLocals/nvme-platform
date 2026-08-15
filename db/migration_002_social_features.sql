@@ -74,6 +74,18 @@ CREATE INDEX IF NOT EXISTS idx_gift_tx_to_user ON gift_transactions(to_user_id);
 
 -- ── SEED DEFAULT GIFT CATALOG (matches the values server.js used to
 -- hardcode: crown/rocket/heart/star/diamond) — only inserts if missing ─────
+-- The live `gifts` table has drifted from what schema.sql describes (it was
+-- missing `emoji` here, and possibly other columns below) — these
+-- ALTER...ADD COLUMN IF NOT EXISTS calls self-heal it to match schema.sql's
+-- definition before the seed insert runs, regardless of what's actually
+-- there today.
+ALTER TABLE gifts ADD COLUMN IF NOT EXISTS emoji VARCHAR(20);
+ALTER TABLE gifts ADD COLUMN IF NOT EXISTS icon_url TEXT;
+ALTER TABLE gifts ADD COLUMN IF NOT EXISTS credit_cost NUMERIC(10,2);
+ALTER TABLE gifts ADD COLUMN IF NOT EXISTS usd_value NUMERIC(10,2);
+ALTER TABLE gifts ADD COLUMN IF NOT EXISTS creator_pct NUMERIC(5,2) DEFAULT 70.00;
+ALTER TABLE gifts ADD COLUMN IF NOT EXISTS platform_pct NUMERIC(5,2) DEFAULT 30.00;
+ALTER TABLE gifts ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
 INSERT INTO gifts (name, emoji, credit_cost, usd_value, creator_pct, platform_pct)
 SELECT * FROM (VALUES
   ('Heart',   '❤️', 10::numeric,  10::numeric, 70::numeric, 30::numeric),

@@ -343,9 +343,9 @@ footer .cp{font-size:.72rem;color:rgba(255,255,255,.3);width:100%;text-align:cen
         const cleanUrl = window.location.pathname;
         window.history.replaceState({}, document.title, cleanUrl);
 
-        // 🔥 THE FIX: Reload the page so the App can detect the user is logged in
-        // If we redirect straight to /app, the token doesn't pass properly.
-        window.location.reload();
+        // 🔥 ULTIMATE FIX: Redirect to /app INSTANTLY
+        // This forces the app to load the feed immediately.
+        window.location.href = '/app';
     }
 
     // 2. Check if a user is already logged in (Has a valid token in localStorage)

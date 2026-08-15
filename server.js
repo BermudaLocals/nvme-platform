@@ -967,7 +967,7 @@ app.get('/api/auth/google/callback',
   (req, res) => {
     // Success! Generate a JWT for your frontend
     const token = jwt.sign({ id: req.user.id }, process.env.JWT_SECRET);
-    res.redirect(`/?token=${token}`);
+    res.redirect(`/#token=${token}`);  // <--- CHANGED THIS LINE
   }
 );
 

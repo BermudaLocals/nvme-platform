@@ -50,7 +50,13 @@ CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
 
 -- ── GIFT TRANSACTIONS (schema's `gifts` table is a catalog of gift TYPES —
 -- there was never a table logging who-sent-what-to-whom) ───────────────────
-CREATE TABLE IF NOT EXISTS gift_transactions (
+-- DROP + recreate rather than IF NOT EXISTS: an earlier partial run left a
+-- gift_transactions table missing the to_user_id column, which then made
+-- CREATE TABLE IF NOT EXISTS silently skip it and broke the index below.
+-- Nothing could have written real rows here yet (the only writer,
+-- /api/gifts/send, would 500 without to_user_id), so dropping is safe.
+DROP TABLE IF EXISTS gift_transactions CASCADE;
+CREATE TABLE gift_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   gift_id UUID NOT NULL REFERENCES gifts(id),
   stream_id UUID REFERENCES livestreams(id) ON DELETE SET NULL,

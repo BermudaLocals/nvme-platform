@@ -1,8 +1,8 @@
 // ========================================
 // 🚀 NVME.live - Complete Server
-// Backwards compatible with existing users
+// Free to Join. Pay for Coins & AI Tokens.
 // Features: 70% Payouts, Streaming, Calls, AI (NVIDIA + Kimi)
-// Likes / Comments / Shares wired up (previously missing)
+// Likes / Comments / Shares wired up
 // ========================================
 
 require('dotenv').config();
@@ -21,6 +21,7 @@ const bcrypt = require('bcryptjs');
 const OpenAI = require('openai');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
+const session = require('express-session'); // ✅ Added for Google OAuth
 
 // ========================================
 // 📦 Initialize
@@ -39,6 +40,17 @@ const io = socketIo(server, {
   pingInterval: 25000,
   transports: ['websocket', 'polling']
 });
+
+// ✅ Added to fix "X-Forwarded-For" warning
+app.set('trust proxy', 1);
+
+// ✅ Added to enable Passport sessions
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'nvme-session-secret',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: process.env.NODE_ENV === 'production' }
+}));
 
 const PORT = process.env.PORT || 3000;
 
@@ -144,16 +156,12 @@ const optionalAuth = async (req, res, next) => {
 };
 
 // ========================================
-// 🤖 AI Studio (NVIDIA + Kimi)
+// 🤖 AI Studio (NVIDIA + Kimi) - Unlimited for free users!
 // ========================================
 
 app.post('/api/ai/generate', authenticateToken, async (req, res) => {
   try {
     const { type, prompt, tone, provider } = req.body;
-    const user = req.user;
-
-    const isPro = user.plan === 'pro' || (user.trial_ends && new Date(user.trial_ends) > new Date());
-    const maxTokens = isPro ? 2000 : 1000;
 
     const prompts = {
       script: `Write a viral ${tone || 'professional'} script for: ${prompt}. Include hook, body, and CTA.`,
@@ -179,7 +187,7 @@ app.post('/api/ai/generate', authenticateToken, async (req, res) => {
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.8,
-          max_tokens: maxTokens,
+          max_tokens: 2000,
         });
         result = completion.choices[0].message.content;
         usedProvider = 'nvidia';
@@ -196,7 +204,7 @@ app.post('/api/ai/generate', authenticateToken, async (req, res) => {
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.8,
-          max_tokens: maxTokens,
+          max_tokens: 2000,
         });
         result = completion.choices[0].message.content;
         usedProvider = 'kimi';
@@ -221,12 +229,6 @@ app.post('/api/ai/generate', authenticateToken, async (req, res) => {
 const CREATOR_PERCENT = parseFloat(process.env.CREATOR_PAYOUT_PERCENT || 70) / 100;
 const PLATFORM_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT || 30) / 100;
 
-// Now accepts an optional external `client` so callers (like /api/gifts/send)
-// can run the payout and the gift-row insert in ONE transaction. Previously
-// processPayout committed on its own connection, then the gift INSERT ran on
-// a separate pool.query — if that second insert failed, the creator was
-// already paid for a gift with no record of it (and the sound never fired
-// because we'd already returned from processPayout successfully).
 const processPayout = async (userId, amount, source, sourceId, client = null) => {
   const creatorAmount = amount * CREATOR_PERCENT;
   const platformFee = amount * PLATFORM_PERCENT;
@@ -397,11 +399,8 @@ app.get('/api/videos/feed', async (req, res) => {
 });
 
 // ========================================
-// ❤️ Likes  (NEW — this is why the like button did nothing)
+// ❤️ Likes
 // ========================================
-// Requires a `likes` table: (video_id, user_id) unique pair. See migration
-// notes at the bottom of this message. Toggle semantics: same user hitting
-// the endpoint twice removes their like (standard "unlike").
 
 app.post('/api/videos/:videoId/like', authenticateToken, async (req, res) => {
   const { videoId } = req.params;
@@ -438,7 +437,6 @@ app.post('/api/videos/:videoId/like', authenticateToken, async (req, res) => {
 
     const likeCount = countResult.rows[0].likes;
 
-    // Live-update anyone viewing this video's stats (feed, video page, etc.)
     io.to(`video-${videoId}`).emit('like-update', { videoId, liked, likeCount });
 
     res.json({ success: true, liked, likeCount });
@@ -465,10 +463,8 @@ app.get('/api/videos/:videoId/like-status', authenticateToken, async (req, res) 
 });
 
 // ========================================
-// 💬 Comments  (NEW — comment button had no backend at all)
+// 💬 Comments
 // ========================================
-// Requires a `comments` table: id, video_id, user_id, username, text,
-// created_at. See migration notes at the bottom of this message.
 
 app.post('/api/videos/:videoId/comments', authenticateToken, async (req, res) => {
   try {
@@ -562,16 +558,13 @@ app.delete('/api/comments/:commentId', authenticateToken, async (req, res) => {
 });
 
 // ========================================
-// 🔗 Shares  (NEW — share button had no backend at all)
+// 🔗 Shares
 // ========================================
-// Just tracks a counter + returns a shareable URL; doesn't require a new
-// table beyond a `shares` column on videos, though a `shares` log table is
-// included in the migration notes if you want per-user share history.
 
 app.post('/api/videos/:videoId/share', optionalAuth, async (req, res) => {
   try {
     const { videoId } = req.params;
-    const { platform } = req.body; // 'copy_link' | 'twitter' | 'whatsapp' | etc, optional
+    const { platform } = req.body;
 
     const videoResult = await pool.query(
       'UPDATE videos SET shares = COALESCE(shares, 0) + 1 WHERE video_id = $1 RETURNING shares',
@@ -601,7 +594,7 @@ app.post('/api/videos/:videoId/share', optionalAuth, async (req, res) => {
 });
 
 // ========================================
-// 👁️ View counter (NEW — feed showed views but nothing incremented them)
+// 👁️ View counter
 // ========================================
 
 app.post('/api/videos/:videoId/view', optionalAuth, async (req, res) => {
@@ -741,8 +734,6 @@ app.post('/api/calls/initiate', authenticateToken, async (req, res) => {
 // ========================================
 // 🎁 Gifts & Gift Sounds
 // ========================================
-// FIXED: payout + gift-row insert now share ONE transaction via processPayout's
-// optional `client` param, so a failed insert rolls back the payout too.
 
 app.post('/api/gifts/send', authenticateToken, async (req, res) => {
   const { streamId, giftType, message } = req.body;
@@ -765,7 +756,6 @@ app.post('/api/gifts/send', authenticateToken, async (req, res) => {
     const stream = streamResult.rows[0];
     const toUserId = stream.user_id;
 
-    // Payout and gift-row insert now happen on the SAME transaction/connection.
     await processPayout(toUserId, value, 'gift', giftId, client);
 
     await client.query(
@@ -776,7 +766,6 @@ app.post('/api/gifts/send', authenticateToken, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // 🎵 BROADCAST THE GIFT + SOUND TO STREAM VIEWERS (after commit succeeds)
     io.to(`stream-${streamId}`).emit('new-gift', {
       giftType,
       fromUser: fromUser.username,
@@ -804,40 +793,7 @@ app.post('/api/gifts/send', authenticateToken, async (req, res) => {
 });
 
 // ========================================
-// 🎁 Free Trial
-// ========================================
-
-app.post('/api/trial/start', authenticateToken, async (req, res) => {
-  try {
-    const user = req.user;
-
-    if (user.trial_ends && new Date(user.trial_ends) > new Date()) {
-      return res.status(400).json({ error: 'You already have an active trial' });
-    }
-
-    const trialDays = parseInt(process.env.TRIAL_DAYS) || 7;
-    const trialEnds = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
-
-    await pool.query(
-      'UPDATE users SET trial_ends = $1, plan = $2 WHERE id = $3',
-      [trialEnds, 'pro', user.id]
-    );
-
-    res.json({
-      success: true,
-      trialEnds,
-      daysRemaining: trialDays,
-      message: `🎁 ${trialDays}-day free trial started!`
-    });
-
-  } catch (error) {
-    console.error('Trial error:', error);
-    res.status(500).json({ error: 'Failed to start trial' });
-  }
-});
-
-// ========================================
-// 📊 Dashboard (Backwards Compatible)
+// 📊 Dashboard
 // ========================================
 
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
@@ -865,9 +821,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
         display_name: user.display_name || user.username,
         avatar: user.avatar,
         followers: user.followers || 0,
-        plan: user.plan || 'free',
-        is_verified: user.is_verified || false,
-        trial_ends: user.trial_ends
+        is_verified: user.is_verified || false
       },
       earnings: {
         total_earnings: user.total_earnings || 0,
@@ -926,7 +880,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Join a video's room so like/comment/share broadcasts reach open viewers.
   socket.on('join-video', (data) => {
     const { videoId } = data;
     if (videoId) socket.join(`video-${videoId}`);
@@ -999,7 +952,9 @@ passport.use(new GoogleStrategy({
   }
 ));
 
+// Initialize Passport (this MUST come AFTER the session middleware)
 app.use(passport.initialize());
+app.use(passport.session());
 
 // Route: Start Google OAuth flow
 app.get('/auth/google',

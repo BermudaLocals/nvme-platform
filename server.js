@@ -65,6 +65,15 @@ pool.connect((err) => {
   else console.log('✅ NeonDB connected');
 });
 
+// Neon terminates idle connections aggressively. Without this listener, a
+// dropped idle client bubbles up as an unhandled 'error' event on the pool,
+// which Node throws synchronously — that's the "Uncaught Exception:
+// Connection terminated unexpectedly" you saw in the deploy logs. This just
+// logs it and lets the pool reconnect on the next query instead.
+pool.on('error', (err) => {
+  console.error('⚠️  Idle Postgres client error (pool will recover):', err.message);
+});
+
 // Trim to a safe public shape — never leak password_hash etc. to the client.
 function publicUser(u) {
   if (!u) return null;
@@ -148,6 +157,7 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 app.use(session({
+  store: new (require('connect-pg-simple')(session))({ pool, createTableIfMissing: true }),
   secret: process.env.JWT_SECRET,
   resave: false,
   saveUninitialized: false,

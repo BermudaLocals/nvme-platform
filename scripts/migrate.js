@@ -1,7 +1,8 @@
 // ========================================
 // 🗄️ NVME.live — DB Migration
-// Runs db/migration_002_social_features.sql against DATABASE_URL.
-// Idempotent — safe to re-run. Run with: npm run migrate
+// Runs every db/migration_*.sql file, in filename order. Idempotent — safe
+// to re-run; already-applied files just no-op on their IF NOT EXISTS checks.
+// Run with: npm run migrate
 // ========================================
 
 require('dotenv').config();
@@ -15,20 +16,33 @@ const pool = new Pool({
 });
 
 async function migrate() {
-  const sqlPath = path.join(__dirname, '..', 'db', 'migration_002_social_features.sql');
-  const sql = fs.readFileSync(sqlPath, 'utf8');
-  const client = await pool.connect();
+  const dbDir = path.join(__dirname, '..', 'db');
+  const files = fs.readdirSync(dbDir)
+    .filter(f => /^migration_\d+.*\.sql$/.test(f))
+    .sort();
 
-  console.log('🗄️  Running migration_002_social_features.sql...');
+  if (files.length === 0) {
+    console.log('No migration_*.sql files found in db/.');
+    return;
+  }
+
+  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    await client.query(sql);
-    await client.query('COMMIT');
-    console.log('✅ Migration complete.');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('❌ Migration failed, rolled back:', err.message);
-    process.exitCode = 1;
+    for (const file of files) {
+      console.log(`🗄️  Running ${file}...`);
+      const sql = fs.readFileSync(path.join(dbDir, file), 'utf8');
+      await client.query('BEGIN');
+      try {
+        await client.query(sql);
+        await client.query('COMMIT');
+        console.log(`✅ ${file} complete.`);
+      } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`❌ ${file} failed, rolled back:`, err.message);
+        process.exitCode = 1;
+        break;
+      }
+    }
   } finally {
     client.release();
     await pool.end();

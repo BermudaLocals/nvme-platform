@@ -326,6 +326,43 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
 
+/* ── AUTH HANDLER (TikTok-Style) ── */
+(function() {
+    // 1. Check if the user just arrived with a token in the URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    
+    if (token) {
+        // Save the token to browser storage (like TikTok does)
+        localStorage.setItem('auth_token', token);
+        console.log('✅ Auth Handshake successful! Token saved.');
+
+        // Clean the URL so the ugly ?token= disappears from the address bar
+        const cleanUrl = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, document.title, cleanUrl);
+
+        // Immediately redirect the user to the actual App Dashboard!
+        window.location.href = '/app';
+    }
+
+    // 2. Check if a user is already logged in (Has a valid token)
+    const existingToken = localStorage.getItem('auth_token');
+    if (existingToken) {
+        // If they are logged in and try to visit the homepage, redirect to /app
+        if (window.location.pathname === '/' || window.location.pathname === '') {
+            window.location.href = '/app';
+        }
+    }
+
+    // 3. Dynamically change the "Start Free with Google" button if already logged in
+    const googleBtn = document.querySelector('.hero-ctas .btn-hero');
+    if (existingToken && googleBtn) {
+        googleBtn.innerText = "Open App →";
+        googleBtn.href = "/app";
+        googleBtn.className = "btn btn-hero"; // Keep the beautiful styling
+    }
+})();
+
 /* ── particle dust field ── */
 (function(){
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;

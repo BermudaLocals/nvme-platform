@@ -2,10 +2,9 @@
 (function() {
     // 1. Check if the user just arrived with a token in the URL
     const urlParams = new URLSearchParams(window.location.search);
-    // 👇 ADD THIS LINE: Check for #token as well
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     
-    // 👇 CHANGE THIS LINE: Look for either ?token or #token
+    // Check both ?token= and #token=
     const token = urlParams.get('token') || hashParams.get('token');
     
     if (token) {
@@ -13,7 +12,7 @@
         localStorage.setItem('auth_token', token);
         console.log('✅ Auth Handshake successful! Token saved.');
 
-        // Clean the URL so the ugly ?token= or #token= disappears
+        // Clean the URL so the ugly ?token= or #token= disappears from the address bar
         const cleanUrl = window.location.pathname;
         window.history.replaceState({}, document.title, cleanUrl);
 

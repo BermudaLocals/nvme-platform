@@ -795,7 +795,17 @@
       #chat-hdr .back-btn { display: flex; }
       #no-chat { display: none; }
     }
-  </style>
+  
+    .botnav{position:fixed;bottom:0;left:0;right:0;height:calc(49px + env(safe-area-inset-bottom,0px));padding:0 4px env(safe-area-inset-bottom,0px);background:rgba(0,0,0,.94);backdrop-filter:blur(20px);border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:stretch;z-index:200}
+    .bitem{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;color:rgba(255,255,255,.55);text-decoration:none;-webkit-tap-highlight-color:transparent}
+    .bitem.on{color:#fff}
+    .bitem .ic{font-size:1.35rem;line-height:1;height:24px;display:flex;align-items:center}
+    .bitem .lb{font-size:10px;font-weight:600;letter-spacing:.02em}
+    .bplus{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;margin-top:-10px}
+    .bplus-in{width:48px;height:30px;border-radius:9px;background:linear-gradient(90deg,#00f2ea 0 50%,#ff0050 50% 100%);color:#000;display:flex;align-items:center;justify-content:center;font-size:1.35rem;font-weight:900;line-height:1;box-shadow:0 2px 0 #fff}
+    .mobile-nav{display:none !important}
+
+</style>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#e91e8c">
 </head>
@@ -1719,5 +1729,13 @@ function formatDateLabel(iso) {
   loadConversations();
 })();
 </script>
+<nav class="botnav" aria-label="Main">
+  <a class="bitem" href="/app"><div class="ic">🏠</div><div class="lb">Home</div></a>
+  <a class="bitem" href="/app#explore"><div class="ic">🔍</div><div class="lb">Discover</div></a>
+  <a class="bplus" href="/creator" aria-label="Create"><span class="bplus-in">＋</span></a>
+  <a class="bitem on" href="/messages"><div class="ic">💬</div><div class="lb">Inbox</div></a>
+  <a class="bitem" href="/app#profile"><div class="ic">👤</div><div class="lb">Me</div></a>
+</nav>
+
 </body>
 </html>

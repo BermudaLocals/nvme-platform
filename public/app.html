@@ -119,13 +119,14 @@ input,textarea{font-family:inherit}
 .cs-cancel{width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;background:rgba(255,255,255,.08);color:#fff;font-weight:700;font-size:.95rem;cursor:pointer}
 
 /* ===== BOTTOM NAV ===== */
-.botnav{position:fixed;bottom:0;left:0;right:0;height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:rgba(0,0,0,.92);backdrop-filter:blur(16px);border-top:1px solid var(--border);display:flex;z-index:100}
-.bitem{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:rgba(255,255,255,.55)}
+.botnav{position:fixed;bottom:0;left:0;right:0;height:calc(49px + env(safe-area-inset-bottom,0px));padding:0 4px env(safe-area-inset-bottom,0px);background:rgba(0,0,0,.94);backdrop-filter:blur(20px);border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:stretch;z-index:200}
+.bitem{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;color:rgba(255,255,255,.55);text-decoration:none;-webkit-tap-highlight-color:transparent}
 .bitem.on{color:#fff}
-.bitem .ic{font-size:1.3rem}
-.bitem .lb{font-size:.62rem;font-weight:700}
-.bplus{flex:0 0 64px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.bplus-in{width:46px;height:32px;border-radius:10px;background:linear-gradient(135deg,var(--cyan),var(--pink));display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:900;box-shadow:0 4px 14px rgba(255,46,91,.4)}
+.bitem .ic{font-size:1.35rem;line-height:1;height:24px;display:flex;align-items:center}
+.bitem .lb{font-size:10px;font-weight:600;letter-spacing:.02em}
+.bplus{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;margin-top:-10px}
+.bplus-in{width:48px;height:30px;border-radius:9px;background:linear-gradient(90deg,#00f2ea 0 50%,#ff0050 50% 100%);color:#000;display:flex;align-items:center;justify-content:center;font-size:1.35rem;font-weight:900;line-height:1;box-shadow:0 2px 0 #fff}
+.mobile-nav{display:none !important}
 
 /* ===== EXPLORE ===== */
 .explore-head{padding:64px 14px 10px}
@@ -370,12 +371,12 @@ input,textarea{font-family:inherit}
 </div>
 
 <!-- ================= BOTTOM NAV ================= -->
-<nav class="botnav" id="botNav">
+<nav class="botnav" id="botNav" aria-label="Main">
   <div class="bitem on" data-s="feed" onclick="showScreen('feed')"><div class="ic">🏠</div><div class="lb">Home</div></div>
   <div class="bitem" data-s="explore" onclick="showScreen('explore')"><div class="ic">🔍</div><div class="lb">Discover</div></div>
-  <div class="bplus" onclick="openCreateSheet()"><div class="bplus-in">＋</div></div>
+  <div class="bplus" onclick="openCreateSheet()" role="button" aria-label="Create"><div class="bplus-in">＋</div></div>
   <div class="bitem" data-s="inbox" onclick="goInbox()"><div class="ic">💬</div><div class="lb">Inbox</div></div>
-  <div class="bitem" data-s="profile" onclick="showScreen('profile')"><div class="ic">👤</div><div class="lb">Profile</div></div>
+  <div class="bitem" data-s="profile" onclick="showScreen('profile')"><div class="ic">👤</div><div class="lb">Me</div></div>
 </nav>
 
 <!-- ================= CREATE SHEET (TikTok-style + picker) ================= -->
@@ -569,6 +570,9 @@ function showScreen(name){
   const sc = $(name+'-screen'); if(sc) sc.classList.add('active');
   document.querySelectorAll('.bitem').forEach(b=>b.classList.toggle('on', b.dataset.s===name));
   if(name==='feed') loadFeed();
+  const h = (location.hash||'').replace('#','');
+  if (h==='explore' || h==='profile' || h==='feed') showScreen(h);
+
   if(name==='explore'){ loadExplore(); loadDiscover(); }
   if(name==='profile') renderProfile();
   if(name==='wallet') loadWallet();
@@ -1114,32 +1118,5 @@ if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').cat
   if(!currentUser){ /* guests can watch the feed; auth wall appears on interaction */ }
 })();
 </script>
-<nav class="mobile-nav">
-  <a href="/app" class="mobile-nav-item active"><span class="icon">🏠</span><span>Home</span></a>
-  <a href="/live" class="mobile-nav-item"><span class="icon">📺</span><span>Live</span></a>
-  <a href="/creator" class="mobile-nav-item"><span class="icon" style="font-size:1.6rem;">➕</span><span>Create</span></a>
-  <a href="/battles" class="mobile-nav-item"><span class="icon">⚔️</span><span>Battles</span></a>
-  <a href="/profile" class="mobile-nav-item"><span class="icon">👤</span><span>Profile</span></a>
-</nav>
-
-<!-- MOBILE BOTTOM NAVIGATION -->
-<nav class="mobile-nav mobile-only">
-  <div class="mobile-nav-item active" onclick="window.location.href='/app'">
-    <span>📹</span>
-    <span>Go Live</span>
-  </div>
-  <div class="mobile-nav-item" onclick="window.location.href='/app'">
-    <span>🔍</span>
-    <span>Discover</span>
-  </div>
-  <div class="mobile-nav-item" onclick="openWallet()">
-    <span>💎</span>
-    <span>Wallet</span>
-  </div>
-  <div class="mobile-nav-item" onclick="window.location.href='/profile'">
-    <span>👤</span>
-    <span>Profile</span>
-  </div>
-</nav>
 </body>
 </html>

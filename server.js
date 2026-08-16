@@ -1003,6 +1003,7 @@ app.post('/api/streams/:id/end-live', authenticateToken, async (req, res) => {
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Stream not found' });
     io.emit('stream-ended', { streamId: req.params.id });
+    io.to(`stream-${req.params.id}`).emit('stream_ended', { streamId: req.params.id });
     res.json({ success: true, stream: result.rows[0] });
   } catch (error) {
     console.error('End-live error:', error.message);
@@ -1040,6 +1041,49 @@ app.get('/api/streams/:id/gift-leaderboard', authenticateToken, async (req, res)
   } catch (error) {
     console.error('Leaderboard error:', error.message);
     res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
+app.post('/api/streams/:id/battle', authenticateToken, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const { battle_type, team_a_name, team_b_name } = req.body || {};
+    const owned = await pool.query(
+      'SELECT id FROM livestreams WHERE id = $1 AND user_id = $2',
+      [streamId, req.user.id]
+    );
+    if (!owned.rows.length) return res.status(404).json({ ok: false, error: 'Stream not found' });
+    const battleResult = await pool.query(
+      `INSERT INTO stream_battles (stream_id, host_id, status) VALUES ($1, $2, 'waiting') RETURNING *`,
+      [streamId, req.user.id]
+    );
+    const battle = battleResult.rows[0];
+    await pool.query(
+      `INSERT INTO battle_participants (battle_id, user_id, team) VALUES ($1, $2, 'a')
+       ON CONFLICT DO NOTHING`,
+      [battle.id, req.user.id]
+    ).catch(async () => {
+      await pool.query(
+        `INSERT INTO battle_participants (battle_id, user_id, team) VALUES ($1, $2, 'a')`,
+        [battle.id, req.user.id]
+      );
+    });
+    if (team_a_name || team_b_name || battle_type) {
+      await pool.query(
+        `UPDATE stream_battles SET team_a_name = COALESCE($1, team_a_name), team_b_name = COALESCE($2, team_b_name), battle_type = COALESCE($3, battle_type) WHERE id = $4`,
+        [team_a_name || null, team_b_name || null, battle_type || null, battle.id]
+      ).catch(() => {});
+    }
+    const participants = await pool.query(
+      `SELECT bp.*, u.username, u.avatar_url FROM battle_participants bp
+       JOIN users u ON bp.user_id = u.id WHERE bp.battle_id = $1`,
+      [battle.id]
+    );
+    io.to(`stream-${streamId}`).emit('battle_created', { battle, participants: participants.rows });
+    res.json({ ok: true, battle, participants: participants.rows });
+  } catch (error) {
+    console.error('Create stream battle error:', error.message);
+    res.status(500).json({ ok: false, error: 'Failed to create battle' });
   }
 });
 
@@ -1124,6 +1168,7 @@ app.post('/api/battles/invite', authenticateToken, async (req, res) => {
       [myStream.rows[0].id, req.user.id, to_stream_id, to_user_id]
     );
     io.to(`user-${to_user_id}`).emit('battle-invite', { invite: result.rows[0], fromUsername: req.user.username });
+    io.to(`user-${to_user_id}`).emit('battle_invite_received', { invite: result.rows[0], fromUsername: req.user.username });
     res.json({ ok: true, invite: result.rows[0] });
   } catch (error) {
     console.error('Battle invite error:', error.message);
@@ -1159,6 +1204,7 @@ app.post('/api/battles/invite/:id/accept', authenticateToken, async (req, res) =
     );
     await client.query('COMMIT');
     io.to(`user-${invite.from_user_id}`).emit('battle-invite-accepted', { battle });
+    io.to(`user-${invite.from_user_id}`).emit('battle_invite_accepted', { battle });
     res.json({ ok: true, battle });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1177,6 +1223,7 @@ app.post('/api/battles/invite/:id/decline', authenticateToken, async (req, res) 
     );
     if (result.rows.length === 0) return res.status(404).json({ ok: false, error: 'Invite not found' });
     io.to(`user-${result.rows[0].from_user_id}`).emit('battle-invite-declined', { inviteId: req.params.id });
+    io.to(`user-${result.rows[0].from_user_id}`).emit('battle_invite_declined', { inviteId: req.params.id });
     res.json({ ok: true });
   } catch (error) {
     console.error('Decline invite error:', error.message);
@@ -1193,7 +1240,8 @@ app.get('/api/battles/:id', authenticateToken, async (req, res) => {
        JOIN users u ON bp.user_id = u.id WHERE bp.battle_id = $1`,
       [req.params.id]
     );
-    res.json({ ...battleResult.rows[0], participants: participants.rows });
+    const battle = battleResult.rows[0];
+    res.json({ ok: true, battle, participants: participants.rows, ...battle });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch battle' });
   }
@@ -1207,6 +1255,7 @@ app.post('/api/battles/:id/start', authenticateToken, async (req, res) => {
     );
     if (result.rows.length === 0) return res.status(404).json({ ok: false, error: 'Battle not found' });
     io.emit('battle-started', { battleId: req.params.id });
+    io.emit('battle_started', { battleId: req.params.id });
     res.json({ ok: true, battle: result.rows[0] });
   } catch (error) {
     console.error('Battle start error:', error.message);
@@ -1227,6 +1276,7 @@ app.post('/api/battles/:id/end', authenticateToken, async (req, res) => {
     );
     if (result.rows.length === 0) return res.status(404).json({ ok: false, error: 'Battle not found' });
     io.emit('battle-ended', { battleId: req.params.id, winnerId });
+    io.emit('battle_ended', { battleId: req.params.id, winnerId });
     res.json({ ok: true, battle: result.rows[0] });
   } catch (error) {
     console.error('Battle end error:', error.message);
@@ -1409,17 +1459,100 @@ app.post('/api/payments/paypal/capture-order', authenticateToken, async (req, re
 // 📡 WebSocket
 // ========================================
 io.on('connection', (socket) => {
-  socket.on('user-online', ({ userId }) => { if (userId) socket.join(`user-${userId}`); });
-  socket.on('join-stream', ({ streamId }) => { if (streamId) socket.join(`stream-${streamId}`); });
-  socket.on('leave-stream', ({ streamId }) => { if (streamId) socket.leave(`stream-${streamId}`); });
-  socket.on('join-video', ({ videoId }) => { if (videoId) socket.join(`video-${videoId}`); });
-  socket.on('leave-video', ({ videoId }) => { if (videoId) socket.leave(`video-${videoId}`); });
-  socket.on('send-message', ({ streamId, message, username }) => {
-    if (streamId && message) {
-      io.to(`stream-${streamId}`).emit('new-message', {
-        username: username || 'Anonymous', message, time: new Date().toISOString()
-      });
+  const handshakeToken = (socket.handshake.auth && socket.handshake.auth.token)
+    || (socket.handshake.query && socket.handshake.query.token)
+    || null;
+  if (handshakeToken && process.env.JWT_SECRET) {
+    try {
+      const payload = jwt.verify(handshakeToken, process.env.JWT_SECRET);
+      if (payload && payload.id) {
+        socket.data.userId = payload.id;
+        socket.join('user-' + payload.id);
+      }
+    } catch (_) { /* anonymous viewer */ }
+  }
+
+  const onJoinUser = (p = {}) => {
+    const userId = p.userId || p.user_id;
+    if (userId) socket.join('user-' + userId);
+  };
+  socket.on('user-online', onJoinUser);
+  socket.on('user_online', onJoinUser);
+
+  const emitViewerCount = (streamId) => {
+    const room = io.sockets.adapter.rooms.get('stream-' + streamId);
+    const n = room ? room.size : 0;
+    io.to('stream-' + streamId).emit('viewer_count', { viewer_count: n, streamId });
+    io.to('stream-' + streamId).emit('viewer-count', { viewer_count: n, streamId });
+  };
+
+  const onJoinStream = (p = {}) => {
+    const streamId = p.streamId || p.stream_id || p.id;
+    if (!streamId) return;
+    socket.join('stream-' + streamId);
+    emitViewerCount(streamId);
+  };
+  const onLeaveStream = (p = {}) => {
+    const streamId = p.streamId || p.stream_id || p.id;
+    if (!streamId) return;
+    socket.leave('stream-' + streamId);
+    emitViewerCount(streamId);
+  };
+  socket.on('join-stream', onJoinStream);
+  socket.on('join_stream', onJoinStream);
+  socket.on('leave-stream', onLeaveStream);
+  socket.on('leave_stream', onLeaveStream);
+
+  socket.on('join-video', ({ videoId } = {}) => { if (videoId) socket.join('video-' + videoId); });
+  socket.on('leave-video', ({ videoId } = {}) => { if (videoId) socket.leave('video-' + videoId); });
+
+  const onChat = (p = {}) => {
+    const streamId = p.streamId || p.stream_id;
+    const message = p.message || p.text || p.content;
+    const username = p.username || p.user || 'Anonymous';
+    if (!streamId || !message) return;
+    const payload = { username, message, text: message, time: new Date().toISOString() };
+    io.to('stream-' + streamId).emit('new-message', payload);
+    io.to('stream-' + streamId).emit('live_chat', payload);
+    io.to('stream-' + streamId).emit('live-chat', payload);
+  };
+  socket.on('send-message', onChat);
+  socket.on('live_chat', onChat);
+  socket.on('live-chat', onChat);
+
+  const onJoinBattle = (p = {}) => {
+    const battleId = p.battleId || p.battle_id;
+    if (battleId) socket.join('battle-' + battleId);
+  };
+  socket.on('join_battle', onJoinBattle);
+  socket.on('join-battle', onJoinBattle);
+
+  const onGiftByName = async (p = {}) => {
+    const streamId = p.streamId || p.stream_id;
+    const giftName = p.giftName || p.gift_name || p.name;
+    if (!streamId || !giftName) {
+      socket.emit('gift_error', { error: 'stream and gift name required' });
+      return;
     }
+    const payload = {
+      giftName, emoji: p.emoji || '🎁', fromUser: p.username || 'fan',
+      quantity: p.quantity || 1, streamId
+    };
+    io.to('stream-' + streamId).emit('gift_received', payload);
+    io.to('stream-' + streamId).emit('new-gift', payload);
+  };
+  socket.on('send_gift_by_name', onGiftByName);
+  socket.on('send-gift-by-name', onGiftByName);
+
+  // WebRTC signaling for host/viewer (live test today)
+  ['webrtc_offer', 'webrtc_answer', 'webrtc_ice', 'webrtc_viewer_join'].forEach((ev) => {
+    socket.on(ev, (p = {}) => {
+      const target = p.targetSocketId;
+      const streamId = p.stream_id || p.streamId;
+      const payload = Object.assign({}, p, { from: socket.id });
+      if (target) return socket.to(target).emit(ev, payload);
+      if (streamId) return socket.to('stream-' + streamId).emit(ev, payload);
+    });
   });
 });
 
@@ -1430,6 +1563,11 @@ io.on('connection', (socket) => {
 app.get('/u/:username', (req, res) => {
   res.sendFile('profile-view.html', { root: 'public' });
 });
+
+app.get('/battles', (req, res) => res.sendFile('creator.html', { root: 'public' }));
+app.get('/profile', (req, res) => res.sendFile('app.html', { root: 'public' }));
+app.get('/discover', (req, res) => res.sendFile('app.html', { root: 'public' }));
+app.get('/inbox', (req, res) => res.sendFile('messages.html', { root: 'public' }));
 
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path.startsWith('/socket.io')) {

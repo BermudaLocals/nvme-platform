@@ -153,6 +153,9 @@ app.use(express.static('public', { extensions: ['html'] }));
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString(), uptime: process.uptime() });
 });
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy', timestamp: new Date().toISOString(), uptime: process.uptime() });
+});
 
 // ========================================
 // 🔐 Auth Middleware
@@ -306,6 +309,9 @@ function tokenBudget(user) {
 app.get('/api/ai/status', authenticateToken, (req, res) => {
   res.json({ ok: true, providers: ['nvidia', 'kimi'], studio: 'nvme-ai-studio' });
 });
+app.get('/api/ai/usage', authenticateToken, (req, res) => {
+  res.json({ ok: true, providers: ['nvidia', 'kimi'], studio: 'nvme-ai-studio' });
+});
 app.post('/api/ai/generate', authenticateToken, async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -408,13 +414,64 @@ app.get('/api/feed', async (req, res) => {
        LIMIT $${params.length}`,
       params
     );
+    let feed = result.rows;
+    if (!feed.length) {
+      await pool.query(
+        `UPDATE livestreams SET status = 'ended', ended_at = NOW()
+         WHERE status = 'live' AND started_at IS NOT NULL
+           AND started_at < NOW() - INTERVAL '6 hours'`
+      );
+      const lives = await pool.query(
+        `SELECT s.id, s.title, s.description, s.thumbnail_url, s.viewer_count, s.started_at,
+                u.id AS host_id, u.username, u.avatar_url
+         FROM livestreams s JOIN users u ON s.user_id = u.id
+         WHERE s.status = 'live'
+         ORDER BY s.viewer_count DESC LIMIT 20`
+      );
+      feed = lives.rows.map((s) => ({
+        id: 'live_' + s.id,
+        url: null,
+        thumbnail: s.thumbnail_url,
+        title: s.title,
+        description: s.description,
+        views: s.viewer_count,
+        like_count: 0,
+        comment_count: 0,
+        created_at: s.started_at,
+        author_id: s.host_id,
+        username: s.username,
+        avatar_url: s.avatar_url,
+        is_live: true,
+        stream_id: s.id,
+        viewer_count: s.viewer_count,
+      }));
+    }
     const nextCursor = result.rows.length === parseInt(limit)
       ? result.rows[result.rows.length - 1].created_at
       : undefined;
-    res.json({ feed: result.rows, nextCursor });
+    res.json({ feed, nextCursor });
   } catch (error) {
     console.error('Feed error:', error);
     res.status(500).json({ error: 'Failed to fetch feed' });
+  }
+});
+
+app.get('/api/videos', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT v.id, v.video_url AS url, v.thumbnail_url AS thumbnail, v.title, v.description,
+              v.view_count AS views, v.like_count, v.comment_count, v.created_at,
+              u.id AS author_id, u.username, u.avatar_url
+       FROM videos v
+       JOIN users u ON v.user_id = u.id
+       WHERE v.is_published = true
+       ORDER BY v.created_at DESC
+       LIMIT 40`
+    );
+    res.json({ videos: result.rows });
+  } catch (error) {
+    console.error('Videos list error:', error);
+    res.status(500).json({ error: 'Failed to fetch videos' });
   }
 });
 
@@ -828,6 +885,11 @@ app.get('/api/search', async (req, res) => {
 // ========================================
 app.get('/api/streams/live', async (req, res) => {
   try {
+    await pool.query(
+      `UPDATE livestreams SET status = 'ended', ended_at = NOW()
+       WHERE status = 'live' AND started_at IS NOT NULL
+         AND started_at < NOW() - INTERVAL '6 hours'`
+    );
     const result = await pool.query(
       `SELECT s.id, s.title, s.description, s.thumbnail_url, s.viewer_count, s.started_at,
               u.id AS host_id, u.username, u.display_name, u.avatar_url, u.is_verified
@@ -843,6 +905,11 @@ app.get('/api/streams/live', async (req, res) => {
 
 app.get('/api/streams/live/now', async (req, res) => {
   try {
+    await pool.query(
+      `UPDATE livestreams SET status = 'ended', ended_at = NOW()
+       WHERE status = 'live' AND started_at IS NOT NULL
+         AND started_at < NOW() - INTERVAL '6 hours'`
+    );
     const result = await pool.query(
       `SELECT s.id, s.title, s.description, s.thumbnail_url, s.viewer_count, s.started_at,
               u.id AS host_id, u.username, u.display_name, u.avatar_url, u.is_verified
@@ -853,6 +920,28 @@ app.get('/api/streams/live/now', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch live streams' });
+  }
+});
+
+app.get('/api/streams/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT s.id, s.title, s.description, s.thumbnail_url, s.viewer_count, s.started_at, s.status,
+              u.id AS host_id, u.username, u.display_name, u.avatar_url, u.is_verified
+       FROM livestreams s JOIN users u ON s.user_id = u.id
+       WHERE s.id = $1`,
+      [req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Stream not found' });
+    const srow = result.rows[0];
+    res.json({
+      ...srow,
+      is_live: srow.status === 'live',
+      playback_url: '/live?id=' + encodeURIComponent(srow.id),
+    });
+  } catch (error) {
+    console.error('Stream by id error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch stream' });
   }
 });
 
@@ -1343,6 +1432,9 @@ app.get('/u/:username', (req, res) => {
 });
 
 app.get('*', (req, res) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path.startsWith('/socket.io')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   res.sendFile('index.html', { root: 'public' });
 });
 

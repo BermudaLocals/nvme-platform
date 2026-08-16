@@ -644,7 +644,7 @@ async function renderFeedWithFilter(){
     try{
       const r = await fetch(API+'/api/streams/live');
       const d = await r.json();
-      const streams = d.streams||[];
+      const streams = Array.isArray(d) ? d : (d.streams||d.data||[]);
       c.innerHTML = streams.length ? streams.map(s=>{
         const sid = esc(s.id), uname = esc(s.username||s.user_id||'creator');
         return '<div class="feed-item" data-vid="live_'+sid+'">' +

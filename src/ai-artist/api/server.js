@@ -1,53 +1,73 @@
-﻿const express = require("express");
+const express = require("express");
 const cors = require("cors");
-const wf = require("../pipeline/workflow");
-const Asm = require("../pipeline/assembler");
-const styles = require("../styles/presets");
-const fs = require("fs");
-const path = require("path");
+const dotenv = require("dotenv");
+dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-var CLIP = path.join(__dirname, "../storage/clips");
-if (!fs.existsSync(CLIP)) fs.mkdirSync(CLIP, { recursive: true });
-app.get("/api/platforms", function(req, res) {
-  res.json([
-    { id: "tiktok", label: "TikTok", min: 8, max: 600, maxLabel: "10 min" },
-    { id: "youtube", label: "YouTube Studio", min: 8, max: 18000, maxLabel: "5 hours" },
-    { id: "shorts", label: "Shorts", min: 8, max: 60, maxLabel: "60s" },
-    { id: "reel", label: "Reel", min: 8, max: 90, maxLabel: "90s" }
-  ]);
-});
-app.get("/api/styles", function(req, res) {
-  res.json(Object.keys(styles).map(function(k) { return { id: k, prefix: styles[k].prefix, suffix: styles[k].suffix, neg: styles[k].neg, cfg: styles[k].cfg, steps: styles[k].steps }; }));
-});
-app.post("/api/generate", async function(req, res) {
+const PORT = process.env.PORT || 3100;
+app.get("/", function(req, res) { res.json({ status: "ok" }); });
+app.get("/health", function(req, res) { res.json({ status: "healthy" }); });
+app.post("/generate", async function(req, res) {
   try {
-    var body = req.body;
-    var prompt = body.prompt, style = body.style, duration = body.duration, platform = body.platform;
-    var p = platform || "tiktok";
-    var L = Asm.getLimits(p);
-    var dur = Math.max(L.min, Math.min(L.max, duration || 8));
-    if (!prompt) return res.status(400).json({ error: "Prompt required" });
-    gen.init(process.env.REPLICATE_TOKEN);
-    var scenes = await wf.multiScene([{ prompt: prompt, duration: dur, morph: false }], style || "kayanDreamy");
-    var r = await wf.render(scenes, p + "_" + Date.now() + ".mp4");
-    res.json({ clip: "/api/clips/" + path.basename(r.path), duration: r.duration, formatted: Asm.fmtDur(r.duration), platform: p, style: style, prompt: prompt });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+    var prompt = req.body.prompt || "abstract digital art";
+    var preset = req.body.preset || "kayanpink";
+    var token = process.env.REPLICATE_API_TOKEN;
+    if (!token || token.indexOf("YOUR_ACTUAL") !== -1) {
+      return res.status(503).json({ error: "No Replicate API token", hint: "Set REPLICATE_API_TOKEN in .env" });
+    }
+    var Replicate = require("replicate");
+    var replicate = new Replicate({ auth: token });
+    var t0 = Date.now();
+    var prediction = await replicate.predictions.create({
+      model: "black-forest-labs/flux-schnell",
+      input: { prompt: "in the style of " + preset + ", " + prompt }
+    });
+    var result = prediction;
+    while (result.status !== "succeeded" && result.status !== "failed" && result.status !== "canceled") {
+      await new Promise(function(r) { setTimeout(r, 1000); });
+      result = await replicate.predictions.get(result.id);
+    }
+    if (result.status === "failed") {
+      return res.status(500).json({ error: "Prediction failed", detail: result.error });
+    }
+    var output = result.output;
+    var imgUrl = Array.isArray(output) ? output[0] : output;
+    res.json({ output: imgUrl, timing: { total_ms: Date.now() - t0, predict_time: result.metrics.predict_time }, prompt: prompt, preset: preset });
+  } catch (err) { console.error("Generate error:", err.message); res.status(500).json({ error: err.message }); }
 });
-app.post("/api/generate/morph", async function(req, res) {
+app.post("/generate/morph", async function(req, res) {
   try {
-    var body = req.body;
-    var p1 = body.prompt1, p2 = body.prompt2, style = body.style, duration = body.duration, platform = body.platform;
-    var p = platform || "tiktok";
-    var L = Asm.getLimits(p);
-    var dur = Math.max(L.min, Math.min(L.max, duration || 8));
-    gen.init(process.env.REPLICATE_TOKEN);
-    var m = await wf.morphClip(p1, p2, style || "kayanMorph", dur);
-    var r = await wf.render([{ frames: m.frames, duration: dur }], "morph_" + Date.now() + ".mp4");
-    res.json({ clip: "/api/clips/" + path.basename(r.path), duration: dur, formatted: Asm.fmtDur(dur), platform: p, prompt: p1 + " -> " + p2 });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+    var prompt = req.body.prompt || "abstract digital art";
+    var preset = req.body.preset || "kayanpink";
+    var fps = req.body.fps || 8;
+    var frames = req.body.frames || 24;
+    var token = process.env.REPLICATE_API_TOKEN;
+    if (!token || token.indexOf("YOUR_ACTUAL") !== -1) {
+      return res.status(503).json({ error: "No Replicate API token" });
+    }
+    var Replicate = require("replicate");
+    var replicate = new Replicate({ auth: token });
+    var prediction = await replicate.predictions.create({
+      model: "black-forest-labs/flux-schnell",
+      input: { prompt: "in the style of " + preset + ", " + prompt }
+    });
+    var result = prediction;
+    while (result.status !== "succeeded" && result.status !== "failed" && result.status !== "canceled") {
+      await new Promise(function(r) { setTimeout(r, 1000); });
+      result = await replicate.predictions.get(result.id);
+    }
+    if (result.status === "failed") {
+      return res.status(500).json({ error: "Prediction failed", detail: result.error });
+    }
+    var imgUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+    var dur = frames / fps;
+    var dx = Math.random() > 0.5 ? 1 : -1;
+    var dy = Math.random() > 0.5 ? 1 : -1;
+    res.json({ output_url: imgUrl, frames: [imgUrl], total_frames: 1, fps: fps, duration: dur, ken_burns: { duration: dur + "s", keyframes: ["scale(1) translate(0%,0%)", "scale(1.07) translate(" + (dx*4) + "%," + (dy*3) + "%)", "scale(1.15) translate(" + (dx*8) + "%," + (dy*6) + "%)"] } });
+  } catch (err) { console.error("Morph error:", err.message); res.status(500).json({ error: err.message }); }
 });
-app.use("/api/clips", express.static(CLIP));
-var PORT = process.env.AI_PORT || 3100;
-app.listen(PORT, function() { console.log("AI Artist API on :" + PORT + " | TikTok 8s-10m | YouTube 8s-5hr"); });
+app.get("/platforms", function(req, res) {
+  res.json({ tiktok: { min: 8, max: 600, label: "TikTok" }, youtube: { min: 8, max: 18000, label: "YouTube Studio" }, shorts: { min: 8, max: 60, label: "YouTube Shorts" }, reel: { min: 8, max: 90, label: "Instagram Reel" } });
+});
+app.listen(PORT, function() { console.log("NVME AI Artist on :" + PORT + " | Flux Schnell | Ready"); });

@@ -1,0 +1,11 @@
+﻿node_modules/
+storage/temp/*
+storage/clips/*
+src/ai-artist/.env
+*.log
+.DS_Store
+src/ai-artist/storage/temp/*.mp4
+src/ai-artist/storage/temp/*.png
+src/ai-artist/storage/clips/*.mp4
+src/ai-artist/storage/clips/*_list.txt
+src/ai-artist/storage/clips/*_seg*.mp4

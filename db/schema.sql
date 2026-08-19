@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   username VARCHAR(50) UNIQUE NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE users (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE videos (
+CREATE TABLE IF NOT EXISTS videos (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title VARCHAR(255) NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE videos (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE livestreams (
+CREATE TABLE IF NOT EXISTS livestreams (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title VARCHAR(255) NOT NULL,
@@ -62,7 +62,7 @@ CREATE TABLE livestreams (
 -- Backward-compat view for any external tools referencing live_streams
 CREATE OR REPLACE VIEW live_streams AS SELECT * FROM livestreams;
 
-CREATE TABLE subscriptions (
+CREATE TABLE IF NOT EXISTS subscriptions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   subscriber_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -78,7 +78,7 @@ CREATE TABLE subscriptions (
   UNIQUE(subscriber_id, creator_id)
 );
 
-CREATE TABLE transactions (
+CREATE TABLE IF NOT EXISTS transactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   type VARCHAR(50) NOT NULL CHECK (type IN ('credit_purchase','gift_sent','gift_received','subscription','withdrawal','refund','tip')),
@@ -89,7 +89,7 @@ CREATE TABLE transactions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE gifts (
+CREATE TABLE IF NOT EXISTS gifts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(100) NOT NULL,
   emoji VARCHAR(20),
@@ -102,7 +102,7 @@ CREATE TABLE gifts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE stream_guests (
+CREATE TABLE IF NOT EXISTS stream_guests (
   id SERIAL PRIMARY KEY,
   stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
   guest_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -114,7 +114,7 @@ CREATE TABLE stream_guests (
   UNIQUE(stream_id, guest_user_id)
 );
 
-CREATE TABLE livestream_chat (
+CREATE TABLE IF NOT EXISTS livestream_chat (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -122,7 +122,7 @@ CREATE TABLE livestream_chat (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE jackpot_pool (
+CREATE TABLE IF NOT EXISTS jackpot_pool (
   id INTEGER PRIMARY KEY DEFAULT 1,
   pool NUMERIC(12,2) DEFAULT 25000,
   total_entries INTEGER DEFAULT 0,
@@ -132,7 +132,7 @@ CREATE TABLE jackpot_pool (
 );
 
 
--- ── BATTLE SYSTEM ───────────────────────────────────────────────────────────
+-- Ã¢â€â‚¬Ã¢â€â‚¬ BATTLE SYSTEM Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 CREATE TABLE IF NOT EXISTS stream_battles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
@@ -162,10 +162,10 @@ CREATE TABLE IF NOT EXISTS battle_participants (
   UNIQUE(battle_id, user_id)
 );
 
--- ── PRIVACY ─────────────────────────────────────────────────────────────────
+-- Ã¢â€â‚¬Ã¢â€â‚¬ PRIVACY Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT FALSE;
 
--- ── EPIC STUDIOS TRANSFER ───────────────────────────────────────────────────
+-- Ã¢â€â‚¬Ã¢â€â‚¬ EPIC STUDIOS TRANSFER Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 CREATE TABLE IF NOT EXISTS epic_transfers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS epic_transfers (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ── FOUNDER BADGES & LEVELS ─────────────────────────────────────────────────
+-- Ã¢â€â‚¬Ã¢â€â‚¬ FOUNDER BADGES & LEVELS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 ALTER TABLE users ADD COLUMN IF NOT EXISTS join_rank INTEGER;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS founder_badge VARCHAR(20);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
@@ -200,7 +200,7 @@ BEGIN
   END IF;
 END $$;
 
--- ── BATTLE INVITES (live user → live user) ─────────────────────────────────
+-- Ã¢â€â‚¬Ã¢â€â‚¬ BATTLE INVITES (live user Ã¢â€ â€™ live user) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 CREATE TABLE IF NOT EXISTS battle_invites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   from_stream_id UUID NOT NULL REFERENCES livestreams(id) ON DELETE CASCADE,
@@ -215,4 +215,3 @@ CREATE TABLE IF NOT EXISTS battle_invites (
 
 CREATE INDEX IF NOT EXISTS idx_battle_invites_to_user ON battle_invites(to_user_id, status);
 CREATE INDEX IF NOT EXISTS idx_battle_invites_from_user ON battle_invites(from_user_id, status);
-

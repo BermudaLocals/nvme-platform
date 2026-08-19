@@ -1,4 +1,3 @@
-$create = @'
 require('dotenv').config({ path: './src/backend/.env' });
 const pool = require('./src/backend/db');
 
@@ -37,6 +36,3 @@ const pool = require('./src/backend/db');
     process.exit(1);
   }
 })();
-'@
-
-$create | Out-File -FilePath .\create-tables.js -Encoding utf8

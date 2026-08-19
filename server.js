@@ -1,7 +1,9 @@
 // ========================================
-// 🚀 NVME.live — Server
+// 🚀 NVME.live — Full Server
 // ========================================
+
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -25,9 +27,13 @@ const paypal = require('@paypal/checkout-server-sdk');
 // ========================================
 // 📦 Initialize
 // ========================================
+
 const app = express();
+
 app.set('trust proxy', 1);
+
 const server = http.createServer(app);
+
 const io = socketIo(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production'
@@ -39,29 +45,374 @@ const io = socketIo(server, {
   pingInterval: 25000,
   transports: ['websocket', 'polling']
 });
+
 const PORT = process.env.PORT || 3000;
-const FRONTEND_URL = process.env.NODE_ENV === 'production' ? 'https://nvme.live' : 'http://localhost:3000';
+
+const FRONTEND_URL =
+  process.env.NODE_ENV === 'production'
+    ? 'https://nvme.live'
+    : 'http://localhost:3000';
 
 // ========================================
-// 🗄️ Database (NeonDB)
+// 🗄️ Database
 // ========================================
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 5000,
   ssl: { rejectUnauthorized: false }
 });
-pool.connect((err) => {
-  if (err) console.error('❌ DB error:', err.stack);
-  else console.log('✅ NeonDB connected');
+
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error('❌ DB connection error:', err.stack);
+    return;
+  }
+
+  console.log('✅ NeonDB connected');
+
+  if (release) release();
 });
+
 pool.on('error', (err) => {
-  console.error('⚠️  Idle Postgres client error (pool will recover):', err.message);
+  console.error(
+    '⚠️ Idle Postgres client error (pool will recover):',
+    err.message
+  );
 });
+
+// ========================================
+// 🧠 NVME INTELLIGENCE DATABASE
+// ========================================
+
+async function initializeIntelligenceDatabase() {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // ------------------------------------
+    // Trending topics
+    // ------------------------------------
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS trending_topics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        topic TEXT NOT NULL,
+        normalized_topic TEXT,
+        source TEXT,
+        source_url TEXT,
+        source_external_id TEXT,
+        category TEXT,
+        region TEXT,
+        language TEXT DEFAULT 'en',
+
+        trend_score NUMERIC DEFAULT 0,
+        velocity_score NUMERIC DEFAULT 0,
+        engagement_score NUMERIC DEFAULT 0,
+        freshness_score NUMERIC DEFAULT 0,
+
+        status TEXT DEFAULT 'active',
+
+        metadata JSONB DEFAULT '{}'::jsonb,
+
+        first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+        last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Existing deployments may already have this table.
+    // Add missing columns safely.
+
+    const trendColumns = [
+      ['normalized_topic', 'TEXT'],
+      ['source', 'TEXT'],
+      ['source_url', 'TEXT'],
+      ['source_external_id', 'TEXT'],
+      ['category', 'TEXT'],
+      ['region', 'TEXT'],
+      ['language', 'TEXT DEFAULT \'en\''],
+      ['trend_score', 'NUMERIC DEFAULT 0'],
+      ['velocity_score', 'NUMERIC DEFAULT 0'],
+      ['engagement_score', 'NUMERIC DEFAULT 0'],
+      ['freshness_score', 'NUMERIC DEFAULT 0'],
+      ['status', 'TEXT DEFAULT \'active\''],
+      ['metadata', 'JSONB DEFAULT \'{}\'::jsonb'],
+      ['first_seen_at', 'TIMESTAMPTZ DEFAULT NOW()'],
+      ['last_seen_at', 'TIMESTAMPTZ DEFAULT NOW()'],
+      ['updated_at', 'TIMESTAMPTZ DEFAULT NOW()']
+    ];
+
+    for (const [column, definition] of trendColumns) {
+      await client.query(`
+        ALTER TABLE trending_topics
+        ADD COLUMN IF NOT EXISTS ${column} ${definition}
+      `);
+    }
+
+    // ------------------------------------
+    // Atomic claims
+    // ------------------------------------
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS atomic_claims (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        trend_id UUID REFERENCES trending_topics(id) ON DELETE SET NULL,
+
+        claim_text TEXT NOT NULL,
+        normalized_claim TEXT NOT NULL,
+        claim_hash TEXT NOT NULL,
+
+        topic TEXT,
+        category TEXT,
+
+        entities JSONB DEFAULT '[]'::jsonb,
+        source_urls JSONB DEFAULT '[]'::jsonb,
+
+        confidence_score NUMERIC DEFAULT 0,
+
+        status TEXT DEFAULT 'active',
+
+        video_count INTEGER DEFAULT 0,
+
+        first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+        last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // ------------------------------------
+    // Video events
+    // ------------------------------------
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS video_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+
+        session_id TEXT,
+
+        event_type TEXT NOT NULL,
+
+        watch_ms INTEGER DEFAULT 0,
+        video_duration_ms INTEGER DEFAULT 0,
+        position_ms INTEGER DEFAULT 0,
+
+        metadata JSONB DEFAULT '{}'::jsonb,
+
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // ------------------------------------
+    // Video feedback
+    // ------------------------------------
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS video_feedback (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+
+        feedback_type TEXT NOT NULL,
+
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+
+        UNIQUE(user_id, video_id, feedback_type)
+      )
+    `);
+
+    // ------------------------------------
+    // User topic affinity
+    // ------------------------------------
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_topic_affinity (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+        topic TEXT NOT NULL,
+
+        score NUMERIC DEFAULT 0,
+
+        views INTEGER DEFAULT 0,
+        completions INTEGER DEFAULT 0,
+        likes INTEGER DEFAULT 0,
+        comments INTEGER DEFAULT 0,
+        shares INTEGER DEFAULT 0,
+        follows INTEGER DEFAULT 0,
+        skips INTEGER DEFAULT 0,
+        not_interested INTEGER DEFAULT 0,
+
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+        UNIQUE(user_id, topic)
+      )
+    `);
+
+    // ------------------------------------
+    // Video intelligence metadata
+    // ------------------------------------
+
+    const videoColumns = [
+      ['trending_topic_id', 'UUID'],
+      ['atomic_claim_id', 'UUID'],
+      ['topic', 'TEXT'],
+      ['category', 'TEXT'],
+      ['content_score', 'NUMERIC DEFAULT 0'],
+      ['completion_rate', 'NUMERIC DEFAULT 0'],
+      ['avg_watch_ms', 'NUMERIC DEFAULT 0'],
+      ['share_count', 'INTEGER DEFAULT 0'],
+      ['save_count', 'INTEGER DEFAULT 0'],
+      ['skip_count', 'INTEGER DEFAULT 0'],
+      ['not_interested_count', 'INTEGER DEFAULT 0'],
+      ['recommendation_score', 'NUMERIC DEFAULT 0'],
+      ['impression_count', 'INTEGER DEFAULT 0'],
+      ['last_ranked_at', 'TIMESTAMPTZ']
+    ];
+
+    for (const [column, definition] of videoColumns) {
+      await client.query(`
+        ALTER TABLE videos
+        ADD COLUMN IF NOT EXISTS ${column} ${definition}
+      `);
+    }
+
+    // ------------------------------------
+    // Foreign keys
+    // ------------------------------------
+
+    await client.query(`
+      DO $$
+      BEGIN
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'videos_trending_topic_id_fkey'
+        ) THEN
+          ALTER TABLE videos
+          ADD CONSTRAINT videos_trending_topic_id_fkey
+          FOREIGN KEY (trending_topic_id)
+          REFERENCES trending_topics(id)
+          ON DELETE SET NULL;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'videos_atomic_claim_id_fkey'
+        ) THEN
+          ALTER TABLE videos
+          ADD CONSTRAINT videos_atomic_claim_id_fkey
+          FOREIGN KEY (atomic_claim_id)
+          REFERENCES atomic_claims(id)
+          ON DELETE SET NULL;
+        END IF;
+
+      EXCEPTION
+        WHEN duplicate_object THEN
+          NULL;
+      END
+      $$;
+    `);
+
+    // ------------------------------------
+    // Indexes
+    // ------------------------------------
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_trending_topics_score
+      ON trending_topics(trend_score DESC)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_trending_topics_status
+      ON trending_topics(status)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_trending_topics_normalized
+      ON trending_topics(normalized_topic)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_atomic_claims_hash
+      ON atomic_claims(claim_hash)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_atomic_claims_trend
+      ON atomic_claims(trend_id)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_video_events_video
+      ON video_events(video_id, created_at DESC)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_video_events_user
+      ON video_events(user_id, created_at DESC)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_video_feedback_user
+      ON video_feedback(user_id, video_id)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_affinity_user
+      ON user_topic_affinity(user_id, score DESC)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_videos_recommendation
+      ON videos(recommendation_score DESC)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_videos_topic
+      ON videos(topic)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_videos_atomic_claim
+      ON videos(atomic_claim_id)
+    `);
+
+    await client.query('COMMIT');
+
+    console.log('🧠 NVME Intelligence database ready');
+  } catch (error) {
+    await client.query('ROLLBACK');
+
+    console.error(
+      '❌ Intelligence database initialization failed:',
+      error.message
+    );
+  } finally {
+    client.release();
+  }
+}
+
+// ========================================
+// 👤 Public User
+// ========================================
 
 function publicUser(u) {
   if (!u) return null;
+
   return {
     id: u.id,
     username: u.username,
@@ -81,1511 +432,8641 @@ function publicUser(u) {
 // ========================================
 // 🤖 AI Clients
 // ========================================
+
 const nvidiaClient = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY,
-  baseURL: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1',
+  baseURL:
+    process.env.NVIDIA_BASE_URL ||
+    'https://integrate.api.nvidia.com/v1'
 });
+
 const kimiClient = new OpenAI({
   apiKey: process.env.MOONSHOT_API_KEY,
-  baseURL: process.env.KIMI_BASE_URL || 'https://api.moonshot.cn/v1',
+  baseURL:
+    process.env.KIMI_BASE_URL ||
+    'https://api.moonshot.cn/v1'
 });
-async function generateWithFallback(systemPrompt, userPrompt, maxTokens) {
+
+async function generateWithFallback(
+  systemPrompt,
+  userPrompt,
+  maxTokens
+) {
   try {
-    const completion = await nvidiaClient.chat.completions.create({
-      model: 'nvidia/llama-3.1-nemotron-70b-instruct',
-      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-      temperature: 0.8,
-      max_tokens: maxTokens,
-    });
-    return { content: completion.choices[0].message.content, provider: 'nvidia' };
+    const completion =
+      await nvidiaClient.chat.completions.create({
+        model:
+          process.env.NVIDIA_MODEL ||
+          'nvidia/llama-3.1-nemotron-70b-instruct',
+
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user',
+            content: userPrompt
+          }
+        ],
+
+        temperature: 0.8,
+        max_tokens: maxTokens
+      });
+
+    return {
+      content:
+        completion.choices?.[0]?.message?.content || '',
+      provider: 'nvidia'
+    };
   } catch (e) {
-    console.log('NVIDIA failed, falling back to Kimi:', e.message);
+    console.log(
+      'NVIDIA failed, falling back to Kimi:',
+      e.message
+    );
   }
-  const completion = await kimiClient.chat.completions.create({
-    model: process.env.KIMI_DEFAULT_MODEL || 'kimi-k3',
-    messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-    temperature: 0.8,
-    max_tokens: maxTokens,
-  });
-  return { content: completion.choices[0].message.content, provider: 'kimi' };
+
+  const completion =
+    await kimiClient.chat.completions.create({
+      model:
+        process.env.KIMI_DEFAULT_MODEL ||
+        'kimi-k3',
+
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: userPrompt
+        }
+      ],
+
+      temperature: 0.8,
+      max_tokens: maxTokens
+    });
+
+  return {
+    content:
+      completion.choices?.[0]?.message?.content || '',
+    provider: 'kimi'
+  };
 }
 
 // ========================================
 // 💳 PayPal
 // ========================================
+
 function paypalClient() {
-  const env = process.env.PAYPAL_MODE === 'live'
-    ? new paypal.core.LiveEnvironment(process.env.PAYPAL_CLIENT_ID, process.env.PAYPAL_CLIENT_SECRET)
-    : new paypal.core.SandboxEnvironment(process.env.PAYPAL_CLIENT_ID, process.env.PAYPAL_CLIENT_SECRET);
+  const env =
+    process.env.PAYPAL_MODE === 'live'
+      ? new paypal.core.LiveEnvironment(
+          process.env.PAYPAL_CLIENT_ID,
+          process.env.PAYPAL_CLIENT_SECRET
+        )
+      : new paypal.core.SandboxEnvironment(
+          process.env.PAYPAL_CLIENT_ID,
+          process.env.PAYPAL_CLIENT_SECRET
+        );
+
   return new paypal.core.PayPalHttpClient(env);
 }
 
 // ========================================
 // 🔒 Middleware
 // ========================================
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+  })
+);
+
 app.use(compression());
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? ['https://nvme.live', 'https://www.nvme.live']
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
-  credentials: true
-}));
+
+app.use(
+  cors({
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? [
+            'https://nvme.live',
+            'https://www.nvme.live'
+          ]
+        : [
+            'http://localhost:3000',
+            'http://127.0.0.1:3000'
+          ],
+
+    credentials: true
+  })
+);
+
 app.use(morgan('dev'));
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: true, limit: '100mb' }));
-app.use(session({
-  store: new (require('connect-pg-simple')(session))({ pool, createTableIfMissing: true }),
-  secret: process.env.JWT_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 5 * 60 * 1000 }
-}));
+
+app.use(
+  express.json({
+    limit: '100mb'
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: '100mb'
+  })
+);
+
+app.use(
+  session({
+    store: new (require('connect-pg-simple')(session))({
+      pool,
+      createTableIfMissing: true
+    }),
+
+    secret: process.env.JWT_SECRET,
+
+    resave: false,
+
+    saveUninitialized: false,
+
+    cookie: {
+      secure:
+        process.env.NODE_ENV === 'production',
+
+      maxAge: 5 * 60 * 1000
+    }
+  })
+);
+
 app.use(passport.initialize());
 app.use(passport.session());
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
-  message: { error: 'Too many requests, please try again later.' }
+
+  message: {
+    error:
+      'Too many requests, please try again later.'
+  }
 });
+
 app.use('/api', limiter);
-app.use(express.static('public', { extensions: ['html'] }));
+
+app.use(
+  express.static('public', {
+    extensions: ['html']
+  })
+);
+
+// ========================================
+// ❤️ Health
+// ========================================
+
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString(), uptime: process.uptime() });
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString(), uptime: process.uptime() });
+
+app.get('/api/health', async (req, res) => {
+  let database = 'unknown';
+
+  try {
+    await pool.query('SELECT 1');
+    database = 'connected';
+  } catch (_) {
+    database = 'error';
+  }
+
+  res.json({
+    status: database === 'connected'
+      ? 'healthy'
+      : 'degraded',
+
+    database,
+
+    intelligence: true,
+
+    timestamp: new Date().toISOString(),
+
+    uptime: process.uptime()
+  });
 });
 
 // ========================================
 // 🔐 Auth Middleware
 // ========================================
-const authenticateToken = async (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = (authHeader && authHeader.split(' ')[1]) || req.cookies?.token;
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const result = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.id]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    req.user = result.rows[0];
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid or expired token' });
-  }
-};
 
-const optionalAuth = async (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = (authHeader && authHeader.split(' ')[1]) || req.cookies?.token;
-  if (!token) return next();
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const result = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.id]);
-    if (result.rows.length > 0) req.user = result.rows[0];
-  } catch (err) { /* proceed anonymously */ }
-  next();
-};
+const authenticateToken =
+  async (req, res, next) => {
+    const authHeader =
+      req.headers['authorization'];
+
+    const token =
+      (authHeader &&
+        authHeader.split(' ')[1]) ||
+      req.cookies?.token;
+
+    if (!token) {
+      return res
+        .status(401)
+        .json({
+          error: 'Access token required'
+        });
+    }
+
+    try {
+      const decoded =
+        jwt.verify(
+          token,
+          process.env.JWT_SECRET
+        );
+
+      const result =
+        await pool.query(
+          'SELECT * FROM users WHERE id = $1',
+          [decoded.id]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({
+            error: 'User not found'
+          });
+      }
+
+      req.user = result.rows[0];
+
+      next();
+    } catch (err) {
+      return res
+        .status(403)
+        .json({
+          error: 'Invalid or expired token'
+        });
+    }
+  };
+
+const optionalAuth =
+  async (req, res, next) => {
+    const authHeader =
+      req.headers['authorization'];
+
+    const token =
+      (authHeader &&
+        authHeader.split(' ')[1]) ||
+      req.cookies?.token;
+
+    if (!token) return next();
+
+    try {
+      const decoded =
+        jwt.verify(
+          token,
+          process.env.JWT_SECRET
+        );
+
+      const result =
+        await pool.query(
+          'SELECT * FROM users WHERE id = $1',
+          [decoded.id]
+        );
+
+      if (result.rows.length > 0) {
+        req.user = result.rows[0];
+      }
+    } catch (_) {}
+
+    next();
+  };
 
 function issueToken(user) {
-  return jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE || '7d' });
+  return jwt.sign(
+    {
+      id: user.id
+    },
+
+    process.env.JWT_SECRET,
+
+    {
+      expiresIn:
+        process.env.JWT_EXPIRE ||
+        '7d'
+    }
+  );
 }
 
 // ========================================
 // 🔑 Auth Routes
 // ========================================
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { username, email, password } = req.body;
-    if (!username || !email || !password)
-      return res.status(400).json({ error: 'username, email, and password are required' });
-    if (password.length < 8)
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $2', [email, username]);
-    if (existing.rows.length > 0)
-      return res.status(409).json({ error: 'Username or email already in use' });
-    const passwordHash = await bcrypt.hash(password, 12);
-    const result = await pool.query(
-      `INSERT INTO users (username, email, password_hash, display_name)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [username, email, passwordHash, username]
-    );
-    const user = result.rows[0];
-    res.json({ token: issueToken(user), user: publicUser(user) });
-  } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ error: 'Failed to register' });
-  }
-});
 
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
-    const user = result.rows[0];
-    if (user.is_banned) return res.status(403).json({ error: 'Account suspended' });
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-    res.json({ token: issueToken(user), user: publicUser(user) });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Failed to log in' });
-  }
-});
+app.post(
+  '/api/auth/register',
+  async (req, res) => {
+    try {
+      const {
+        username,
+        email,
+        password
+      } = req.body;
 
-app.get('/api/auth/me', authenticateToken, (req, res) => {
-  res.json({ user: publicUser(req.user) });
-});
+      if (
+        !username ||
+        !email ||
+        !password
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'username, email, and password are required'
+          });
+      }
+
+      if (password.length < 8) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Password must be at least 8 characters'
+          });
+      }
+
+      const existing =
+        await pool.query(
+          'SELECT id FROM users WHERE email = $1 OR username = $2',
+          [email, username]
+        );
+
+      if (existing.rows.length > 0) {
+        return res
+          .status(409)
+          .json({
+            error:
+              'Username or email already in use'
+          });
+      }
+
+      const passwordHash =
+        await bcrypt.hash(
+          password,
+          12
+        );
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO users
+          (
+            username,
+            email,
+            password_hash,
+            display_name
+          )
+          VALUES ($1, $2, $3, $4)
+          RETURNING *
+          `,
+          [
+            username,
+            email,
+            passwordHash,
+            username
+          ]
+        );
+
+      const user =
+        result.rows[0];
+
+      res.json({
+        token: issueToken(user),
+        user: publicUser(user)
+      });
+    } catch (error) {
+      console.error(
+        'Register error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to register'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/auth/login',
+  async (req, res) => {
+    try {
+      const {
+        email,
+        password
+      } = req.body;
+
+      if (!email || !password) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'email and password are required'
+          });
+      }
+
+      const result =
+        await pool.query(
+          'SELECT * FROM users WHERE email = $1',
+          [email]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(401)
+          .json({
+            error:
+              'Invalid credentials'
+          });
+      }
+
+      const user =
+        result.rows[0];
+
+      if (user.is_banned) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'Account suspended'
+          });
+      }
+
+      const valid =
+        await bcrypt.compare(
+          password,
+          user.password_hash
+        );
+
+      if (!valid) {
+        return res
+          .status(401)
+          .json({
+            error:
+              'Invalid credentials'
+          });
+      }
+
+      res.json({
+        token: issueToken(user),
+        user: publicUser(user)
+      });
+    } catch (error) {
+      console.error(
+        'Login error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to log in'
+        });
+    }
+  }
+);
+
+app.get(
+  '/api/auth/me',
+  authenticateToken,
+  (req, res) => {
+    res.json({
+      user: publicUser(req.user)
+    });
+  }
+);
 
 // ========================================
 // 🔑 Google OAuth
 // ========================================
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${FRONTEND_URL}/auth/google/callback`
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      const email = profile.emails?.[0]?.value;
-      let result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-      let user = result.rows[0];
-      if (!user) {
-        const baseUsername = (profile.displayName || email.split('@')[0]).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 40) || 'user';
-        let username = baseUsername;
-        let n = 0;
-        while ((await pool.query('SELECT 1 FROM users WHERE username = $1', [username])).rows.length > 0) {
-          n += 1;
-          username = `${baseUsername}${n}`;
+
+if (
+  process.env.GOOGLE_CLIENT_ID &&
+  process.env.GOOGLE_CLIENT_SECRET
+) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID:
+          process.env.GOOGLE_CLIENT_ID,
+
+        clientSecret:
+          process.env.GOOGLE_CLIENT_SECRET,
+
+        callbackURL:
+          `${FRONTEND_URL}/auth/google/callback`
+      },
+
+      async (
+        accessToken,
+        refreshToken,
+        profile,
+        done
+      ) => {
+        try {
+          const email =
+            profile.emails?.[0]?.value;
+
+          let result =
+            await pool.query(
+              'SELECT * FROM users WHERE email = $1',
+              [email]
+            );
+
+          let user =
+            result.rows[0];
+
+          if (!user) {
+            const baseUsername =
+              (
+                profile.displayName ||
+                email.split('@')[0]
+              )
+                .replace(
+                  /[^a-zA-Z0-9_]/g,
+                  ''
+                )
+                .slice(0, 40) ||
+              'user';
+
+            let username =
+              baseUsername;
+
+            let n = 0;
+
+            while (
+              (
+                await pool.query(
+                  'SELECT 1 FROM users WHERE username = $1',
+                  [username]
+                )
+              ).rows.length > 0
+            ) {
+              n += 1;
+
+              username =
+                `${baseUsername}${n}`;
+            }
+
+            const randomPassword =
+              await bcrypt.hash(
+                uuidv4(),
+                12
+              );
+
+            const insertResult =
+              await pool.query(
+                `
+                INSERT INTO users
+                (
+                  username,
+                  email,
+                  password_hash,
+                  display_name,
+                  avatar_url,
+                  is_verified
+                )
+                VALUES
+                ($1, $2, $3, $4, $5, false)
+                RETURNING *
+                `,
+                [
+                  username,
+                  email,
+                  randomPassword,
+                  profile.displayName ||
+                    username,
+                  profile.photos?.[0]
+                    ?.value || null
+                ]
+              );
+
+            user =
+              insertResult.rows[0];
+          }
+
+          done(null, user);
+        } catch (err) {
+          done(err);
         }
-        const randomPassword = await bcrypt.hash(uuidv4(), 12);
-        const insertResult = await pool.query(
-          `INSERT INTO users (username, email, password_hash, display_name, avatar_url, is_verified)
-           VALUES ($1, $2, $3, $4, $5, false) RETURNING *`,
-          [username, email, randomPassword, profile.displayName || username, profile.photos?.[0]?.value || null]
-        );
-        user = insertResult.rows[0];
       }
-      done(null, user);
-    } catch (err) {
-      done(err);
+    )
+  );
+
+  passport.serializeUser(
+    (user, done) =>
+      done(null, user.id)
+  );
+
+  passport.deserializeUser(
+    async (id, done) => {
+      try {
+        const result =
+          await pool.query(
+            'SELECT * FROM users WHERE id = $1',
+            [id]
+          );
+
+        done(
+          null,
+          result.rows[0]
+        );
+      } catch (err) {
+        done(err);
+      }
     }
-  }));
-  passport.serializeUser((user, done) => done(null, user.id));
-  passport.deserializeUser(async (id, done) => {
-    try {
-      const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-      done(null, result.rows[0]);
-    } catch (err) { done(err); }
-  });
-  app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-  app.get('/auth/google/callback',
-    passport.authenticate('google', { session: false, failureRedirect: `${FRONTEND_URL}/?auth_error=1` }),
+  );
+
+  app.get(
+    '/auth/google',
+    passport.authenticate(
+      'google',
+      {
+        scope: [
+          'profile',
+          'email'
+        ]
+      }
+    )
+  );
+
+  app.get(
+    '/auth/google/callback',
+
+    passport.authenticate(
+      'google',
+      {
+        session: false,
+
+        failureRedirect:
+          `${FRONTEND_URL}/?auth_error=1`
+      }
+    ),
+
     (req, res) => {
-      const jwtToken = issueToken(req.user);
-      res.redirect(`${FRONTEND_URL}/app?token=${jwtToken}`);
+      const jwtToken =
+        issueToken(req.user);
+
+      res.redirect(
+        `${FRONTEND_URL}/app?token=${jwtToken}`
+      );
     }
   );
 } else {
-  app.get('/auth/google', (req, res) => res.status(503).json({ error: 'Google OAuth not configured' }));
+  app.get(
+    '/auth/google',
+    (req, res) =>
+      res
+        .status(503)
+        .json({
+          error:
+            'Google OAuth not configured'
+        })
+  );
 }
 
 // ========================================
 // 🤖 AI Studio
 // ========================================
+
 const AI_PROMPTS = {
-  script: (topic) => `Write a viral short-video script for: ${topic}. Include hook, body, and CTA.`,
-  caption: (topic) => `Write 5 engaging captions for: ${topic}. Include hashtags.`,
-  hashtags: (topic) => `Generate 30+ trending hashtags for: ${topic}.`,
-  idea: (topic) => `Generate 10 viral content ideas for: ${topic}.`,
+  script: (topic) =>
+    `Write a viral short-video script for: ${topic}. Include hook, body, and CTA.`,
+
+  caption: (topic) =>
+    `Write 5 engaging captions for: ${topic}. Include hashtags.`,
+
+  hashtags: (topic) =>
+    `Generate 30+ trending hashtags for: ${topic}.`,
+
+  idea: (topic) =>
+    `Generate 10 viral content ideas for: ${topic}.`
 };
-const AI_SYSTEM_PROMPT = 'You are a viral content expert for social media creators.';
+
+const AI_SYSTEM_PROMPT =
+  'You are a viral content expert for social media creators.';
+
 function tokenBudget(user) {
-  const isPro = user.is_creator || (user.plan_ends && new Date(user.plan_ends) > new Date());
-  return isPro ? 2000 : 1000;
+  const isPro =
+    user.is_creator ||
+    (
+      user.plan_ends &&
+      new Date(user.plan_ends) >
+        new Date()
+    );
+
+  return isPro
+    ? 2000
+    : 1000;
 }
-app.get('/api/ai/status', authenticateToken, (req, res) => {
-  res.json({ ok: true, providers: ['nvidia', 'kimi'], studio: 'nvme-ai-studio' });
-});
-app.get('/api/ai/usage', authenticateToken, (req, res) => {
-  res.json({ ok: true, providers: ['nvidia', 'kimi'], studio: 'nvme-ai-studio' });
-});
-app.post('/api/ai/generate', authenticateToken, async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    if (!prompt) return res.status(400).json({ error: 'prompt is required' });
-    const { content, provider } = await generateWithFallback(AI_SYSTEM_PROMPT, prompt, tokenBudget(req.user));
-    res.json({ success: true, content, provider });
-  } catch (error) {
-    console.error('AI generate error:', error);
-    res.status(500).json({ error: 'All AI providers failed' });
+
+app.get(
+  '/api/ai/status',
+  authenticateToken,
+  (req, res) => {
+    res.json({
+      ok: true,
+      providers: [
+        'nvidia',
+        'kimi'
+      ],
+      studio:
+        'nvme-ai-studio'
+    });
   }
-});
-for (const type of ['captions', 'hashtags', 'script']) {
-  app.post(`/api/ai/${type}`, authenticateToken, async (req, res) => {
+);
+
+app.get(
+  '/api/ai/usage',
+  authenticateToken,
+  (req, res) => {
+    res.json({
+      ok: true,
+      providers: [
+        'nvidia',
+        'kimi'
+      ],
+      studio:
+        'nvme-ai-studio'
+    });
+  }
+);
+
+app.post(
+  '/api/ai/generate',
+  authenticateToken,
+  async (req, res) => {
     try {
-      const { topic } = req.body;
-      if (!topic) return res.status(400).json({ error: 'topic is required' });
-      const key = type === 'captions' ? 'caption' : type;
-      const userPrompt = (AI_PROMPTS[key] || AI_PROMPTS.idea)(topic);
-      const { content, provider } = await generateWithFallback(AI_SYSTEM_PROMPT, userPrompt, tokenBudget(req.user));
-      res.json({ success: true, content, provider });
+      const { prompt } =
+        req.body;
+
+      if (!prompt) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'prompt is required'
+          });
+      }
+
+      const {
+        content,
+        provider
+      } =
+        await generateWithFallback(
+          AI_SYSTEM_PROMPT,
+          prompt,
+          tokenBudget(req.user)
+        );
+
+      res.json({
+        success: true,
+        content,
+        provider
+      });
     } catch (error) {
-      console.error(`AI ${type} error:`, error);
-      res.status(500).json({ error: 'All AI providers failed' });
+      console.error(
+        'AI generate error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'All AI providers failed'
+        });
     }
-  });
+  }
+);
+
+for (
+  const type of [
+    'captions',
+    'hashtags',
+    'script'
+  ]
+) {
+  app.post(
+    `/api/ai/${type}`,
+    authenticateToken,
+    async (req, res) => {
+      try {
+        const { topic } =
+          req.body;
+
+        if (!topic) {
+          return res
+            .status(400)
+            .json({
+              error:
+                'topic is required'
+            });
+        }
+
+        const key =
+          type === 'captions'
+            ? 'caption'
+            : type;
+
+        const userPrompt =
+          (
+            AI_PROMPTS[key] ||
+            AI_PROMPTS.idea
+          )(topic);
+
+        const {
+          content,
+          provider
+        } =
+          await generateWithFallback(
+            AI_SYSTEM_PROMPT,
+            userPrompt,
+            tokenBudget(req.user)
+          );
+
+        res.json({
+          success: true,
+          content,
+          provider
+        });
+      } catch (error) {
+        console.error(
+          `AI ${type} error:`,
+          error
+        );
+
+        res
+          .status(500)
+          .json({
+            error:
+              'All AI providers failed'
+          });
+      }
+    }
+  );
 }
+
+// ========================================
+// 🧠 INTELLIGENCE HELPERS
+// ========================================
+
+function normalizeText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hashText(value) {
+  const crypto =
+    require('crypto');
+
+  return crypto
+    .createHash('sha256')
+    .update(normalizeText(value))
+    .digest('hex');
+}
+
+function clamp(
+  value,
+  min,
+  max
+) {
+  return Math.max(
+    min,
+    Math.min(max, value)
+  );
+}
+
+function safeNumber(value) {
+  const n =
+    Number(value);
+
+  return Number.isFinite(n)
+    ? n
+    : 0;
+}
+
+function parseJsonResponse(text) {
+  try {
+    return JSON.parse(text);
+  } catch (_) {}
+
+  const match =
+    String(text || '')
+      .match(/\{[\s\S]*\}/);
+
+  if (!match) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(
+      match[0]
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+// ========================================
+// 🔥 TREND ENGINE
+// ========================================
+
+async function calculateTrendScore(
+  topicId
+) {
+  const result =
+    await pool.query(
+      `
+      SELECT
+        trend_score,
+        velocity_score,
+        engagement_score,
+        freshness_score,
+        first_seen_at,
+        last_seen_at
+      FROM trending_topics
+      WHERE id = $1
+      `,
+      [topicId]
+    );
+
+  if (!result.rows.length) {
+    return null;
+  }
+
+  const row =
+    result.rows[0];
+
+  const now =
+    Date.now();
+
+  const lastSeen =
+    new Date(
+      row.last_seen_at
+    ).getTime();
+
+  const ageHours =
+    Math.max(
+      0,
+      (now - lastSeen) /
+        3600000
+    );
+
+  const freshness =
+    Math.exp(
+      -ageHours / 24
+    ) * 100;
+
+  const score =
+    safeNumber(
+      row.velocity_score
+    ) * 0.35 +
+
+    safeNumber(
+      row.engagement_score
+    ) * 0.25 +
+
+    freshness * 0.20 +
+
+    safeNumber(
+      row.trend_score
+    ) * 0.20;
+
+  const finalScore =
+    clamp(
+      score,
+      0,
+      100
+    );
+
+  await pool.query(
+    `
+    UPDATE trending_topics
+    SET
+      trend_score = $1,
+      freshness_score = $2,
+      updated_at = NOW()
+    WHERE id = $3
+    `,
+    [
+      finalScore,
+      freshness,
+      topicId
+    ]
+  );
+
+  return finalScore;
+}
+
+// ----------------------------------------
+// Create/update trend
+// ----------------------------------------
+
+async function upsertTrend({
+  topic,
+  source,
+  sourceUrl,
+  externalId,
+  category,
+  region,
+  language,
+  score,
+  metadata
+}) {
+  const normalized =
+    normalizeText(topic);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const existing =
+    await pool.query(
+      `
+      SELECT *
+      FROM trending_topics
+      WHERE normalized_topic = $1
+        AND COALESCE(source, '') = COALESCE($2, '')
+      ORDER BY last_seen_at DESC
+      LIMIT 1
+      `,
+      [
+        normalized,
+        source || ''
+      ]
+    );
+
+  if (existing.rows.length) {
+    const current =
+      existing.rows[0];
+
+    const nextScore =
+      Math.max(
+        safeNumber(
+          current.trend_score
+        ),
+        safeNumber(score)
+      );
+
+    const updated =
+      await pool.query(
+        `
+        UPDATE trending_topics
+        SET
+          topic = $1,
+          source_url = COALESCE($2, source_url),
+          source_external_id = COALESCE($3, source_external_id),
+          category = COALESCE($4, category),
+          region = COALESCE($5, region),
+          language = COALESCE($6, language),
+          trend_score = $7,
+          velocity_score = GREATEST(
+            COALESCE(velocity_score, 0),
+            $8
+          ),
+          metadata = COALESCE(metadata, '{}'::jsonb)
+                     || COALESCE($9::jsonb, '{}'::jsonb),
+          last_seen_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $10
+        RETURNING *
+        `,
+        [
+          topic,
+          sourceUrl || null,
+          externalId || null,
+          category || null,
+          region || null,
+          language || 'en',
+          nextScore,
+          safeNumber(score),
+          JSON.stringify(
+            metadata || {}
+          ),
+          current.id
+        ]
+      );
+
+    return updated.rows[0];
+  }
+
+  const inserted =
+    await pool.query(
+      `
+      INSERT INTO trending_topics
+      (
+        topic,
+        normalized_topic,
+        source,
+        source_url,
+        source_external_id,
+        category,
+        region,
+        language,
+        trend_score,
+        velocity_score,
+        metadata
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11
+      )
+      RETURNING *
+      `,
+      [
+        topic,
+        normalized,
+        source || 'manual',
+        sourceUrl || null,
+        externalId || null,
+        category || null,
+        region || null,
+        language || 'en',
+        safeNumber(score),
+        safeNumber(score),
+        JSON.stringify(
+          metadata || {}
+        )
+      ]
+    );
+
+  return inserted.rows[0];
+}
+
+// ----------------------------------------
+// Extract atomic claims
+// ----------------------------------------
+
+async function extractAtomicClaims(
+  trend
+) {
+  const prompt = `
+Analyze this trending topic:
+
+TOPIC:
+${trend.topic}
+
+SOURCE:
+${trend.source || 'unknown'}
+
+CATEGORY:
+${trend.category || 'general'}
+
+Return ONLY valid JSON using this exact structure:
+
+{
+  "claims": [
+    {
+      "claim": "one factual atomic claim",
+      "normalized_claim": "normalized factual claim",
+      "entities": ["entity1"],
+      "confidence": 0.0
+    }
+  ]
+}
+
+Rules:
+
+1. Produce 1-5 atomic claims.
+2. Each claim must express one distinct factual idea.
+3. Do not invent facts.
+4. Do not combine multiple facts into one claim.
+5. If the supplied information is insufficient, keep the claim conservative.
+6. Confidence must be between 0 and 1.
+`;
+
+  try {
+    const {
+      content,
+      provider
+    } =
+      await generateWithFallback(
+        `
+You are the NVME.live Atomic Claim Engine.
+
+Your job is to break trending subjects into distinct factual claims that can be independently verified and used to generate short-form videos.
+
+Never fabricate information.
+
+Return JSON only.
+        `,
+        prompt,
+        1800
+      );
+
+    const parsed =
+      parseJsonResponse(
+        content
+      );
+
+    if (
+      !parsed ||
+      !Array.isArray(
+        parsed.claims
+      )
+    ) {
+      return [];
+    }
+
+    return parsed.claims
+      .filter(
+        claim =>
+          claim &&
+          claim.claim
+      )
+      .map(
+        claim => ({
+          ...claim,
+          provider
+        })
+      );
+  } catch (error) {
+    console.error(
+      'Atomic claim extraction error:',
+      error.message
+    );
+
+    return [];
+  }
+}
+
+// ----------------------------------------
+// Deduplicate atomic claim
+// ----------------------------------------
+
+async function createOrGetAtomicClaim(
+  trend,
+  claim
+) {
+  const normalized =
+    normalizeText(
+      claim.normalized_claim ||
+      claim.claim
+    );
+
+  if (!normalized) {
+    return null;
+  }
+
+  const claimHash =
+    hashText(normalized);
+
+  const existing =
+    await pool.query(
+      `
+      SELECT *
+      FROM atomic_claims
+      WHERE claim_hash = $1
+      LIMIT 1
+      `,
+      [claimHash]
+    );
+
+  if (existing.rows.length) {
+    const row =
+      existing.rows[0];
+
+    await pool.query(
+      `
+      UPDATE atomic_claims
+      SET
+        last_seen_at = NOW(),
+        confidence_score = GREATEST(
+          COALESCE(confidence_score, 0),
+          $1
+        ),
+        source_urls =
+          COALESCE(source_urls, '[]'::jsonb)
+          || COALESCE($2::jsonb, '[]'::jsonb),
+        updated_at = NOW()
+      WHERE id = $3
+      `,
+      [
+        clamp(
+          safeNumber(
+            claim.confidence
+          ),
+          0,
+          1
+        ),
+        JSON.stringify(
+          trend.source_url
+            ? [trend.source_url]
+            : []
+        ),
+        row.id
+      ]
+    );
+
+    return row;
+  }
+
+  const inserted =
+    await pool.query(
+      `
+      INSERT INTO atomic_claims
+      (
+        trend_id,
+        claim_text,
+        normalized_claim,
+        claim_hash,
+        topic,
+        category,
+        entities,
+        source_urls,
+        confidence_score
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9
+      )
+      RETURNING *
+      `,
+      [
+        trend.id,
+        claim.claim,
+        normalized,
+        claimHash,
+        trend.topic,
+        trend.category || null,
+        JSON.stringify(
+          Array.isArray(
+            claim.entities
+          )
+            ? claim.entities
+            : []
+        ),
+        JSON.stringify(
+          trend.source_url
+            ? [trend.source_url]
+            : []
+        ),
+        clamp(
+          safeNumber(
+            claim.confidence
+          ),
+          0,
+          1
+        )
+      ]
+    );
+
+  return inserted.rows[0];
+}
+
+// ========================================
+// 📈 TRENDING API
+// ========================================
+
+// Submit a trend from any source.
+
+app.post(
+  '/api/trending/ingest',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        topic,
+        source,
+        source_url,
+        source_external_id,
+        category,
+        region,
+        language,
+        score,
+        metadata
+      } = req.body;
+
+      if (!topic) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'topic is required'
+          });
+      }
+
+      const trend =
+        await upsertTrend({
+          topic,
+          source,
+          sourceUrl:
+            source_url,
+          externalId:
+            source_external_id,
+          category,
+          region,
+          language,
+          score,
+          metadata
+        });
+
+      res.json({
+        success: true,
+        trend
+      });
+    } catch (error) {
+      console.error(
+        'Trend ingest error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to ingest trend'
+        });
+    }
+  }
+);
+
+// Batch ingest.
+
+app.post(
+  '/api/trending/ingest/batch',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const trends =
+        Array.isArray(
+          req.body?.trends
+        )
+          ? req.body.trends
+          : [];
+
+      if (!trends.length) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'trends array is required'
+          });
+      }
+
+      const results = [];
+
+      for (
+        const item of trends
+      ) {
+        if (!item?.topic) {
+          continue;
+        }
+
+        const trend =
+          await upsertTrend({
+            topic:
+              item.topic,
+
+            source:
+              item.source,
+
+            sourceUrl:
+              item.source_url,
+
+            externalId:
+              item.source_external_id,
+
+            category:
+              item.category,
+
+            region:
+              item.region,
+
+            language:
+              item.language,
+
+            score:
+              item.score,
+
+            metadata:
+              item.metadata
+          });
+
+        results.push(
+          trend
+        );
+      }
+
+      res.json({
+        success: true,
+        count:
+          results.length,
+        trends: results
+      });
+    } catch (error) {
+      console.error(
+        'Batch trend ingest error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to ingest trends'
+        });
+    }
+  }
+);
+
+// Get trends.
+
+app.get(
+  '/api/trending',
+  async (req, res) => {
+    try {
+      const limit =
+        clamp(
+          parseInt(
+            req.query.limit
+          ) || 30,
+          1,
+          100
+        );
+
+      const category =
+        req.query.category;
+
+      const params =
+        [limit];
+
+      let where =
+        `
+        WHERE status = 'active'
+        AND (
+          last_seen_at >
+          NOW() - INTERVAL '7 days'
+        )
+        `;
+
+      if (category) {
+        params.push(
+          category
+        );
+
+        where +=
+          ` AND category = $${params.length}`;
+      }
+
+      const result =
+        await pool.query(
+          `
+          SELECT *
+          FROM trending_topics
+          ${where}
+          ORDER BY
+            trend_score DESC,
+            last_seen_at DESC
+          LIMIT $1
+          `,
+          params
+        );
+
+      res.json({
+        trends:
+          result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Trending list error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch trending topics'
+        });
+    }
+  }
+);
+
+// Generate atomic claims from a trend.
+
+app.post(
+  '/api/trending/:id/claims',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const trendResult =
+        await pool.query(
+          `
+          SELECT *
+          FROM trending_topics
+          WHERE id = $1
+          `,
+          [req.params.id]
+        );
+
+      if (!trendResult.rows.length) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Trend not found'
+          });
+      }
+
+      const trend =
+        trendResult.rows[0];
+
+      const extracted =
+        await extractAtomicClaims(
+          trend
+        );
+
+      const claims = [];
+
+      for (
+        const claim of extracted
+      ) {
+        const row =
+          await createOrGetAtomicClaim(
+            trend,
+            claim
+          );
+
+        if (row) {
+          claims.push(row);
+        }
+      }
+
+      res.json({
+        success: true,
+        trend,
+        claims
+      });
+    } catch (error) {
+      console.error(
+        'Atomic claims API error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to create atomic claims'
+        });
+    }
+  }
+);
+
+// Get claims.
+
+app.get(
+  '/api/trending/:id/claims',
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT *
+          FROM atomic_claims
+          WHERE trend_id = $1
+          ORDER BY
+            confidence_score DESC,
+            created_at DESC
+          `,
+          [req.params.id]
+        );
+
+      res.json({
+        claims:
+          result.rows
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch claims'
+        });
+    }
+  }
+);
 
 // ========================================
 // 📹 Video Upload
 // ========================================
+
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: parseInt(process.env.MAX_VIDEO_SIZE) || 2147483648 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['video/mp4', 'video/mov', 'video/avi', 'video/mkv', 'video/webm'];
-    allowedTypes.includes(file.mimetype) ? cb(null, true) : cb(new Error('Invalid file type.'));
-  }
-});
-app.post('/api/upload', authenticateToken, upload.single('video'), async (req, res) => {
-  try {
-    const user = req.user;
-    const { title, description, tags } = req.body;
-    if (!req.file || !title) return res.status(400).json({ error: 'Video file and title are required' });
-    const videoId = uuidv4();
-    let videoUrl = '', thumbnailUrl = '';
-    try {
-      const result = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          { resource_type: 'video', public_id: `videos/${videoId}`, folder: 'nvme-videos',
-            eager: [{ width: 720, height: 480, crop: 'pad' }], eager_async: true },
-          (error, result) => error ? reject(error) : resolve(result)
-        );
-        uploadStream.end(req.file.buffer);
-      });
-      videoUrl = result.secure_url;
-      thumbnailUrl = result.eager?.[0]?.secure_url || result.secure_url.replace('.mp4', '.jpg');
-    } catch (uploadError) {
-      console.error('Cloudinary error:', uploadError);
-      return res.status(500).json({ error: 'Failed to upload video to Cloudinary' });
-    }
-    const result = await pool.query(
-      `INSERT INTO videos (id, user_id, title, description, video_url, thumbnail_url, tags, is_published)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::text[], true) RETURNING *`,
-      [videoId, user.id, title, description || '', videoUrl, thumbnailUrl,
-       tags ? tags.split(',').map(t => t.trim()) : []]
-    );
-    res.json({ success: true, url: videoUrl, thumbnail: thumbnailUrl, video: result.rows[0] });
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ error: 'Failed to upload video' });
-  }
+  cloud_name:
+    process.env.CLOUDINARY_CLOUD_NAME,
+
+  api_key:
+    process.env.CLOUDINARY_API_KEY,
+
+  api_secret:
+    process.env.CLOUDINARY_API_SECRET
 });
 
-// ========================================
-// 🎬 Feed / Videos
-// ========================================
-app.get('/api/feed', async (req, res) => {
-  try {
-    const { cursor, limit = 20 } = req.query;
-    const params = [];
-    let where = 'WHERE v.is_published = true';
-    if (cursor) {
-      params.push(cursor);
-      where += ` AND v.created_at < $${params.length}`;
+const upload =
+  multer({
+    storage:
+      multer.memoryStorage(),
+
+    limits: {
+      fileSize:
+        parseInt(
+          process.env.MAX_VIDEO_SIZE
+        ) ||
+        2147483648
+    },
+
+    fileFilter: (
+      req,
+      file,
+      cb
+    ) => {
+      const allowedTypes = [
+        'video/mp4',
+        'video/mov',
+        'video/avi',
+        'video/mkv',
+        'video/webm',
+        'video/quicktime'
+      ];
+
+      allowedTypes.includes(
+        file.mimetype
+      )
+        ? cb(null, true)
+        : cb(
+            new Error(
+              'Invalid file type.'
+            )
+          );
     }
-    params.push(parseInt(limit));
-    const result = await pool.query(
-      `SELECT v.id, v.video_url AS url, v.thumbnail_url AS thumbnail, v.title, v.description,
-              v.view_count AS views, v.like_count, v.comment_count, v.created_at,
-              u.id AS author_id, u.username, u.avatar_url
-       FROM videos v
-       JOIN users u ON v.user_id = u.id
-       ${where}
-       ORDER BY v.created_at DESC
-       LIMIT $${params.length}`,
+  });
+
+app.post(
+  '/api/upload',
+  authenticateToken,
+  upload.single('video'),
+  async (req, res) => {
+    try {
+      const user =
+        req.user;
+
+      const {
+        title,
+        description,
+        tags,
+        topic,
+        category,
+        trending_topic_id,
+        atomic_claim_id
+      } = req.body;
+
+      if (
+        !req.file ||
+        !title
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Video file and title are required'
+          });
+      }
+
+      const videoId =
+        uuidv4();
+
+      let videoUrl = '';
+      let thumbnailUrl = '';
+
+      try {
+        const result =
+          await new Promise(
+            (
+              resolve,
+              reject
+            ) => {
+              const uploadStream =
+                cloudinary
+                  .uploader
+                  .upload_stream(
+                    {
+                      resource_type:
+                        'video',
+
+                      public_id:
+                        `videos/${videoId}`,
+
+                      folder:
+                        'nvme-videos',
+
+                      eager: [
+                        {
+                          width: 720,
+                          height: 480,
+                          crop: 'pad'
+                        }
+                      ],
+
+                      eager_async:
+                        true
+                    },
+
+                    (
+                      error,
+                      result
+                    ) =>
+                      error
+                        ? reject(
+                            error
+                          )
+                        : resolve(
+                            result
+                          )
+                  );
+
+              uploadStream.end(
+                req.file.buffer
+              );
+            }
+          );
+
+        videoUrl =
+          result.secure_url;
+
+        thumbnailUrl =
+          result.eager?.[0]
+            ?.secure_url ||
+          result.secure_url
+            .replace(
+              '.mp4',
+              '.jpg'
+            );
+      } catch (
+        uploadError
+      ) {
+        console.error(
+          'Cloudinary error:',
+          uploadError
+        );
+
+        return res
+          .status(500)
+          .json({
+            error:
+              'Failed to upload video to Cloudinary'
+          });
+      }
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO videos
+          (
+            id,
+            user_id,
+            title,
+            description,
+            video_url,
+            thumbnail_url,
+            tags,
+            topic,
+            category,
+            trending_topic_id,
+            atomic_claim_id,
+            is_published
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7::text[],
+            $8,
+            $9,
+            $10,
+            $11,
+            true
+          )
+          RETURNING *
+          `,
+          [
+            videoId,
+            user.id,
+            title,
+            description || '',
+            videoUrl,
+            thumbnailUrl,
+
+            tags
+              ? tags
+                  .split(',')
+                  .map(
+                    t =>
+                      t.trim()
+                  )
+              : [],
+
+            topic || null,
+            category || null,
+            trending_topic_id ||
+              null,
+            atomic_claim_id ||
+              null
+          ]
+        );
+
+      if (atomic_claim_id) {
+        await pool.query(
+          `
+          UPDATE atomic_claims
+          SET
+            video_count =
+              COALESCE(video_count, 0) + 1,
+            updated_at = NOW()
+          WHERE id = $1
+          `,
+          [atomic_claim_id]
+        );
+      }
+
+      res.json({
+        success: true,
+        url: videoUrl,
+        thumbnail:
+          thumbnailUrl,
+        video:
+          result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'Upload error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to upload video'
+        });
+    }
+  }
+);
+
+// ========================================
+// 🧠 VIDEO CANDIDATE RANKING
+// ========================================
+
+async function calculateVideoScore(
+  video,
+  userId
+) {
+  const views =
+    Math.max(
+      1,
+      safeNumber(
+        video.views
+      )
+    );
+
+  const likes =
+    safeNumber(
+      video.like_count
+    );
+
+  const comments =
+    safeNumber(
+      video.comment_count
+    );
+
+  const shares =
+    safeNumber(
+      video.share_count
+    );
+
+  const completions =
+    safeNumber(
+      video.completions
+    );
+
+  const impressions =
+    Math.max(
+      1,
+      safeNumber(
+        video.impression_count
+      )
+    );
+
+  const notInterested =
+    safeNumber(
+      video.not_interested_count
+    );
+
+  const skips =
+    safeNumber(
+      video.skip_count
+    );
+
+  const completionRate =
+    video.completion_rate !== null &&
+    video.completion_rate !== undefined
+      ? safeNumber(
+          video.completion_rate
+        )
+      : completions /
+        impressions;
+
+  const likeRate =
+    likes /
+    views;
+
+  const commentRate =
+    comments /
+    views;
+
+  const shareRate =
+    shares /
+    views;
+
+  const skipRate =
+    skips /
+    impressions;
+
+  const negativeRate =
+    notInterested /
+    impressions;
+
+  const ageHours =
+    Math.max(
+      0,
+      (
+        Date.now() -
+        new Date(
+          video.created_at
+        ).getTime()
+      ) /
+        3600000
+    );
+
+  const freshness =
+    Math.exp(
+      -ageHours / 72
+    );
+
+  let affinity =
+    0;
+
+  if (
+    userId &&
+    video.topic
+  ) {
+    const result =
+      await pool.query(
+        `
+        SELECT score
+        FROM user_topic_affinity
+        WHERE user_id = $1
+          AND topic = $2
+        LIMIT 1
+        `,
+        [
+          userId,
+          video.topic
+        ]
+      );
+
+    if (result.rows.length) {
+      affinity =
+        clamp(
+          safeNumber(
+            result.rows[0]
+              .score
+          ),
+          -100,
+          100
+        ) / 100;
+    }
+  }
+
+  let followedCreator =
+    0;
+
+  if (userId) {
+    const result =
+      await pool.query(
+        `
+        SELECT 1
+        FROM follows
+        WHERE follower_id = $1
+          AND following_id = $2
+        LIMIT 1
+        `,
+        [
+          userId,
+          video.author_id
+        ]
+      );
+
+    followedCreator =
+      result.rows.length
+        ? 1
+        : 0;
+  }
+
+  const rawScore =
+
+    completionRate * 0.28 +
+
+    clamp(
+      likeRate * 10,
+      0,
+      1
+    ) * 0.12 +
+
+    clamp(
+      commentRate * 10,
+      0,
+      1
+    ) * 0.08 +
+
+    clamp(
+      shareRate * 20,
+      0,
+      1
+    ) * 0.10 +
+
+    freshness * 0.12 +
+
+    affinity * 0.12 +
+
+    followedCreator * 0.08 -
+
+    skipRate * 0.05 -
+
+    negativeRate * 0.15;
+
+  return rawScore * 100;
+}
+
+// ========================================
+// 🎬 FEED / VIDEOS
+// ========================================
+
+async function getRankedFeed({
+  userId,
+  limit,
+  cursor
+}) {
+  const params = [];
+
+  let where =
+    `
+    WHERE v.is_published = true
+    `;
+
+  if (cursor) {
+    params.push(cursor);
+
+    where +=
+      ` AND v.created_at < $${params.length}`;
+  }
+
+  const candidateLimit =
+    Math.max(
+      limit * 5,
+      100
+    );
+
+  params.push(
+    candidateLimit
+  );
+
+  const candidateLimitParam =
+    params.length;
+
+  const result =
+    await pool.query(
+      `
+      SELECT
+        v.id,
+        v.video_url AS url,
+        v.thumbnail_url AS thumbnail,
+        v.title,
+        v.description,
+
+        v.view_count AS views,
+        v.like_count,
+        v.comment_count,
+
+        COALESCE(
+          v.share_count,
+          0
+        ) AS share_count,
+
+        COALESCE(
+          v.save_count,
+          0
+        ) AS save_count,
+
+        COALESCE(
+          v.skip_count,
+          0
+        ) AS skip_count,
+
+        COALESCE(
+          v.not_interested_count,
+          0
+        ) AS not_interested_count,
+
+        COALESCE(
+          v.impression_count,
+          0
+        ) AS impression_count,
+
+        COALESCE(
+          v.completion_rate,
+          0
+        ) AS completion_rate,
+
+        COALESCE(
+          v.avg_watch_ms,
+          0
+        ) AS avg_watch_ms,
+
+        COALESCE(
+          v.recommendation_score,
+          0
+        ) AS recommendation_score,
+
+        v.topic,
+        v.category,
+
+        v.trending_topic_id,
+        v.atomic_claim_id,
+
+        v.created_at,
+
+        u.id AS author_id,
+        u.username,
+        u.display_name,
+        u.avatar_url,
+        u.is_verified
+
+      FROM videos v
+
+      JOIN users u
+        ON v.user_id = u.id
+
+      ${where}
+
+      ORDER BY
+        v.created_at DESC
+
+      LIMIT $${candidateLimitParam}
+      `,
       params
     );
-    let feed = result.rows;
-    if (!feed.length) {
-      await pool.query(
-        `UPDATE livestreams SET status = 'ended', ended_at = NOW()
-         WHERE status = 'live' AND started_at IS NOT NULL
-           AND started_at < NOW() - INTERVAL '6 hours'`
+
+  const candidates =
+    result.rows;
+
+  const scored = [];
+
+  for (
+    const video of candidates
+  ) {
+    let score =
+      await calculateVideoScore(
+        video,
+        userId
       );
-      const lives = await pool.query(
-        `SELECT s.id, s.title, s.description, s.thumbnail_url, s.viewer_count, s.started_at,
-                u.id AS host_id, u.username, u.avatar_url
-         FROM livestreams s JOIN users u ON s.user_id = u.id
-         WHERE s.status = 'live'
-         ORDER BY s.viewer_count DESC LIMIT 20`
-      );
-      feed = lives.rows.map((s) => ({
-        id: 'live_' + s.id,
-        url: null,
-        thumbnail: s.thumbnail_url,
-        title: s.title,
-        description: s.description,
-        views: s.viewer_count,
-        like_count: 0,
-        comment_count: 0,
-        created_at: s.started_at,
-        author_id: s.host_id,
-        username: s.username,
-        avatar_url: s.avatar_url,
-        is_live: true,
-        stream_id: s.id,
-        viewer_count: s.viewer_count,
-      }));
+
+    // Global recommendation score.
+
+    score +=
+      safeNumber(
+        video.recommendation_score
+      ) * 0.10;
+
+    // Trend boost.
+
+    if (
+      video.trending_topic_id
+    ) {
+      const trend =
+        await pool.query(
+          `
+          SELECT trend_score
+          FROM trending_topics
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [
+            video.trending_topic_id
+          ]
+        );
+
+      if (trend.rows.length) {
+        score +=
+          safeNumber(
+            trend.rows[0]
+              .trend_score
+          ) * 0.10;
+      }
     }
-    const nextCursor = result.rows.length === parseInt(limit)
-      ? result.rows[result.rows.length - 1].created_at
-      : undefined;
-    res.json({ feed, nextCursor });
-  } catch (error) {
-    console.error('Feed error:', error);
-    res.status(500).json({ error: 'Failed to fetch feed' });
-  }
-});
 
-app.get('/api/videos', async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT v.id, v.video_url AS url, v.thumbnail_url AS thumbnail, v.title, v.description,
-              v.view_count AS views, v.like_count, v.comment_count, v.created_at,
-              u.id AS author_id, u.username, u.avatar_url
-       FROM videos v
-       JOIN users u ON v.user_id = u.id
-       WHERE v.is_published = true
-       ORDER BY v.created_at DESC
-       LIMIT 40`
-    );
-    res.json({ videos: result.rows });
-  } catch (error) {
-    console.error('Videos list error:', error);
-    res.status(500).json({ error: 'Failed to fetch videos' });
+    scored.push({
+      ...video,
+      _ranking_score: score
+    });
   }
-});
 
-app.get('/api/videos/:id', optionalAuth, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT v.id, v.video_url AS url, v.thumbnail_url AS thumbnail, v.title, v.description,
-              v.view_count AS views, v.like_count, v.comment_count, v.created_at,
-              u.id AS author_id, u.username, u.avatar_url
-       FROM videos v JOIN users u ON v.user_id = u.id
-       WHERE v.id = $1`,
-      [req.params.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json(result.rows[0]);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch video' });
-  }
-});
+  // Highest ranked first.
 
-app.get('/api/users/:username/videos', async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT v.id, v.video_url AS url, v.thumbnail_url AS thumbnail, v.title, v.description,
-              v.view_count AS views, v.like_count, v.comment_count, v.created_at,
-              u.id AS author_id, u.username, u.avatar_url
-       FROM videos v JOIN users u ON v.user_id = u.id
-       WHERE u.username = $1 AND v.is_published = true
-       ORDER BY v.created_at DESC`,
-      [req.params.username]
-    );
-    res.json({ videos: result.rows });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch videos' });
-  }
-});
+  scored.sort(
+    (a, b) =>
+      b._ranking_score -
+      a._ranking_score
+  );
 
-app.post('/api/videos/:id/view', optionalAuth, async (req, res) => {
-  try {
-    const result = await pool.query(
-      'UPDATE videos SET view_count = COALESCE(view_count, 0) + 1 WHERE id = $1 RETURNING view_count',
-      [req.params.id]
+  // ------------------------------------
+  // Diversity filter
+  // ------------------------------------
+
+  const selected = [];
+
+  const creatorCounts =
+    new Map();
+
+  const topicCounts =
+    new Map();
+
+  for (
+    const video of scored
+  ) {
+    const creator =
+      video.author_id;
+
+    const topic =
+      normalizeText(
+        video.topic ||
+        video.category ||
+        ''
+      );
+
+    const creatorCount =
+      creatorCounts.get(
+        creator
+      ) || 0;
+
+    const topicCount =
+      topicCounts.get(
+        topic
+      ) || 0;
+
+    if (
+      creatorCount >= 3
+    ) {
+      continue;
+    }
+
+    if (
+      topic &&
+      topicCount >= 5
+    ) {
+      continue;
+    }
+
+    selected.push(
+      video
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json({ success: true, views: result.rows[0].view_count });
-  } catch (error) {
-    console.error('View count error:', error.message);
-    res.status(500).json({ error: 'Failed to record view' });
+
+    creatorCounts.set(
+      creator,
+      creatorCount + 1
+    );
+
+    if (topic) {
+      topicCounts.set(
+        topic,
+        topicCount + 1
+      );
+    }
+
+    if (
+      selected.length >=
+      limit
+    ) {
+      break;
+    }
   }
-});
+
+  return selected.map(
+    video => {
+      const {
+        _ranking_score,
+        ...clean
+      } = video;
+
+      return {
+        ...clean,
+        ranking_score:
+          Number(
+            _ranking_score.toFixed(
+              4
+            )
+          )
+      };
+    }
+  );
+}
+
+app.get(
+  '/api/feed',
+  optionalAuth,
+  async (req, res) => {
+    try {
+      const limit =
+        clamp(
+          parseInt(
+            req.query.limit
+          ) || 20,
+          1,
+          50
+        );
+
+      const cursor =
+        req.query.cursor ||
+        null;
+
+      const feed =
+        await getRankedFeed({
+          userId:
+            req.user?.id ||
+            null,
+
+          limit,
+          cursor
+        });
+
+      const nextCursor =
+        feed.length === limit
+          ? feed[
+              feed.length - 1
+            ].created_at
+          : undefined;
+
+      res.json({
+        feed,
+        nextCursor,
+
+        algorithm:
+          req.user
+            ? 'personalized-v1'
+            : 'trending-v1'
+      });
+    } catch (error) {
+      console.error(
+        'Feed error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch feed'
+        });
+    }
+  }
+);
+
+// Legacy chronological video list.
+
+app.get(
+  '/api/videos',
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            v.id,
+            v.video_url AS url,
+            v.thumbnail_url AS thumbnail,
+            v.title,
+            v.description,
+            v.view_count AS views,
+            v.like_count,
+            v.comment_count,
+            v.created_at,
+
+            u.id AS author_id,
+            u.username,
+            u.avatar_url
+
+          FROM videos v
+
+          JOIN users u
+            ON v.user_id = u.id
+
+          WHERE v.is_published = true
+
+          ORDER BY
+            v.created_at DESC
+
+          LIMIT 40
+          `
+        );
+
+      res.json({
+        videos:
+          result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Videos list error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch videos'
+        });
+    }
+  }
+);
+
+// ========================================
+// 🎯 Video Details
+// ========================================
+
+app.get(
+  '/api/videos/:id',
+  optionalAuth,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            v.id,
+            v.video_url AS url,
+            v.thumbnail_url AS thumbnail,
+            v.title,
+            v.description,
+
+            v.view_count AS views,
+            v.like_count,
+            v.comment_count,
+
+            COALESCE(v.share_count, 0)
+              AS share_count,
+
+            COALESCE(v.save_count, 0)
+              AS save_count,
+
+            COALESCE(v.topic, '') AS topic,
+            v.category,
+
+            v.trending_topic_id,
+            v.atomic_claim_id,
+
+            v.created_at,
+
+            u.id AS author_id,
+            u.username,
+            u.avatar_url
+
+          FROM videos v
+
+          JOIN users u
+            ON v.user_id = u.id
+
+          WHERE v.id = $1
+          `,
+          [req.params.id]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Video not found'
+          });
+      }
+
+      res.json(
+        result.rows[0]
+      );
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch video'
+        });
+    }
+  }
+);
+
+// ========================================
+// 📊 VIDEO EVENTS
+// ========================================
+
+const ALLOWED_VIDEO_EVENTS = new Set([
+  'impression',
+  'play',
+  'pause',
+  '25_percent',
+  '50_percent',
+  '75_percent',
+  'complete',
+  'rewatch',
+  'like',
+  'unlike',
+  'comment',
+  'share',
+  'save',
+  'follow',
+  'skip',
+  'not_interested'
+]);
+
+async function updateTopicAffinity({
+  userId,
+  topic,
+  eventType
+}) {
+  if (
+    !userId ||
+    !topic
+  ) {
+    return;
+  }
+
+  const normalizedTopic =
+    normalizeText(topic);
+
+  if (!normalizedTopic) {
+    return;
+  }
+
+  const weights = {
+    impression: 0.01,
+    play: 0.05,
+    '25_percent': 0.10,
+    '50_percent': 0.15,
+    '75_percent': 0.20,
+    complete: 0.35,
+    rewatch: 0.40,
+    like: 0.50,
+    comment: 0.70,
+    share: 0.90,
+    save: 0.75,
+    follow: 1.00,
+    skip: -0.35,
+    not_interested: -1.00,
+    unlike: -0.30
+  };
+
+  const weight =
+    weights[eventType] ||
+    0;
+
+  const increment =
+    weight * 10;
+
+  const counterMap = {
+    impression:
+      'views',
+
+    play:
+      'views',
+
+    complete:
+      'completions',
+
+    like:
+      'likes',
+
+    comment:
+      'comments',
+
+    share:
+      'shares',
+
+    follow:
+      'follows',
+
+    skip:
+      'skips',
+
+    not_interested:
+      'not_interested'
+  };
+
+  const counter =
+    counterMap[eventType];
+
+  if (counter) {
+    await pool.query(
+      `
+      INSERT INTO user_topic_affinity
+      (
+        user_id,
+        topic,
+        score,
+        ${counter}
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        $3,
+        1
+      )
+      ON CONFLICT
+      (
+        user_id,
+        topic
+      )
+      DO UPDATE SET
+        score =
+          user_topic_affinity.score
+          + EXCLUDED.score,
+
+        ${counter} =
+          user_topic_affinity.${counter}
+          + 1,
+
+        updated_at =
+          NOW()
+      `,
+      [
+        userId,
+        normalizedTopic,
+        increment
+      ]
+    );
+  } else {
+    await pool.query(
+      `
+      INSERT INTO user_topic_affinity
+      (
+        user_id,
+        topic,
+        score
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        $3
+      )
+      ON CONFLICT
+      (
+        user_id,
+        topic
+      )
+      DO UPDATE SET
+        score =
+          user_topic_affinity.score
+          + EXCLUDED.score,
+
+        updated_at =
+          NOW()
+      `,
+      [
+        userId,
+        normalizedTopic,
+        increment
+      ]
+    );
+  }
+}
+
+async function updateVideoSignal(
+  videoId,
+  eventType,
+  eventData
+) {
+  const weights = {
+    impression: 0.01,
+    play: 0.05,
+    '25_percent': 0.10,
+    '50_percent': 0.15,
+    '75_percent': 0.20,
+    complete: 0.50,
+    rewatch: 0.60,
+    like: 0.75,
+    comment: 0.90,
+    share: 1.10,
+    save: 0.95,
+    follow: 1.20,
+    skip: -0.45,
+    not_interested: -1.50,
+    unlike: -0.50
+  };
+
+  const signal =
+    weights[eventType] ||
+    0;
+
+  await pool.query(
+    `
+    UPDATE videos
+    SET
+      recommendation_score =
+        COALESCE(
+          recommendation_score,
+          0
+        ) + $1,
+
+      impression_count =
+        COALESCE(
+          impression_count,
+          0
+        ) +
+        CASE
+          WHEN $2 = 'impression'
+          THEN 1
+          ELSE 0
+        END,
+
+      share_count =
+        COALESCE(
+          share_count,
+          0
+        ) +
+        CASE
+          WHEN $2 = 'share'
+          THEN 1
+          ELSE 0
+        END,
+
+      save_count =
+        COALESCE(
+          save_count,
+          0
+        ) +
+        CASE
+          WHEN $2 = 'save'
+          THEN 1
+          ELSE 0
+        END,
+
+      skip_count =
+        COALESCE(
+          skip_count,
+          0
+        ) +
+        CASE
+          WHEN $2 = 'skip'
+          THEN 1
+          ELSE 0
+        END,
+
+      not_interested_count =
+        COALESCE(
+          not_interested_count,
+          0
+        ) +
+        CASE
+          WHEN $2 = 'not_interested'
+          THEN 1
+          ELSE 0
+        END,
+
+      last_ranked_at =
+        NOW()
+
+    WHERE id = $3
+    `,
+    [
+      signal,
+      eventType,
+      videoId
+    ]
+  );
+
+  if (
+    eventData?.watch_ms &&
+    eventData?.video_duration_ms
+  ) {
+    const watchMs =
+      Math.max(
+        0,
+        Number(
+          eventData.watch_ms
+        )
+      );
+
+    const durationMs =
+      Math.max(
+        1,
+        Number(
+          eventData.video_duration_ms
+        )
+      );
+
+    const completion =
+      clamp(
+        watchMs /
+          durationMs,
+        0,
+        1
+      );
+
+    await pool.query(
+      `
+      UPDATE videos
+      SET
+        avg_watch_ms =
+          CASE
+            WHEN COALESCE(
+              impression_count,
+              0
+            ) <= 1
+            THEN $1
+            ELSE
+              (
+                COALESCE(
+                  avg_watch_ms,
+                  0
+                )
+                *
+                (
+                  COALESCE(
+                    impression_count,
+                    1
+                  ) - 1
+                )
+                + $1
+              )
+              /
+              COALESCE(
+                impression_count,
+                1
+              )
+          END,
+
+        completion_rate =
+          CASE
+            WHEN COALESCE(
+              impression_count,
+              0
+            ) <= 1
+            THEN $2
+            ELSE
+              (
+                COALESCE(
+                  completion_rate,
+                  0
+                )
+                *
+                (
+                  COALESCE(
+                    impression_count,
+                    1
+                  ) - 1
+                )
+                + $2
+              )
+              /
+              COALESCE(
+                impression_count,
+                1
+              )
+          END
+
+      WHERE id = $3
+      `,
+      [
+        watchMs,
+        completion,
+        videoId
+      ]
+    );
+  }
+}
+
+app.post(
+  '/api/videos/:id/event',
+  optionalAuth,
+  async (req, res) => {
+    try {
+      const {
+        event_type,
+        session_id,
+        watch_ms,
+        video_duration_ms,
+        position_ms,
+        metadata
+      } = req.body;
+
+      if (
+        !event_type ||
+        !ALLOWED_VIDEO_EVENTS.has(
+          event_type
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Invalid event_type'
+          });
+      }
+
+      const video =
+        await pool.query(
+          `
+          SELECT
+            id,
+            topic,
+            category,
+            user_id
+          FROM videos
+          WHERE id = $1
+          `,
+          [req.params.id]
+        );
+
+      if (!video.rows.length) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Video not found'
+          });
+      }
+
+      const v =
+        video.rows[0];
+
+      await pool.query(
+        `
+        INSERT INTO video_events
+        (
+          video_id,
+          user_id,
+          session_id,
+          event_type,
+          watch_ms,
+          video_duration_ms,
+          position_ms,
+          metadata
+        )
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8
+        )
+        `,
+        [
+          v.id,
+          req.user?.id ||
+            null,
+
+          session_id ||
+            null,
+
+          event_type,
+
+          Number(
+            watch_ms
+          ) || 0,
+
+          Number(
+            video_duration_ms
+          ) || 0,
+
+          Number(
+            position_ms
+          ) || 0,
+
+          JSON.stringify(
+            metadata || {}
+          )
+        ]
+      );
+
+      await updateVideoSignal(
+        v.id,
+        event_type,
+        {
+          watch_ms,
+          video_duration_ms
+        }
+      );
+
+      if (
+        req.user?.id &&
+        v.topic
+      ) {
+        await updateTopicAffinity({
+          userId:
+            req.user.id,
+
+          topic:
+            v.topic,
+
+          eventType:
+            event_type
+        });
+      }
+
+      res.json({
+        success: true
+      });
+    } catch (error) {
+      console.error(
+        'Video event error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to record video event'
+        });
+    }
+  }
+);
+
+// Batch events.
+
+app.post(
+  '/api/videos/events',
+  optionalAuth,
+  async (req, res) => {
+    try {
+      const events =
+        Array.isArray(
+          req.body?.events
+        )
+          ? req.body.events
+          : [];
+
+      if (!events.length) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'events array is required'
+          });
+      }
+
+      let processed = 0;
+
+      for (
+        const event of events.slice(
+          0,
+          100
+        )
+      ) {
+        if (
+          !event?.video_id ||
+          !event?.event_type
+        ) {
+          continue;
+        }
+
+        if (
+          !ALLOWED_VIDEO_EVENTS.has(
+            event.event_type
+          )
+        ) {
+          continue;
+        }
+
+        const video =
+          await pool.query(
+            `
+            SELECT
+              id,
+              topic
+            FROM videos
+            WHERE id = $1
+            `,
+            [event.video_id]
+          );
+
+        if (!video.rows.length) {
+          continue;
+        }
+
+        await pool.query(
+          `
+          INSERT INTO video_events
+          (
+            video_id,
+            user_id,
+            session_id,
+            event_type,
+            watch_ms,
+            video_duration_ms,
+            position_ms,
+            metadata
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8
+          )
+          `,
+          [
+            event.video_id,
+
+            req.user?.id ||
+              null,
+
+            event.session_id ||
+              null,
+
+            event.event_type,
+
+            Number(
+              event.watch_ms
+            ) || 0,
+
+            Number(
+              event.video_duration_ms
+            ) || 0,
+
+            Number(
+              event.position_ms
+            ) || 0,
+
+            JSON.stringify(
+              event.metadata ||
+                {}
+            )
+          ]
+        );
+
+        await updateVideoSignal(
+          event.video_id,
+          event.event_type,
+          event
+        );
+
+        if (
+          req.user?.id &&
+          video.rows[0].topic
+        ) {
+          await updateTopicAffinity({
+            userId:
+              req.user.id,
+
+            topic:
+              video.rows[0]
+                .topic,
+
+            eventType:
+              event.event_type
+          });
+        }
+
+        processed += 1;
+      }
+
+      res.json({
+        success: true,
+        processed
+      });
+    } catch (error) {
+      console.error(
+        'Batch video event error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to process events'
+        });
+    }
+  }
+);
+
+// ========================================
+// 🚫 VIDEO FEEDBACK
+// ========================================
+
+app.post(
+  '/api/videos/:id/feedback',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        feedback_type
+      } = req.body;
+
+      const allowed = [
+        'not_interested',
+        'hide',
+        'report'
+      ];
+
+      if (
+        !allowed.includes(
+          feedback_type
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Invalid feedback_type'
+          });
+      }
+
+      const video =
+        await pool.query(
+          `
+          SELECT
+            id,
+            topic,
+            user_id
+          FROM videos
+          WHERE id = $1
+          `,
+          [req.params.id]
+        );
+
+      if (!video.rows.length) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Video not found'
+          });
+      }
+
+      await pool.query(
+        `
+        INSERT INTO video_feedback
+        (
+          user_id,
+          video_id,
+          feedback_type
+        )
+        VALUES
+        (
+          $1,
+          $2,
+          $3
+        )
+        ON CONFLICT DO NOTHING
+        `,
+        [
+          req.user.id,
+          req.params.id,
+          feedback_type
+        ]
+      );
+
+      await updateVideoSignal(
+        req.params.id,
+        feedback_type,
+        {}
+      );
+
+      if (
+        video.rows[0].topic
+      ) {
+        await updateTopicAffinity({
+          userId:
+            req.user.id,
+
+          topic:
+            video.rows[0]
+              .topic,
+
+          eventType:
+            feedback_type
+        });
+      }
+
+      res.json({
+        success: true,
+        feedback_type
+      });
+    } catch (error) {
+      console.error(
+        'Video feedback error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to record feedback'
+        });
+    }
+  }
+);
+
+// ========================================
+// 👁️ VIEW
+// ========================================
+
+app.post(
+  '/api/videos/:id/view',
+  optionalAuth,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE videos
+          SET
+            view_count =
+              COALESCE(
+                view_count,
+                0
+              ) + 1
+          WHERE id = $1
+          RETURNING
+            view_count,
+            topic
+          `,
+          [req.params.id]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Video not found'
+          });
+      }
+
+      await pool.query(
+        `
+        INSERT INTO video_events
+        (
+          video_id,
+          user_id,
+          session_id,
+          event_type
+        )
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          'impression'
+        )
+        `,
+        [
+          req.params.id,
+          req.user?.id ||
+            null,
+          req.body?.session_id ||
+            null
+        ]
+      );
+
+      await updateVideoSignal(
+        req.params.id,
+        'impression',
+        {}
+      );
+
+      if (
+        req.user?.id &&
+        result.rows[0].topic
+      ) {
+        await updateTopicAffinity({
+          userId:
+            req.user.id,
+
+          topic:
+            result.rows[0]
+              .topic,
+
+          eventType:
+            'impression'
+        });
+      }
+
+      res.json({
+        success: true,
+        views:
+          result.rows[0]
+            .view_count
+      });
+    } catch (error) {
+      console.error(
+        'View count error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to record view'
+        });
+    }
+  }
+);
 
 // ========================================
 // ❤️ Likes
 // ========================================
-app.post('/api/videos/:id/like', authenticateToken, async (req, res) => {
-  const videoId = req.params.id;
-  const user = req.user;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const videoResult = await client.query('SELECT id FROM videos WHERE id = $1 FOR UPDATE', [videoId]);
-    if (videoResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Video not found' });
+
+app.post(
+  '/api/videos/:id/like',
+  authenticateToken,
+  async (req, res) => {
+    const videoId =
+      req.params.id;
+
+    const user =
+      req.user;
+
+    const client =
+      await pool.connect();
+
+    try {
+      await client.query(
+        'BEGIN'
+      );
+
+      const videoResult =
+        await client.query(
+          `
+          SELECT
+            id,
+            topic
+          FROM videos
+          WHERE id = $1
+          FOR UPDATE
+          `,
+          [videoId]
+        );
+
+      if (
+        videoResult.rows.length ===
+        0
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res
+          .status(404)
+          .json({
+            error:
+              'Video not found'
+          });
+      }
+
+      const existing =
+        await client.query(
+          `
+          SELECT 1
+          FROM likes
+          WHERE video_id = $1
+            AND user_id = $2
+          `,
+          [
+            videoId,
+            user.id
+          ]
+        );
+
+      let liked;
+
+      if (
+        existing.rows.length >
+        0
+      ) {
+        await client.query(
+          `
+          DELETE FROM likes
+          WHERE video_id = $1
+            AND user_id = $2
+          `,
+          [
+            videoId,
+            user.id
+          ]
+        );
+
+        await client.query(
+          `
+          UPDATE videos
+          SET
+            like_count =
+              GREATEST(
+                COALESCE(
+                  like_count,
+                  0
+                ) - 1,
+                0
+              )
+          WHERE id = $1
+          `,
+          [videoId]
+        );
+
+        liked = false;
+      } else {
+        await client.query(
+          `
+          INSERT INTO likes
+          (
+            video_id,
+            user_id
+          )
+          VALUES
+          ($1, $2)
+          `,
+          [
+            videoId,
+            user.id
+          ]
+        );
+
+        await client.query(
+          `
+          UPDATE videos
+          SET
+            like_count =
+              COALESCE(
+                like_count,
+                0
+              ) + 1
+          WHERE id = $1
+          `,
+          [videoId]
+        );
+
+        liked = true;
+      }
+
+      const countResult =
+        await client.query(
+          `
+          SELECT
+            like_count,
+            topic
+          FROM videos
+          WHERE id = $1
+          `,
+          [videoId]
+        );
+
+      await client.query(
+        'COMMIT'
+      );
+
+      const likeCount =
+        countResult.rows[0]
+          .like_count;
+
+      await updateVideoSignal(
+        videoId,
+        liked
+          ? 'like'
+          : 'unlike',
+        {}
+      );
+
+      if (
+        liked &&
+        countResult.rows[0]
+          .topic
+      ) {
+        await updateTopicAffinity({
+          userId:
+            user.id,
+
+          topic:
+            countResult.rows[0]
+              .topic,
+
+          eventType:
+            'like'
+        });
+      }
+
+      io.to(
+        `video-${videoId}`
+      ).emit(
+        'like-update',
+        {
+          videoId,
+          liked,
+          likeCount
+        }
+      );
+
+      res.json({
+        success: true,
+        liked,
+        like_count:
+          likeCount
+      });
+    } catch (error) {
+      await client.query(
+        'ROLLBACK'
+      );
+
+      console.error(
+        'Like error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to update like'
+        });
+    } finally {
+      client.release();
     }
-    const existing = await client.query('SELECT 1 FROM likes WHERE video_id = $1 AND user_id = $2', [videoId, user.id]);
-    let liked;
-    if (existing.rows.length > 0) {
-      await client.query('DELETE FROM likes WHERE video_id = $1 AND user_id = $2', [videoId, user.id]);
-      await client.query('UPDATE videos SET like_count = GREATEST(COALESCE(like_count, 0) - 1, 0) WHERE id = $1', [videoId]);
-      liked = false;
-    } else {
-      await client.query('INSERT INTO likes (video_id, user_id) VALUES ($1, $2)', [videoId, user.id]);
-      await client.query('UPDATE videos SET like_count = COALESCE(like_count, 0) + 1 WHERE id = $1', [videoId]);
-      liked = true;
-    }
-    const countResult = await client.query('SELECT like_count FROM videos WHERE id = $1', [videoId]);
-    await client.query('COMMIT');
-    const likeCount = countResult.rows[0].like_count;
-    io.to(`video-${videoId}`).emit('like-update', { videoId, liked, likeCount });
-    res.json({ success: true, liked, like_count: likeCount });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Like error:', error);
-    res.status(500).json({ error: 'Failed to update like' });
-  } finally {
-    client.release();
   }
-});
+);
 
 // ========================================
 // 💬 Comments
 // ========================================
-app.get('/api/videos/:id/comments', async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT c.id, c.text, c.image_url, c.created_at, u.username, u.display_name, u.avatar_url
-       FROM comments c JOIN users u ON c.user_id = u.id
-       WHERE c.video_id = $1
-       ORDER BY c.created_at DESC LIMIT 100`,
-      [req.params.id]
-    );
-    res.json({ comments: result.rows });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch comments' });
-  }
-});
 
-app.post('/api/videos/:id/comments', authenticateToken, async (req, res) => {
-  try {
-    const videoId = req.params.id;
-    const { text, image } = req.body;
-    if (!text || !text.trim()) return res.status(400).json({ error: 'Comment text is required' });
-    if (text.length > 500) return res.status(400).json({ error: 'Comment too long (500 char max)' });
-    const videoResult = await pool.query('SELECT id FROM videos WHERE id = $1', [videoId]);
-    if (videoResult.rows.length === 0) return res.status(404).json({ error: 'Video not found' });
-    const result = await pool.query(
-      `INSERT INTO comments (video_id, user_id, text, image_url) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [videoId, req.user.id, text.trim(), image || null]
-    );
-    await pool.query('UPDATE videos SET comment_count = COALESCE(comment_count, 0) + 1 WHERE id = $1', [videoId]);
-    const comment = { ...result.rows[0], username: req.user.username, display_name: req.user.display_name, avatar_url: req.user.avatar_url };
-    io.to(`video-${videoId}`).emit('new-comment', comment);
-    res.json({ success: true, comment });
-  } catch (error) {
-    console.error('Comment error:', error);
-    res.status(500).json({ error: 'Failed to post comment' });
+app.get(
+  '/api/videos/:id/comments',
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            c.id,
+            c.text,
+            c.image_url,
+            c.created_at,
+
+            u.username,
+            u.display_name,
+            u.avatar_url
+
+          FROM comments c
+
+          JOIN users u
+            ON c.user_id = u.id
+
+          WHERE c.video_id = $1
+
+          ORDER BY
+            c.created_at DESC
+
+          LIMIT 100
+          `,
+          [req.params.id]
+        );
+
+      res.json({
+        comments:
+          result.rows
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch comments'
+        });
+    }
   }
-});
+);
+
+app.post(
+  '/api/videos/:id/comments',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const videoId =
+        req.params.id;
+
+      const {
+        text,
+        image
+      } = req.body;
+
+      if (
+        !text ||
+        !text.trim()
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Comment text is required'
+          });
+      }
+
+      if (
+        text.length > 500
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Comment too long (500 char max)'
+          });
+      }
+
+      const videoResult =
+        await pool.query(
+          `
+          SELECT
+            id,
+            topic
+          FROM videos
+          WHERE id = $1
+          `,
+          [videoId]
+        );
+
+      if (
+        videoResult.rows.length ===
+        0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Video not found'
+          });
+      }
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO comments
+          (
+            video_id,
+            user_id,
+            text,
+            image_url
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4
+          )
+          RETURNING *
+          `,
+          [
+            videoId,
+            req.user.id,
+            text.trim(),
+            image || null
+          ]
+        );
+
+      await pool.query(
+        `
+        UPDATE videos
+        SET
+          comment_count =
+            COALESCE(
+              comment_count,
+              0
+            ) + 1
+        WHERE id = $1
+        `,
+        [videoId]
+      );
+
+      await updateVideoSignal(
+        videoId,
+        'comment',
+        {}
+      );
+
+      if (
+        videoResult.rows[0]
+          .topic
+      ) {
+        await updateTopicAffinity({
+          userId:
+            req.user.id,
+
+          topic:
+            videoResult.rows[0]
+              .topic,
+
+          eventType:
+            'comment'
+        });
+      }
+
+      const comment = {
+        ...result.rows[0],
+
+        username:
+          req.user.username,
+
+        display_name:
+          req.user.display_name,
+
+        avatar_url:
+          req.user.avatar_url
+      };
+
+      io.to(
+        `video-${videoId}`
+      ).emit(
+        'new-comment',
+        comment
+      );
+
+      res.json({
+        success: true,
+        comment
+      });
+    } catch (error) {
+      console.error(
+        'Comment error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to post comment'
+        });
+    }
+  }
+);
 
 // ========================================
 // 👥 Users / Social
 // ========================================
-app.get('/api/users/discover', optionalAuth, async (req, res) => {
-  try {
-    const excludeId = req.user?.id || null;
-    const result = await pool.query(
-      `SELECT id, username, display_name, avatar_url, bio, follower_count AS followers, is_verified
-       FROM users
-       WHERE is_banned = false AND ($1::uuid IS NULL OR id != $1)
-       ORDER BY follower_count DESC NULLS LAST, created_at DESC
-       LIMIT 30`,
-      [excludeId]
-    );
-    res.json({ users: result.rows });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
-});
 
-app.get('/api/users/:username/stats', async (req, res) => {
-  try {
-    const userResult = await pool.query(
-      'SELECT id, follower_count, following_count FROM users WHERE username = $1',
-      [req.params.username]
-    );
-    if (userResult.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    const user = userResult.rows[0];
-    const videoStats = await pool.query(
-      'SELECT COUNT(*) AS video_count, COALESCE(SUM(view_count), 0) AS total_views FROM videos WHERE user_id = $1 AND is_published = true',
-      [user.id]
-    );
-    res.json({
-      followers: user.follower_count,
-      following: user.following_count,
-      videos: parseInt(videoStats.rows[0].video_count),
-      total_views: parseInt(videoStats.rows[0].total_views)
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch stats' });
-  }
-});
+app.get(
+  '/api/users/discover',
+  optionalAuth,
+  async (req, res) => {
+    try {
+      const excludeId =
+        req.user?.id ||
+        null;
 
-// ── Privacy toggle ──────────────────────────────────────────
-app.put('/api/profile/privacy', authenticateToken, async (req, res) => {
-  try {
-    const { is_private } = req.body;
-    await pool.query('UPDATE users SET is_private = $1 WHERE id = $2', [!!is_private, req.user.id]);
-    res.json({ ok: true, is_private: !!is_private });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+      const result =
+        await pool.query(
+          `
+          SELECT
+            id,
+            username,
+            display_name,
+            avatar_url,
+            bio,
+            follower_count AS followers,
+            is_verified
 
-// ── Follow / unfollow / request (privacy-aware) ─────────────
-app.post('/api/users/:userId/follow', authenticateToken, async (req, res) => {
-  const targetId = req.params.userId;
-  const user = req.user;
-  if (targetId === user.id) return res.status(400).json({ error: "You can't follow yourself" });
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const target = await client.query('SELECT id, is_private FROM users WHERE id = $1', [targetId]);
-    if (target.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'User not found' });
-    }
-    const isPrivate = target.rows[0].is_private;
+          FROM users
 
-    // Already following? — unfollow
-    const existing = await client.query(
-      'SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2',
-      [user.id, targetId]
-    );
-    if (existing.rows.length > 0) {
-      await client.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [user.id, targetId]);
-      await client.query('UPDATE users SET following_count = GREATEST(COALESCE(following_count, 0) - 1, 0) WHERE id = $1', [user.id]);
-      await client.query('UPDATE users SET follower_count = GREATEST(COALESCE(follower_count, 0) - 1, 0) WHERE id = $1', [targetId]);
-      await client.query('COMMIT');
-      return res.json({ ok: true, following: false, status: 'unfollowed' });
-    }
+          WHERE
+            is_banned = false
+            AND (
+              $1::uuid IS NULL
+              OR id != $1
+            )
 
-    // Pending request? — cancel it
-    const pendingReq = await client.query(
-      "SELECT 1 FROM follow_requests WHERE requester_id = $1 AND target_id = $2 AND status = 'pending'",
-      [user.id, targetId]
-    );
-    if (pendingReq.rows.length > 0) {
-      await client.query(
-        "DELETE FROM follow_requests WHERE requester_id = $1 AND target_id = $2 AND status = 'pending'",
-        [user.id, targetId]
-      );
-      await client.query('COMMIT');
-      return res.json({ ok: true, following: false, status: 'request_cancelled' });
-    }
+          ORDER BY
+            follower_count DESC NULLS LAST,
+            created_at DESC
 
-    if (isPrivate) {
-      // Private — send follow request
-      await client.query(
-        'INSERT INTO follow_requests (requester_id, target_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [user.id, targetId]
-      );
-      await client.query('COMMIT');
-      return res.json({ ok: true, following: false, status: 'requested' });
-    }
-
-    // Public — follow directly
-    await client.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)', [user.id, targetId]);
-    await client.query('UPDATE users SET following_count = COALESCE(following_count, 0) + 1 WHERE id = $1', [user.id]);
-    await client.query('UPDATE users SET follower_count = COALESCE(follower_count, 0) + 1 WHERE id = $1', [targetId]);
-    await client.query('COMMIT');
-    res.json({ ok: true, following: true, status: 'following' });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Follow error:', error);
-    res.status(500).json({ error: 'Failed to update follow' });
-  } finally {
-    client.release();
-  }
-});
-
-// ── Get pending follow requests ──────────────────────────────
-app.get('/api/follow-requests', authenticateToken, async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT fr.id, fr.created_at, fr.requester_id,
-             u.username, u.display_name, u.avatar_url
-      FROM follow_requests fr
-      JOIN users u ON u.id = fr.requester_id
-      WHERE fr.target_id = $1 AND fr.status = 'pending'
-      ORDER BY fr.created_at DESC
-    `, [req.user.id]);
-    res.json({ ok: true, requests: rows });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── Accept or decline a follow request ──────────────────────
-app.post('/api/follow-requests/:id/respond', authenticateToken, async (req, res) => {
-  try {
-    const { action } = req.body;
-    const { rows } = await pool.query(
-      "SELECT * FROM follow_requests WHERE id = $1 AND target_id = $2 AND status = 'pending'",
-      [req.params.id, req.user.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Request not found' });
-    const request = rows[0];
-    if (action === 'accept') {
-      await pool.query(
-        'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [request.requester_id, req.user.id]
-      );
-      await pool.query('UPDATE users SET follower_count = COALESCE(follower_count, 0) + 1 WHERE id = $1', [req.user.id]);
-      await pool.query('UPDATE users SET following_count = COALESCE(following_count, 0) + 1 WHERE id = $1', [request.requester_id]);
-    }
-    await pool.query('DELETE FROM follow_requests WHERE id = $1', [request.id]);
-    res.json({ ok: true, action });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── Public user profile (privacy-aware) ─────────────────────
-app.get('/api/users/:username', optionalAuth, async (req, res) => {
-  try {
-    const viewerId = req.user?.id || null;
-    const { rows: urows } = await pool.query(
-      `SELECT id, username, display_name, bio, avatar_url, is_private, is_verified,
-              follower_count, following_count, created_at
-       FROM users WHERE username = $1`,
-      [req.params.username]
-    );
-    if (!urows.length) return res.status(404).json({ error: 'user not found' });
-    const user = urows[0];
-
-    // Determine relationship
-    let relationship = 'none';
-    if (viewerId === user.id) {
-      relationship = 'self';
-    } else if (viewerId) {
-      const { rows: frows } = await pool.query(
-        'SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [viewerId, user.id]
-      );
-      if (frows.length) {
-        relationship = 'following';
-      } else {
-        const { rows: rrows } = await pool.query(
-          "SELECT 1 FROM follow_requests WHERE requester_id = $1 AND target_id = $2 AND status = 'pending'",
-          [viewerId, user.id]
+          LIMIT 30
+          `,
+          [excludeId]
         );
-        if (rrows.length) relationship = 'requested';
+
+      res.json({
+        users:
+          result.rows
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch users'
+        });
+    }
+  }
+);
+
+app.get(
+  '/api/users/:username/stats',
+  async (req, res) => {
+    try {
+      const userResult =
+        await pool.query(
+          `
+          SELECT
+            id,
+            follower_count,
+            following_count
+          FROM users
+          WHERE username = $1
+          `,
+          [req.params.username]
+        );
+
+      if (
+        userResult.rows.length ===
+        0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'User not found'
+          });
       }
+
+      const user =
+        userResult.rows[0];
+
+      const videoStats =
+        await pool.query(
+          `
+          SELECT
+            COUNT(*) AS video_count,
+            COALESCE(
+              SUM(view_count),
+              0
+            ) AS total_views
+
+          FROM videos
+
+          WHERE user_id = $1
+            AND is_published = true
+          `,
+          [user.id]
+        );
+
+      res.json({
+        followers:
+          user.follower_count,
+
+        following:
+          user.following_count,
+
+        videos:
+          parseInt(
+            videoStats.rows[0]
+              .video_count
+          ),
+
+        total_views:
+          parseInt(
+            videoStats.rows[0]
+              .total_views
+          )
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch stats'
+        });
+    }
+  }
+);
+
+// Privacy.
+
+app.put(
+  '/api/profile/privacy',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        is_private
+      } = req.body;
+
+      await pool.query(
+        `
+        UPDATE users
+        SET is_private = $1
+        WHERE id = $2
+        `,
+        [
+          !!is_private,
+          req.user.id
+        ]
+      );
+
+      res.json({
+        ok: true,
+        is_private:
+          !!is_private
+      });
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error:
+            e.message
+        });
+    }
+  }
+);
+
+// Follow.
+
+app.post(
+  '/api/users/:userId/follow',
+  authenticateToken,
+  async (req, res) => {
+    const targetId =
+      req.params.userId;
+
+    const user =
+      req.user;
+
+    if (
+      targetId === user.id
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "You can't follow yourself"
+        });
     }
 
-    const canSeeContent = !user.is_private || relationship === 'following' || relationship === 'self';
+    const client =
+      await pool.connect();
 
-    let videos = [];
-    if (canSeeContent) {
-      const { rows: vrows } = await pool.query(`
-        SELECT v.id, v.video_url AS url, v.thumbnail_url AS thumbnail,
-               v.title, v.description, v.view_count AS views, v.like_count, v.created_at
-        FROM videos v
-        WHERE v.user_id = $1 AND v.is_published = true
-        ORDER BY v.created_at DESC LIMIT 50
-      `, [user.id]);
-      videos = vrows;
+    try {
+      await client.query(
+        'BEGIN'
+      );
+
+      const target =
+        await client.query(
+          `
+          SELECT
+            id,
+            is_private
+          FROM users
+          WHERE id = $1
+          `,
+          [targetId]
+        );
+
+      if (
+        target.rows.length ===
+        0
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res
+          .status(404)
+          .json({
+            error:
+              'User not found'
+          });
+      }
+
+      const isPrivate =
+        target.rows[0]
+          .is_private;
+
+      const existing =
+        await client.query(
+          `
+          SELECT 1
+          FROM follows
+          WHERE follower_id = $1
+            AND following_id = $2
+          `,
+          [
+            user.id,
+            targetId
+          ]
+        );
+
+      if (
+        existing.rows.length >
+        0
+      ) {
+        await client.query(
+          `
+          DELETE FROM follows
+          WHERE follower_id = $1
+            AND following_id = $2
+          `,
+          [
+            user.id,
+            targetId
+          ]
+        );
+
+        await client.query(
+          `
+          UPDATE users
+          SET following_count =
+            GREATEST(
+              COALESCE(
+                following_count,
+                0
+              ) - 1,
+              0
+            )
+          WHERE id = $1
+          `,
+          [user.id]
+        );
+
+        await client.query(
+          `
+          UPDATE users
+          SET follower_count =
+            GREATEST(
+              COALESCE(
+                follower_count,
+                0
+              ) - 1,
+              0
+            )
+          WHERE id = $1
+          `,
+          [targetId]
+        );
+
+        await client.query(
+          'COMMIT'
+        );
+
+        return res.json({
+          ok: true,
+          following: false,
+          status:
+            'unfollowed'
+        });
+      }
+
+      const pendingReq =
+        await client.query(
+          `
+          SELECT 1
+          FROM follow_requests
+          WHERE requester_id = $1
+            AND target_id = $2
+            AND status = 'pending'
+          `,
+          [
+            user.id,
+            targetId
+          ]
+        );
+
+      if (
+        pendingReq.rows.length >
+        0
+      ) {
+        await client.query(
+          `
+          DELETE FROM follow_requests
+          WHERE requester_id = $1
+            AND target_id = $2
+            AND status = 'pending'
+          `,
+          [
+            user.id,
+            targetId
+          ]
+        );
+
+        await client.query(
+          'COMMIT'
+        );
+
+        return res.json({
+          ok: true,
+          following: false,
+          status:
+            'request_cancelled'
+        });
+      }
+
+      if (isPrivate) {
+        await client.query(
+          `
+          INSERT INTO follow_requests
+          (
+            requester_id,
+            target_id
+          )
+          VALUES
+          ($1, $2)
+          ON CONFLICT DO NOTHING
+          `,
+          [
+            user.id,
+            targetId
+          ]
+        );
+
+        await client.query(
+          'COMMIT'
+        );
+
+        return res.json({
+          ok: true,
+          following: false,
+          status:
+            'requested'
+        });
+      }
+
+      await client.query(
+        `
+        INSERT INTO follows
+        (
+          follower_id,
+          following_id
+        )
+        VALUES
+        ($1, $2)
+        `,
+        [
+          user.id,
+          targetId
+        ]
+      );
+
+      await client.query(
+        `
+        UPDATE users
+        SET following_count =
+          COALESCE(
+            following_count,
+            0
+          ) + 1
+        WHERE id = $1
+        `,
+        [user.id]
+      );
+
+      await client.query(
+        `
+        UPDATE users
+        SET follower_count =
+          COALESCE(
+            follower_count,
+            0
+          ) + 1
+        WHERE id = $1
+        `,
+        [targetId]
+      );
+
+      await client.query(
+        'COMMIT'
+      );
+
+      await updateVideoSignal(
+        null,
+        'follow',
+        {}
+      ).catch(() => {});
+
+      res.json({
+        ok: true,
+        following: true,
+        status:
+          'following'
+      });
+    } catch (error) {
+      await client.query(
+        'ROLLBACK'
+      );
+
+      console.error(
+        'Follow error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to update follow'
+        });
+    } finally {
+      client.release();
     }
-
-    res.json({
-      ok: true,
-      user: {
-        id: user.id,
-        username: user.username,
-        display_name: user.display_name,
-        bio: canSeeContent ? user.bio : null,
-        avatar_url: user.avatar_url,
-        is_private: user.is_private,
-        is_verified: user.is_verified,
-        created_at: user.created_at
-      },
-      stats: {
-        followers: user.follower_count || 0,
-        following: user.following_count || 0,
-        videos: canSeeContent ? videos.length : null
-      },
-      relationship,
-      can_see_content: canSeeContent,
-      videos
-    });
-  } catch (e) {
-    console.error('Profile error:', e.message);
-    res.status(500).json({ error: e.message });
   }
-});
+);
 
-// ── Profile update ───────────────────────────────────────────
-app.put('/api/profile', authenticateToken, async (req, res) => {
-  try {
-    const { display_name, bio, avatar_url, username, profile_link } = req.body;
-    const result = await pool.query(
-      `UPDATE users SET
-         display_name = COALESCE($1, display_name),
-         bio = COALESCE($2, bio),
-         avatar_url = COALESCE($3, avatar_url),
-         username = COALESCE($4, username),
-         updated_at = NOW()
-       WHERE id = $5 RETURNING *`,
-      [display_name, bio, avatar_url, username, req.user.id]
-    );
-    res.json({ ok: true, user: publicUser(result.rows[0]) });
-  } catch (error) {
-    console.error('Profile update error:', error);
-    res.status(500).json({ error: 'Failed to update profile' });
+// Follow requests.
+
+app.get(
+  '/api/follow-requests',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        rows
+      } = await pool.query(
+        `
+        SELECT
+          fr.id,
+          fr.created_at,
+          fr.requester_id,
+
+          u.username,
+          u.display_name,
+          u.avatar_url
+
+        FROM follow_requests fr
+
+        JOIN users u
+          ON u.id =
+             fr.requester_id
+
+        WHERE
+          fr.target_id = $1
+          AND fr.status =
+            'pending'
+
+        ORDER BY
+          fr.created_at DESC
+        `,
+        [req.user.id]
+      );
+
+      res.json({
+        ok: true,
+        requests:
+          rows
+      });
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error:
+            e.message
+        });
+    }
   }
-});
+);
+
+app.post(
+  '/api/follow-requests/:id/respond',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        action
+      } = req.body;
+
+      const {
+        rows
+      } = await pool.query(
+        `
+        SELECT *
+        FROM follow_requests
+        WHERE id = $1
+          AND target_id = $2
+          AND status = 'pending'
+        `,
+        [
+          req.params.id,
+          req.user.id
+        ]
+      );
+
+      if (!rows.length) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Request not found'
+          });
+      }
+
+      const request =
+        rows[0];
+
+      if (
+        action === 'accept'
+      ) {
+        await pool.query(
+          `
+          INSERT INTO follows
+          (
+            follower_id,
+            following_id
+          )
+          VALUES
+          ($1, $2)
+          ON CONFLICT DO NOTHING
+          `,
+          [
+            request.requester_id,
+            req.user.id
+          ]
+        );
+
+        await pool.query(
+          `
+          UPDATE users
+          SET follower_count =
+            COALESCE(
+              follower_count,
+              0
+            ) + 1
+          WHERE id = $1
+          `,
+          [req.user.id]
+        );
+
+        await pool.query(
+          `
+          UPDATE users
+          SET following_count =
+            COALESCE(
+              following_count,
+              0
+            ) + 1
+          WHERE id = $1
+          `,
+          [
+            request.requester_id
+          ]
+        );
+      }
+
+      await pool.query(
+        `
+        DELETE FROM follow_requests
+        WHERE id = $1
+        `,
+        [request.id]
+      );
+
+      res.json({
+        ok: true,
+        action
+      });
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error:
+            e.message
+        });
+    }
+  }
+);
+
+// Public profile.
+
+app.get(
+  '/api/users/:username',
+  optionalAuth,
+  async (req, res) => {
+    try {
+      const viewerId =
+        req.user?.id ||
+        null;
+
+      const {
+        rows: urows
+      } = await pool.query(
+        `
+        SELECT
+          id,
+          username,
+          display_name,
+          bio,
+          avatar_url,
+          is_private,
+          is_verified,
+          follower_count,
+          following_count,
+          created_at
+
+        FROM users
+
+        WHERE username = $1
+        `,
+        [req.params.username]
+      );
+
+      if (!urows.length) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'user not found'
+          });
+      }
+
+      const user =
+        urows[0];
+
+      let relationship =
+        'none';
+
+      if (
+        viewerId === user.id
+      ) {
+        relationship =
+          'self';
+      } else if (
+        viewerId
+      ) {
+        const {
+          rows: frows
+        } = await pool.query(
+          `
+          SELECT 1
+          FROM follows
+          WHERE follower_id = $1
+            AND following_id = $2
+          `,
+          [
+            viewerId,
+            user.id
+          ]
+        );
+
+        if (frows.length) {
+          relationship =
+            'following';
+        } else {
+          const {
+            rows: rrows
+          } = await pool.query(
+            `
+            SELECT 1
+            FROM follow_requests
+            WHERE requester_id = $1
+              AND target_id = $2
+              AND status = 'pending'
+            `,
+            [
+              viewerId,
+              user.id
+            ]
+          );
+
+          if (rrows.length) {
+            relationship =
+              'requested';
+          }
+        }
+      }
+
+      const canSeeContent =
+        !user.is_private ||
+        relationship ===
+          'following' ||
+        relationship ===
+          'self';
+
+      let videos = [];
+
+      if (
+        canSeeContent
+      ) {
+        const {
+          rows: vrows
+        } = await pool.query(
+          `
+          SELECT
+            v.id,
+            v.video_url AS url,
+            v.thumbnail_url AS thumbnail,
+            v.title,
+            v.description,
+            v.view_count AS views,
+            v.like_count,
+            v.comment_count,
+            v.created_at
+
+          FROM videos v
+
+          WHERE
+            v.user_id = $1
+            AND v.is_published = true
+
+          ORDER BY
+            v.created_at DESC
+
+          LIMIT 50
+          `,
+          [user.id]
+        );
+
+        videos =
+          vrows;
+      }
+
+      res.json({
+        ok: true,
+
+        user: {
+          id: user.id,
+          username:
+            user.username,
+          display_name:
+            user.display_name,
+          bio:
+            canSeeContent
+              ? user.bio
+              : null,
+          avatar_url:
+            user.avatar_url,
+          is_private:
+            user.is_private,
+          is_verified:
+            user.is_verified,
+          created_at:
+            user.created_at
+        },
+
+        stats: {
+          followers:
+            user.follower_count ||
+            0,
+
+          following:
+            user.following_count ||
+            0,
+
+          videos:
+            canSeeContent
+              ? videos.length
+              : null
+        },
+
+        relationship,
+
+        can_see_content:
+          canSeeContent,
+
+        videos
+      });
+    } catch (e) {
+      console.error(
+        'Profile error:',
+        e.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            e.message
+        });
+    }
+  }
+);
+
+// Profile update.
+
+app.put(
+  '/api/profile',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        display_name,
+        bio,
+        avatar_url,
+        username,
+        profile_link
+      } = req.body;
+
+      const result =
+        await pool.query(
+          `
+          UPDATE users
+          SET
+            display_name =
+              COALESCE(
+                $1,
+                display_name
+              ),
+
+            bio =
+              COALESCE(
+                $2,
+                bio
+              ),
+
+            avatar_url =
+              COALESCE(
+                $3,
+                avatar_url
+              ),
+
+            username =
+              COALESCE(
+                $4,
+                username
+              ),
+
+            updated_at =
+              NOW()
+
+          WHERE id = $5
+
+          RETURNING *
+          `,
+          [
+            display_name,
+            bio,
+            avatar_url,
+            username,
+            req.user.id
+          ]
+        );
+
+      res.json({
+        ok: true,
+        user:
+          publicUser(
+            result.rows[0]
+          )
+      });
+    } catch (error) {
+      console.error(
+        'Profile update error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to update profile'
+        });
+    }
+  }
+);
 
 // ========================================
 // 🔎 Search
 // ========================================
-app.get('/api/search', async (req, res) => {
-  try {
-    const q = `%${req.query.q || ''}%`;
-    const [users, videos] = await Promise.all([
-      pool.query(
-        `SELECT id, username, display_name, avatar_url, follower_count AS followers
-         FROM users WHERE username ILIKE $1 OR display_name ILIKE $1 LIMIT 20`,
-        [q]
-      ),
-      pool.query(
-        `SELECT v.id, v.video_url AS url, v.thumbnail_url AS thumbnail, v.title, v.description,
-                v.view_count AS views, u.username, u.avatar_url
-         FROM videos v JOIN users u ON v.user_id = u.id
-         WHERE v.is_published = true AND (v.title ILIKE $1 OR v.description ILIKE $1)
-         LIMIT 20`,
-        [q]
-      )
-    ]);
-    res.json({ users: users.rows, videos: videos.rows });
-  } catch (error) {
-    res.status(500).json({ error: 'Search failed' });
+
+app.get(
+  '/api/search',
+  async (req, res) => {
+    try {
+      const q =
+        `%${req.query.q || ''}%`;
+
+      const [
+        users,
+        videos
+      ] =
+        await Promise.all([
+          pool.query(
+            `
+            SELECT
+              id,
+              username,
+              display_name,
+              avatar_url,
+              follower_count AS followers
+
+            FROM users
+
+            WHERE
+              username ILIKE $1
+              OR display_name ILIKE $1
+
+            LIMIT 20
+            `,
+            [q]
+          ),
+
+          pool.query(
+            `
+            SELECT
+              v.id,
+              v.video_url AS url,
+              v.thumbnail_url AS thumbnail,
+              v.title,
+              v.description,
+              v.view_count AS views,
+
+              u.username,
+              u.avatar_url
+
+            FROM videos v
+
+            JOIN users u
+              ON v.user_id = u.id
+
+            WHERE
+              v.is_published = true
+              AND (
+                v.title ILIKE $1
+                OR v.description ILIKE $1
+              )
+
+            LIMIT 20
+            `,
+            [q]
+          )
+        ]);
+
+      res.json({
+        users:
+          users.rows,
+
+        videos:
+          videos.rows
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Search failed'
+        });
+    }
   }
-});
+);
 
 // ========================================
-// 🎬 Live Streaming
+// 🎬 User Videos
 // ========================================
-app.get('/api/streams/live', async (req, res) => {
-  try {
-    await pool.query(
-      `UPDATE livestreams SET status = 'ended', ended_at = NOW()
-       WHERE status = 'live' AND started_at IS NOT NULL
-         AND started_at < NOW() - INTERVAL '6 hours'`
-    );
-    const result = await pool.query(
-      `SELECT s.id, s.title, s.description, s.thumbnail_url, s.viewer_count, s.started_at,
-              u.id AS host_id, u.username, u.display_name, u.avatar_url, u.is_verified
-       FROM livestreams s JOIN users u ON s.user_id = u.id
-       WHERE s.status = 'live'
-       ORDER BY s.viewer_count DESC LIMIT 50`
-    );
-    res.json(result.rows);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch live streams' });
-  }
-});
 
-app.get('/api/streams/live/now', async (req, res) => {
-  try {
-    await pool.query(
-      `UPDATE livestreams SET status = 'ended', ended_at = NOW()
-       WHERE status = 'live' AND started_at IS NOT NULL
-         AND started_at < NOW() - INTERVAL '6 hours'`
-    );
-    const result = await pool.query(
-      `SELECT s.id, s.title, s.description, s.thumbnail_url, s.viewer_count, s.started_at,
-              u.id AS host_id, u.username, u.display_name, u.avatar_url, u.is_verified
-       FROM livestreams s JOIN users u ON s.user_id = u.id
-       WHERE s.status = 'live'
-       ORDER BY s.viewer_count DESC LIMIT 50`
-    );
-    res.json(result.rows);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch live streams' });
-  }
-});
+app.get(
+  '/api/users/:username/videos',
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            v.id,
+            v.video_url AS url,
+            v.thumbnail_url AS thumbnail,
+            v.title,
+            v.description,
+            v.view_count AS views,
+            v.like_count,
+            v.comment_count,
+            v.created_at,
 
-app.get('/api/streams/:id', async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT s.id, s.title, s.description, s.thumbnail_url, s.viewer_count, s.started_at, s.status,
-              u.id AS host_id, u.username, u.display_name, u.avatar_url, u.is_verified
-       FROM livestreams s JOIN users u ON s.user_id = u.id
-       WHERE s.id = $1`,
-      [req.params.id]
-    );
-    if (!result.rows.length) return res.status(404).json({ error: 'Stream not found' });
-    const srow = result.rows[0];
-    res.json({
-      ...srow,
-      is_live: srow.status === 'live',
-      playback_url: '/live?id=' + encodeURIComponent(srow.id),
-    });
-  } catch (error) {
-    console.error('Stream by id error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch stream' });
-  }
-});
+            u.id AS author_id,
+            u.username,
+            u.avatar_url
 
-app.get('/api/creator/streams', authenticateToken, async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 20;
-    const result = await pool.query(
-      `SELECT id, title, description, thumbnail_url, status, viewer_count, peak_viewer_count,
-              total_gifts_received, started_at, ended_at, created_at
-       FROM livestreams WHERE user_id = $1
-       ORDER BY created_at DESC LIMIT $2`,
-      [req.user.id, limit]
-    );
-    res.json({ streams: result.rows });
-  } catch (error) {
-    console.error('Creator streams error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch streams' });
-  }
-});
+          FROM videos v
 
-app.post('/api/streams', authenticateToken, async (req, res) => {
-  try {
-    const { title, description, is_premium, price_credits } = req.body;
-    const streamKey = uuidv4();
-    const result = await pool.query(
-      `INSERT INTO livestreams (user_id, title, description, stream_key, is_premium, price_credits, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'offline') RETURNING *`,
-      [req.user.id, title || 'Live Stream', description || '', streamKey, !!is_premium, price_credits || 0]
-    );
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Create stream error:', error.message);
-    res.status(500).json({ error: 'Failed to create stream' });
-  }
-});
+          JOIN users u
+            ON v.user_id = u.id
 
-app.post('/api/streams/:id/go-live', authenticateToken, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `UPDATE livestreams SET status = 'live', started_at = NOW()
-       WHERE id = $1 AND user_id = $2 RETURNING *`,
-      [req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Stream not found' });
-    io.emit('stream-started', { streamId: result.rows[0].id, username: req.user.username, title: result.rows[0].title });
-    res.json({ success: true, stream: result.rows[0] });
-  } catch (error) {
-    console.error('Go-live error:', error.message);
-    res.status(500).json({ error: 'Failed to go live' });
-  }
-});
+          WHERE
+            u.username = $1
+            AND v.is_published = true
 
-app.post('/api/streams/:id/end-live', authenticateToken, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `UPDATE livestreams SET status = 'ended', ended_at = NOW()
-       WHERE id = $1 AND user_id = $2 RETURNING *`,
-      [req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Stream not found' });
-    io.emit('stream-ended', { streamId: req.params.id });
-    io.to(`stream-${req.params.id}`).emit('stream_ended', { streamId: req.params.id });
-    res.json({ success: true, stream: result.rows[0] });
-  } catch (error) {
-    console.error('End-live error:', error.message);
-    res.status(500).json({ error: 'Failed to end stream' });
-  }
-});
+          ORDER BY
+            v.created_at DESC
+          `,
+          [req.params.username]
+        );
 
-app.post('/api/streams/:id/goal', authenticateToken, async (req, res) => {
-  try {
-    const { target, reward } = req.body;
-    const result = await pool.query(
-      `UPDATE livestreams SET goal_target = $1, goal_reward = $2, goal_current = 0
-       WHERE id = $3 AND user_id = $4 RETURNING id, goal_target, goal_reward, goal_current`,
-      [target, reward || null, req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Stream not found' });
-    res.json({ success: true, goal: result.rows[0] });
-  } catch (error) {
-    console.error('Set goal error:', error.message);
-    res.status(500).json({ error: 'Failed to set goal' });
+      res.json({
+        videos:
+          result.rows
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch videos'
+        });
+    }
   }
-});
+);
 
-app.get('/api/streams/:id/gift-leaderboard', authenticateToken, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT u.id, u.username, u.avatar_url, SUM(gt.credits_spent) AS total
-       FROM gift_transactions gt JOIN users u ON gt.from_user_id = u.id
-       WHERE gt.stream_id = $1
-       GROUP BY u.id, u.username, u.avatar_url
-       ORDER BY total DESC LIMIT 20`,
-      [req.params.id]
-    );
-    res.json({ leaderboard: result.rows });
-  } catch (error) {
-    console.error('Leaderboard error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch leaderboard' });
-  }
-});
+// ========================================
+// 📊 User Interest Profile
+// ========================================
 
-app.post('/api/streams/:id/battle', authenticateToken, async (req, res) => {
-  try {
-    const streamId = req.params.id;
-    const { battle_type, team_a_name, team_b_name } = req.body || {};
-    const owned = await pool.query(
-      'SELECT id FROM livestreams WHERE id = $1 AND user_id = $2',
-      [streamId, req.user.id]
-    );
-    if (!owned.rows.length) return res.status(404).json({ ok: false, error: 'Stream not found' });
-    const battleResult = await pool.query(
-      `INSERT INTO stream_battles (stream_id, host_id, status) VALUES ($1, $2, 'waiting') RETURNING *`,
-      [streamId, req.user.id]
-    );
-    const battle = battleResult.rows[0];
-    await pool.query(
-      `INSERT INTO battle_participants (battle_id, user_id, team) VALUES ($1, $2, 'a')
-       ON CONFLICT DO NOTHING`,
-      [battle.id, req.user.id]
-    ).catch(async () => {
-      await pool.query(
-        `INSERT INTO battle_participants (battle_id, user_id, team) VALUES ($1, $2, 'a')`,
-        [battle.id, req.user.id]
+app.get(
+  '/api/recommendations/profile',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            topic,
+            score,
+            views,
+            completions,
+            likes,
+            comments,
+            shares,
+            follows,
+            skips,
+            not_interested,
+            updated_at
+
+          FROM user_topic_affinity
+
+          WHERE user_id = $1
+
+          ORDER BY
+            score DESC
+
+          LIMIT 100
+          `,
+          [req.user.id]
+        );
+
+      res.json({
+        interests:
+          result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Recommendation profile error:',
+        error
       );
-    });
-    if (team_a_name || team_b_name || battle_type) {
-      await pool.query(
-        `UPDATE stream_battles SET team_a_name = COALESCE($1, team_a_name), team_b_name = COALESCE($2, team_b_name), battle_type = COALESCE($3, battle_type) WHERE id = $4`,
-        [team_a_name || null, team_b_name || null, battle_type || null, battle.id]
-      ).catch(() => {});
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch recommendation profile'
+        });
     }
-    const participants = await pool.query(
-      `SELECT bp.*, u.username, u.avatar_url FROM battle_participants bp
-       JOIN users u ON bp.user_id = u.id WHERE bp.battle_id = $1`,
-      [battle.id]
-    );
-    io.to(`stream-${streamId}`).emit('battle_created', { battle, participants: participants.rows });
-    res.json({ ok: true, battle, participants: participants.rows });
-  } catch (error) {
-    console.error('Create stream battle error:', error.message);
-    res.status(500).json({ ok: false, error: 'Failed to create battle' });
   }
-});
+);
 
 // ========================================
-// 🎁 Gifts
+// 🧠 Intelligence Admin/Debug
 // ========================================
-app.post('/api/gifts/send', authenticateToken, async (req, res) => {
-  const { streamId, giftName, quantity = 1, message } = req.body;
-  const fromUser = req.user;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const giftResult = await client.query('SELECT * FROM gifts WHERE name = $1 AND is_active = true', [giftName]);
-    if (giftResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Unknown gift type' });
+
+app.get(
+  '/api/intelligence/stats',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const [
+        trends,
+        claims,
+        videos,
+        events,
+        feedback
+      ] =
+        await Promise.all([
+          pool.query(
+            `
+            SELECT
+              COUNT(*) AS count
+            FROM trending_topics
+            WHERE status = 'active'
+            `
+          ),
+
+          pool.query(
+            `
+            SELECT
+              COUNT(*) AS count
+            FROM atomic_claims
+            WHERE status = 'active'
+            `
+          ),
+
+          pool.query(
+            `
+            SELECT
+              COUNT(*) AS count
+            FROM videos
+            WHERE is_published = true
+            `
+          ),
+
+          pool.query(
+            `
+            SELECT
+              COUNT(*) AS count
+            FROM video_events
+            `
+          ),
+
+          pool.query(
+            `
+            SELECT
+              COUNT(*) AS count
+            FROM video_feedback
+            `
+          )
+        ]);
+
+      res.json({
+        trends:
+          Number(
+            trends.rows[0].count
+          ),
+
+        atomic_claims:
+          Number(
+            claims.rows[0].count
+          ),
+
+        videos:
+          Number(
+            videos.rows[0].count
+          ),
+
+        events:
+          Number(
+            events.rows[0].count
+          ),
+
+        feedback:
+          Number(
+            feedback.rows[0].count
+          )
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch intelligence stats'
+        });
     }
-    const gift = giftResult.rows[0];
-    const totalCredits = parseFloat(gift.credit_cost) * quantity;
-    const senderResult = await client.query('SELECT balance_credits FROM users WHERE id = $1 FOR UPDATE', [fromUser.id]);
-    if (parseFloat(senderResult.rows[0].balance_credits) < totalCredits) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Insufficient credits' });
-    }
-    const streamResult = await client.query('SELECT user_id FROM livestreams WHERE id = $1', [streamId]);
-    if (streamResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Stream not found' });
-    }
-    const toUserId = streamResult.rows[0].user_id;
-    const creatorCredits = totalCredits * (parseFloat(gift.creator_pct) / 100);
-    const platformCredits = totalCredits * (parseFloat(gift.platform_pct) / 100);
-    await client.query('UPDATE users SET balance_credits = balance_credits - $1 WHERE id = $2', [totalCredits, fromUser.id]);
-    await client.query(
-      'UPDATE users SET balance_credits = balance_credits + $1, total_earned = total_earned + $1 WHERE id = $2',
-      [creatorCredits, toUserId]
-    );
-    await client.query(
-      `UPDATE livestreams SET total_gifts_received = total_gifts_received + $1 WHERE id = $2`,
-      [creatorCredits, streamId]
-    );
-    const txResult = await client.query(
-      `INSERT INTO gift_transactions (gift_id, stream_id, from_user_id, to_user_id, quantity, credits_spent, creator_credits, platform_credits, message)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [gift.id, streamId, fromUser.id, toUserId, quantity, totalCredits, creatorCredits, platformCredits, message || '']
-    );
-    await client.query(
-      `INSERT INTO transactions (user_id, type, amount_usd, credits_amount, description)
-       VALUES ($1, 'gift_received', $2, $2, $3)`,
-      [toUserId, creatorCredits, `${gift.name} x${quantity} from ${fromUser.username}`]
-    );
-    await client.query('COMMIT');
-    io.to(`stream-${streamId}`).emit('new-gift', {
-      giftName: gift.name, emoji: gift.emoji, fromUser: fromUser.username,
-      quantity, creatorCredits, playSound: true, soundFile: `/sounds/gift-${gift.name.toLowerCase()}.mp3`
-    });
-    res.json({ success: true, gift: gift.name, quantity, creatorCredits, transaction: txResult.rows[0] });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Gift error:', error);
-    res.status(500).json({ error: 'Failed to send gift' });
-  } finally {
-    client.release();
   }
-});
+);
+
+// ========================================
+// 🎯 Trend → Claim Pipeline
+// ========================================
+
+app.post(
+  '/api/intelligence/process-trend/:id',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT *
+          FROM trending_topics
+          WHERE id = $1
+          `,
+          [req.params.id]
+        );
+
+      if (!result.rows.length) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Trend not found'
+          });
+      }
+
+      const trend =
+        result.rows[0];
+
+      const score =
+        await calculateTrendScore(
+          trend.id
+        );
+
+      const extracted =
+        await extractAtomicClaims(
+          trend
+        );
+
+      const claims = [];
+
+      for (
+        const claim of extracted
+      ) {
+        const row =
+          await createOrGetAtomicClaim(
+            trend,
+            claim
+          );
+
+        if (row) {
+          claims.push(row);
+        }
+      }
+
+      res.json({
+        success: true,
+
+        trend: {
+          ...trend,
+          calculated_score:
+            score
+        },
+
+        claims
+      });
+    } catch (error) {
+      console.error(
+        'Trend processing error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to process trend'
+        });
+    }
+  }
+);
+
+// ========================================
+// ⚔️ LIVE STREAMING
+// ========================================
+
+app.get(
+  '/api/streams/live',
+  async (req, res) => {
+    try {
+      await pool.query(
+        `
+        UPDATE livestreams
+        SET
+          status = 'ended',
+          ended_at = NOW()
+
+        WHERE
+          status = 'live'
+          AND started_at IS NOT NULL
+          AND started_at <
+            NOW() -
+            INTERVAL '6 hours'
+        `
+      );
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            s.id,
+            s.title,
+            s.description,
+            s.thumbnail_url,
+            s.viewer_count,
+            s.started_at,
+
+            u.id AS host_id,
+            u.username,
+            u.display_name,
+            u.avatar_url,
+            u.is_verified
+
+          FROM livestreams s
+
+          JOIN users u
+            ON s.user_id = u.id
+
+          WHERE s.status = 'live'
+
+          ORDER BY
+            s.viewer_count DESC
+
+          LIMIT 50
+          `
+        );
+
+      res.json(
+        result.rows
+      );
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch live streams'
+        });
+    }
+  }
+);
+
+app.get(
+  '/api/streams/live/now',
+  async (req, res) => {
+    try {
+      await pool.query(
+        `
+        UPDATE livestreams
+        SET
+          status = 'ended',
+          ended_at = NOW()
+
+        WHERE
+          status = 'live'
+          AND started_at IS NOT NULL
+          AND started_at <
+            NOW() -
+            INTERVAL '6 hours'
+        `
+      );
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            s.id,
+            s.title,
+            s.description,
+            s.thumbnail_url,
+            s.viewer_count,
+            s.started_at,
+
+            u.id AS host_id,
+            u.username,
+            u.display_name,
+            u.avatar_url,
+            u.is_verified
+
+          FROM livestreams s
+
+          JOIN users u
+            ON s.user_id = u.id
+
+          WHERE s.status = 'live'
+
+          ORDER BY
+            s.viewer_count DESC
+
+          LIMIT 50
+          `
+        );
+
+      res.json(
+        result.rows
+      );
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch live streams'
+        });
+    }
+  }
+);
+
+app.get(
+  '/api/streams/:id',
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            s.id,
+            s.title,
+            s.description,
+            s.thumbnail_url,
+            s.viewer_count,
+            s.started_at,
+            s.status,
+
+            u.id AS host_id,
+            u.username,
+            u.display_name,
+            u.avatar_url,
+            u.is_verified
+
+          FROM livestreams s
+
+          JOIN users u
+            ON s.user_id = u.id
+
+          WHERE s.id = $1
+          `,
+          [req.params.id]
+        );
+
+      if (
+        !result.rows.length
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Stream not found'
+          });
+      }
+
+      const srow =
+        result.rows[0];
+
+      res.json({
+        ...srow,
+
+        is_live:
+          srow.status ===
+          'live',
+
+        playback_url:
+          '/live?id=' +
+          encodeURIComponent(
+            srow.id
+          )
+      });
+    } catch (error) {
+      console.error(
+        'Stream by id error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch stream'
+        });
+    }
+  }
+);
+
+app.get(
+  '/api/creator/streams',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const limit =
+        parseInt(
+          req.query.limit
+        ) || 20;
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            id,
+            title,
+            description,
+            thumbnail_url,
+            status,
+            viewer_count,
+            peak_viewer_count,
+            total_gifts_received,
+            started_at,
+            ended_at,
+            created_at
+
+          FROM livestreams
+
+          WHERE user_id = $1
+
+          ORDER BY
+            created_at DESC
+
+          LIMIT $2
+          `,
+          [
+            req.user.id,
+            limit
+          ]
+        );
+
+      res.json({
+        streams:
+          result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Creator streams error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch streams'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/streams',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        title,
+        description,
+        is_premium,
+        price_credits
+      } = req.body;
+
+      const streamKey =
+        uuidv4();
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO livestreams
+          (
+            user_id,
+            title,
+            description,
+            stream_key,
+            is_premium,
+            price_credits,
+            status
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            'offline'
+          )
+          RETURNING *
+          `,
+          [
+            req.user.id,
+            title ||
+              'Live Stream',
+            description || '',
+            streamKey,
+            !!is_premium,
+            price_credits || 0
+          ]
+        );
+
+      res.json(
+        result.rows[0]
+      );
+    } catch (error) {
+      console.error(
+        'Create stream error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to create stream'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/streams/:id/go-live',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE livestreams
+          SET
+            status = 'live',
+            started_at = NOW()
+
+          WHERE
+            id = $1
+            AND user_id = $2
+
+          RETURNING *
+          `,
+          [
+            req.params.id,
+            req.user.id
+          ]
+        );
+
+      if (
+        result.rows.length ===
+        0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Stream not found'
+          });
+      }
+
+      io.emit(
+        'stream-started',
+        {
+          streamId:
+            result.rows[0]
+              .id,
+
+          username:
+            req.user.username,
+
+          title:
+            result.rows[0]
+              .title
+        }
+      );
+
+      res.json({
+        success: true,
+        stream:
+          result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'Go-live error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to go live'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/streams/:id/end-live',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE livestreams
+          SET
+            status = 'ended',
+            ended_at = NOW()
+
+          WHERE
+            id = $1
+            AND user_id = $2
+
+          RETURNING *
+          `,
+          [
+            req.params.id,
+            req.user.id
+          ]
+        );
+
+      if (
+        result.rows.length ===
+        0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Stream not found'
+          });
+      }
+
+      io.emit(
+        'stream-ended',
+        {
+          streamId:
+            req.params.id
+        }
+      );
+
+      io.to(
+        `stream-${req.params.id}`
+      ).emit(
+        'stream_ended',
+        {
+          streamId:
+            req.params.id
+        }
+      );
+
+      res.json({
+        success: true,
+        stream:
+          result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'End-live error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to end stream'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/streams/:id/goal',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        target,
+        reward
+      } = req.body;
+
+      const result =
+        await pool.query(
+          `
+          UPDATE livestreams
+
+          SET
+            goal_target = $1,
+            goal_reward = $2,
+            goal_current = 0
+
+          WHERE
+            id = $3
+            AND user_id = $4
+
+          RETURNING
+            id,
+            goal_target,
+            goal_reward,
+            goal_current
+          `,
+          [
+            target,
+            reward || null,
+            req.params.id,
+            req.user.id
+          ]
+        );
+
+      if (
+        result.rows.length ===
+        0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Stream not found'
+          });
+      }
+
+      res.json({
+        success: true,
+        goal:
+          result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'Set goal error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to set goal'
+        });
+    }
+  }
+);
+
+app.get(
+  '/api/streams/:id/gift-leaderboard',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            u.id,
+            u.username,
+            u.avatar_url,
+            SUM(
+              gt.credits_spent
+            ) AS total
+
+          FROM gift_transactions gt
+
+          JOIN users u
+            ON gt.from_user_id =
+               u.id
+
+          WHERE gt.stream_id =
+            $1
+
+          GROUP BY
+            u.id,
+            u.username,
+            u.avatar_url
+
+          ORDER BY
+            total DESC
+
+          LIMIT 20
+          `,
+          [req.params.id]
+        );
+
+      res.json({
+        leaderboard:
+          result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Leaderboard error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch leaderboard'
+        });
+    }
+  }
+);
 
 // ========================================
 // ⚔️ LIVE Battles
 // ========================================
-app.post('/api/battles/invite', authenticateToken, async (req, res) => {
-  try {
-    const { to_stream_id, to_user_id } = req.body;
-    if (!to_stream_id || !to_user_id) return res.status(400).json({ error: 'to_stream_id and to_user_id are required' });
-    const myStream = await pool.query(
-      "SELECT id FROM livestreams WHERE user_id = $1 AND status = 'live' ORDER BY started_at DESC LIMIT 1",
-      [req.user.id]
-    );
-    if (myStream.rows.length === 0) return res.status(400).json({ ok: false, error: 'You must be live to send a battle invite' });
-    const result = await pool.query(
-      `INSERT INTO battle_invites (from_stream_id, from_user_id, to_stream_id, to_user_id)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [myStream.rows[0].id, req.user.id, to_stream_id, to_user_id]
-    );
-    io.to(`user-${to_user_id}`).emit('battle-invite', { invite: result.rows[0], fromUsername: req.user.username });
-    io.to(`user-${to_user_id}`).emit('battle_invite_received', { invite: result.rows[0], fromUsername: req.user.username });
-    res.json({ ok: true, invite: result.rows[0] });
-  } catch (error) {
-    console.error('Battle invite error:', error.message);
-    res.status(500).json({ ok: false, error: 'Failed to send invite' });
-  }
-});
 
-app.post('/api/battles/invite/:id/accept', authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const inviteResult = await client.query(
-      "SELECT * FROM battle_invites WHERE id = $1 AND to_user_id = $2 AND status = 'pending' FOR UPDATE",
-      [req.params.id, req.user.id]
-    );
-    if (inviteResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ ok: false, error: 'Invite not found or already handled' });
+app.post(
+  '/api/streams/:id/battle',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const streamId =
+        req.params.id;
+
+      const {
+        battle_type,
+        team_a_name,
+        team_b_name
+      } =
+        req.body || {};
+
+      const owned =
+        await pool.query(
+          `
+          SELECT id
+          FROM livestreams
+          WHERE id = $1
+            AND user_id = $2
+          `,
+          [
+            streamId,
+            req.user.id
+          ]
+        );
+
+      if (!owned.rows.length) {
+        return res
+          .status(404)
+          .json({
+            ok: false,
+            error:
+              'Stream not found'
+          });
+      }
+
+      const battleResult =
+        await pool.query(
+          `
+          INSERT INTO stream_battles
+          (
+            stream_id,
+            host_id,
+            status
+          )
+          VALUES
+          ($1, $2, 'waiting')
+          RETURNING *
+          `,
+          [
+            streamId,
+            req.user.id
+          ]
+        );
+
+      const battle =
+        battleResult.rows[0];
+
+      await pool.query(
+        `
+        INSERT INTO battle_participants
+        (
+          battle_id,
+          user_id,
+          team
+        )
+        VALUES
+        ($1, $2, 'a')
+        ON CONFLICT DO NOTHING
+        `,
+        [
+          battle.id,
+          req.user.id
+        ]
+      );
+
+      if (
+        team_a_name ||
+        team_b_name ||
+        battle_type
+      ) {
+        await pool.query(
+          `
+          UPDATE stream_battles
+
+          SET
+            team_a_name =
+              COALESCE(
+                $1,
+                team_a_name
+              ),
+
+            team_b_name =
+              COALESCE(
+                $2,
+                team_b_name
+              ),
+
+            battle_type =
+              COALESCE(
+                $3,
+                battle_type
+              )
+
+          WHERE id = $4
+          `,
+          [
+            team_a_name ||
+              null,
+
+            team_b_name ||
+              null,
+
+            battle_type ||
+              null,
+
+            battle.id
+          ]
+        );
+      }
+
+      const participants =
+        await pool.query(
+          `
+          SELECT
+            bp.*,
+            u.username,
+            u.avatar_url
+
+          FROM battle_participants bp
+
+          JOIN users u
+            ON bp.user_id =
+               u.id
+
+          WHERE
+            bp.battle_id = $1
+          `,
+          [battle.id]
+        );
+
+      io.to(
+        `stream-${streamId}`
+      ).emit(
+        'battle_created',
+        {
+          battle,
+          participants:
+            participants.rows
+        }
+      );
+
+      res.json({
+        ok: true,
+        battle,
+        participants:
+          participants.rows
+      });
+    } catch (error) {
+      console.error(
+        'Create stream battle error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            'Failed to create battle'
+        });
     }
-    const invite = inviteResult.rows[0];
-    const battleResult = await client.query(
-      `INSERT INTO stream_battles (stream_id, host_id, status) VALUES ($1, $2, 'waiting') RETURNING *`,
-      [invite.from_stream_id, invite.from_user_id]
-    );
-    const battle = battleResult.rows[0];
-    await client.query(
-      `INSERT INTO battle_participants (battle_id, user_id, team) VALUES ($1, $2, 'a'), ($1, $3, 'b')`,
-      [battle.id, invite.from_user_id, invite.to_user_id]
-    );
-    await client.query(
-      "UPDATE battle_invites SET status = 'accepted', responded_at = NOW(), battle_id = $1 WHERE id = $2",
-      [battle.id, invite.id]
-    );
-    await client.query('COMMIT');
-    io.to(`user-${invite.from_user_id}`).emit('battle-invite-accepted', { battle });
-    io.to(`user-${invite.from_user_id}`).emit('battle_invite_accepted', { battle });
-    res.json({ ok: true, battle });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Accept invite error:', error.message);
-    res.status(500).json({ ok: false, error: 'Failed to accept invite' });
-  } finally {
-    client.release();
   }
-});
+);
 
-app.post('/api/battles/invite/:id/decline', authenticateToken, async (req, res) => {
-  try {
-    const result = await pool.query(
-      "UPDATE battle_invites SET status = 'declined', responded_at = NOW() WHERE id = $1 AND to_user_id = $2 RETURNING *",
-      [req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ ok: false, error: 'Invite not found' });
-    io.to(`user-${result.rows[0].from_user_id}`).emit('battle-invite-declined', { inviteId: req.params.id });
-    io.to(`user-${result.rows[0].from_user_id}`).emit('battle_invite_declined', { inviteId: req.params.id });
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Decline invite error:', error.message);
-    res.status(500).json({ ok: false, error: 'Failed to decline invite' });
-  }
-});
+// ========================================
+// 🎁 Gifts
+// ========================================
 
-app.get('/api/battles/:id', authenticateToken, async (req, res) => {
-  try {
-    const battleResult = await pool.query('SELECT * FROM stream_battles WHERE id = $1', [req.params.id]);
-    if (battleResult.rows.length === 0) return res.status(404).json({ error: 'Battle not found' });
-    const participants = await pool.query(
-      `SELECT bp.*, u.username, u.avatar_url FROM battle_participants bp
-       JOIN users u ON bp.user_id = u.id WHERE bp.battle_id = $1`,
-      [req.params.id]
-    );
-    const battle = battleResult.rows[0];
-    res.json({ ok: true, battle, participants: participants.rows, ...battle });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch battle' });
-  }
-});
+app.post(
+  '/api/gifts/send',
+  authenticateToken,
+  async (req, res) => {
+    const {
+      streamId,
+      giftName,
+      quantity = 1,
+      message
+    } = req.body;
 
-app.post('/api/battles/:id/start', authenticateToken, async (req, res) => {
-  try {
-    const result = await pool.query(
-      "UPDATE stream_battles SET status = 'active', started_at = NOW() WHERE id = $1 AND host_id = $2 RETURNING *",
-      [req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ ok: false, error: 'Battle not found' });
-    io.emit('battle-started', { battleId: req.params.id });
-    io.emit('battle_started', { battleId: req.params.id });
-    res.json({ ok: true, battle: result.rows[0] });
-  } catch (error) {
-    console.error('Battle start error:', error.message);
-    res.status(500).json({ ok: false, error: 'Failed to start battle' });
-  }
-});
+    const fromUser =
+      req.user;
 
-app.post('/api/battles/:id/end', authenticateToken, async (req, res) => {
-  try {
-    const participants = await pool.query(
-      'SELECT * FROM battle_participants WHERE battle_id = $1 ORDER BY gifts_received DESC',
-      [req.params.id]
-    );
-    const winnerId = participants.rows[0]?.user_id || null;
-    const result = await pool.query(
-      "UPDATE stream_battles SET status = 'ended', ended_at = NOW(), winner_id = $1 WHERE id = $2 AND host_id = $3 RETURNING *",
-      [winnerId, req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ ok: false, error: 'Battle not found' });
-    io.emit('battle-ended', { battleId: req.params.id, winnerId });
-    io.emit('battle_ended', { battleId: req.params.id, winnerId });
-    res.json({ ok: true, battle: result.rows[0] });
-  } catch (error) {
-    console.error('Battle end error:', error.message);
-    res.status(500).json({ ok: false, error: 'Failed to end battle' });
-  }
-});
+    const client =
+      await pool.connect();
 
-app.post('/api/battles/:id/attack', authenticateToken, async (req, res) => {
-  const { gift_type, cost, damage, stream_id } = req.body;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const senderResult = await client.query('SELECT balance_credits FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
-    if (parseFloat(senderResult.rows[0].balance_credits) < cost) {
-      await client.query('ROLLBACK');
-      return res.json({ ok: false, error: 'Insufficient credits' });
+    try {
+      await client.query(
+        'BEGIN'
+      );
+
+      const giftResult =
+        await client.query(
+          `
+          SELECT *
+          FROM gifts
+          WHERE name = $1
+            AND is_active = true
+          `,
+          [giftName]
+        );
+
+      if (
+        giftResult.rows.length ===
+        0
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res
+          .status(400)
+          .json({
+            error:
+              'Unknown gift type'
+          });
+      }
+
+      const gift =
+        giftResult.rows[0];
+
+      const totalCredits =
+        parseFloat(
+          gift.credit_cost
+        ) * quantity;
+
+      const senderResult =
+        await client.query(
+          `
+          SELECT
+            balance_credits
+          FROM users
+          WHERE id = $1
+          FOR UPDATE
+          `,
+          [fromUser.id]
+        );
+
+      if (
+        parseFloat(
+          senderResult.rows[0]
+            .balance_credits
+        ) <
+        totalCredits
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res
+          .status(400)
+          .json({
+            error:
+              'Insufficient credits'
+          });
+      }
+
+      const streamResult =
+        await client.query(
+          `
+          SELECT user_id
+          FROM livestreams
+          WHERE id = $1
+          `,
+          [streamId]
+        );
+
+      if (
+        streamResult.rows.length ===
+        0
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res
+          .status(404)
+          .json({
+            error:
+              'Stream not found'
+          });
+      }
+
+      const toUserId =
+        streamResult.rows[0]
+          .user_id;
+
+      const creatorCredits =
+        totalCredits *
+        (
+          parseFloat(
+            gift.creator_pct
+          ) / 100
+        );
+
+      const platformCredits =
+        totalCredits *
+        (
+          parseFloat(
+            gift.platform_pct
+          ) / 100
+        );
+
+      await client.query(
+        `
+        UPDATE users
+
+        SET
+          balance_credits =
+            balance_credits - $1
+
+        WHERE id = $2
+        `,
+        [
+          totalCredits,
+          fromUser.id
+        ]
+      );
+
+      await client.query(
+        `
+        UPDATE users
+
+        SET
+          balance_credits =
+            balance_credits + $1,
+
+          total_earned =
+            total_earned + $1
+
+        WHERE id = $2
+        `,
+        [
+          creatorCredits,
+          toUserId
+        ]
+      );
+
+      await client.query(
+        `
+        UPDATE livestreams
+
+        SET
+          total_gifts_received =
+            total_gifts_received + $1
+
+        WHERE id = $2
+        `,
+        [
+          creatorCredits,
+          streamId
+        ]
+      );
+
+      const txResult =
+        await client.query(
+          `
+          INSERT INTO gift_transactions
+          (
+            gift_id,
+            stream_id,
+            from_user_id,
+            to_user_id,
+            quantity,
+            credits_spent,
+            creator_credits,
+            platform_credits,
+            message
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9
+          )
+          RETURNING *
+          `,
+          [
+            gift.id,
+            streamId,
+            fromUser.id,
+            toUserId,
+            quantity,
+            totalCredits,
+            creatorCredits,
+            platformCredits,
+            message || ''
+          ]
+        );
+
+      await client.query(
+        `
+        INSERT INTO transactions
+        (
+          user_id,
+          type,
+          amount_usd,
+          credits_amount,
+          description
+        )
+        VALUES
+        (
+          $1,
+          'gift_received',
+          $2,
+          $2,
+          $3
+        )
+        `,
+        [
+          toUserId,
+          creatorCredits,
+          `${gift.name} x${quantity} from ${fromUser.username}`
+        ]
+      );
+
+      await client.query(
+        'COMMIT'
+      );
+
+      io.to(
+        `stream-${streamId}`
+      ).emit(
+        'new-gift',
+        {
+          giftName:
+            gift.name,
+
+          emoji:
+            gift.emoji,
+
+          fromUser:
+            fromUser.username,
+
+          quantity,
+
+          creatorCredits,
+
+          playSound:
+            true,
+
+          soundFile:
+            `/sounds/gift-${gift.name.toLowerCase()}.mp3`
+        }
+      );
+
+      res.json({
+        success: true,
+        gift:
+          gift.name,
+        quantity,
+        creatorCredits,
+        transaction:
+          txResult.rows[0]
+      });
+    } catch (error) {
+      await client.query(
+        'ROLLBACK'
+      );
+
+      console.error(
+        'Gift error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to send gift'
+        });
+    } finally {
+      client.release();
     }
-    const targetResult = await client.query(
-      `SELECT bp.id FROM battle_participants bp
-       WHERE bp.battle_id = $1 AND bp.user_id != $2 AND bp.status = 'active' LIMIT 1`,
-      [req.params.id, req.user.id]
-    );
-    if (targetResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.json({ ok: false, error: 'No active opponent found' });
-    }
-    const targetParticipantId = targetResult.rows[0].id;
-    const updated = await client.query(
-      'UPDATE users SET balance_credits = balance_credits - $1 WHERE id = $2 RETURNING balance_credits',
-      [cost, req.user.id]
-    );
-    await client.query(
-      'UPDATE battle_participants SET gifts_received = gifts_received + $1, votes = votes + 1 WHERE id = $2',
-      [cost, targetParticipantId]
-    );
-    await client.query(
-      `INSERT INTO battle_attacks (battle_id, attacker_id, target_participant_id, gift_type, cost, damage)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [req.params.id, req.user.id, targetParticipantId, gift_type || null, cost, damage || 0]
-    );
-    await client.query('COMMIT');
-    io.emit('battle-attack', { battleId: req.params.id, targetParticipantId, damage, gift_type });
-    res.json({ ok: true, new_balance: parseFloat(updated.rows[0].balance_credits) });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Battle attack error:', error.message);
-    res.json({ ok: false, error: 'Attack failed' });
-  } finally {
-    client.release();
   }
-});
+);
 
-app.post('/api/battles/:id/background', authenticateToken, async (req, res) => {
-  try {
-    const { participant_id, bg_data_url } = req.body;
-    await pool.query(
-      'UPDATE battle_participants SET background_url = $1 WHERE id = $2 AND user_id = $3',
-      [bg_data_url, participant_id, req.user.id]
-    );
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Battle background error:', error.message);
-    res.status(500).json({ ok: false, error: 'Failed to save background' });
+// ========================================
+// ⚔️ Battles
+// ========================================
+
+app.post(
+  '/api/battles/invite',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        to_stream_id,
+        to_user_id
+      } = req.body;
+
+      if (
+        !to_stream_id ||
+        !to_user_id
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'to_stream_id and to_user_id are required'
+          });
+      }
+
+      const myStream =
+        await pool.query(
+          `
+          SELECT id
+          FROM livestreams
+          WHERE user_id = $1
+            AND status = 'live'
+          ORDER BY
+            started_at DESC
+          LIMIT 1
+          `,
+          [req.user.id]
+        );
+
+      if (
+        myStream.rows.length ===
+        0
+      ) {
+        return res
+          .status(400)
+          .json({
+            ok: false,
+            error:
+              'You must be live to send a battle invite'
+          });
+      }
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO battle_invites
+          (
+            from_stream_id,
+            from_user_id,
+            to_stream_id,
+            to_user_id
+          )
+          VALUES
+          ($1, $2, $3, $4)
+          RETURNING *
+          `,
+          [
+            myStream.rows[0]
+              .id,
+
+            req.user.id,
+
+            to_stream_id,
+
+            to_user_id
+          ]
+        );
+
+      io.to(
+        `user-${to_user_id}`
+      ).emit(
+        'battle-invite',
+        {
+          invite:
+            result.rows[0],
+
+          fromUsername:
+            req.user.username
+        }
+      );
+
+      io.to(
+        `user-${to_user_id}`
+      ).emit(
+        'battle_invite_received',
+        {
+          invite:
+            result.rows[0],
+
+          fromUsername:
+            req.user.username
+        }
+      );
+
+      res.json({
+        ok: true,
+        invite:
+          result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'Battle invite error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            'Failed to send invite'
+        });
+    }
   }
-});
+);
+
+app.post(
+  '/api/battles/invite/:id/accept',
+  authenticateToken,
+  async (req, res) => {
+    const client =
+      await pool.connect();
+
+    try {
+      await client.query(
+        'BEGIN'
+      );
+
+      const inviteResult =
+        await client.query(
+          `
+          SELECT *
+          FROM battle_invites
+          WHERE id = $1
+            AND to_user_id = $2
+            AND status = 'pending'
+          FOR UPDATE
+          `,
+          [
+            req.params.id,
+            req.user.id
+          ]
+        );
+
+      if (
+        inviteResult.rows.length ===
+        0
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res
+          .status(404)
+          .json({
+            ok: false,
+            error:
+              'Invite not found or already handled'
+          });
+      }
+
+      const invite =
+        inviteResult.rows[0];
+
+      const battleResult =
+        await client.query(
+          `
+          INSERT INTO stream_battles
+          (
+            stream_id,
+            host_id,
+            status
+          )
+          VALUES
+          ($1, $2, 'waiting')
+          RETURNING *
+          `,
+          [
+            invite.from_stream_id,
+            invite.from_user_id
+          ]
+        );
+
+      const battle =
+        battleResult.rows[0];
+
+      await client.query(
+        `
+        INSERT INTO battle_participants
+        (
+          battle_id,
+          user_id,
+          team
+        )
+        VALUES
+        ($1, $2, 'a'),
+        ($1, $3, 'b')
+        `,
+        [
+          battle.id,
+          invite.from_user_id,
+          invite.to_user_id
+        ]
+      );
+
+      await client.query(
+        `
+        UPDATE battle_invites
+
+        SET
+          status = 'accepted',
+          responded_at = NOW(),
+          battle_id = $1
+
+        WHERE id = $2
+        `,
+        [
+          battle.id,
+          invite.id
+        ]
+      );
+
+      await client.query(
+        'COMMIT'
+      );
+
+      io.to(
+        `user-${invite.from_user_id}`
+      ).emit(
+        'battle-invite-accepted',
+        {
+          battle
+        }
+      );
+
+      io.to(
+        `user-${invite.from_user_id}`
+      ).emit(
+        'battle_invite_accepted',
+        {
+          battle
+        }
+      );
+
+      res.json({
+        ok: true,
+        battle
+      });
+    } catch (error) {
+      await client.query(
+        'ROLLBACK'
+      );
+
+      console.error(
+        'Accept invite error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            'Failed to accept invite'
+        });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+app.post(
+  '/api/battles/invite/:id/decline',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE battle_invites
+
+          SET
+            status = 'declined',
+            responded_at = NOW()
+
+          WHERE
+            id = $1
+            AND to_user_id = $2
+
+          RETURNING *
+          `,
+          [
+            req.params.id,
+            req.user.id
+          ]
+        );
+
+      if (
+        result.rows.length ===
+        0
+      ) {
+        return res
+          .status(404)
+          .json({
+            ok: false,
+            error:
+              'Invite not found'
+          });
+      }
+
+      io.to(
+        `user-${result.rows[0]
+          .from_user_id}`
+      ).emit(
+        'battle-invite-declined',
+        {
+          inviteId:
+            req.params.id
+        }
+      );
+
+      io.to(
+        `user-${result.rows[0]
+          .from_user_id}`
+      ).emit(
+        'battle_invite_declined',
+        {
+          inviteId:
+            req.params.id
+        }
+      );
+
+      res.json({
+        ok: true
+      });
+    } catch (error) {
+      console.error(
+        'Decline invite error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            'Failed to decline invite'
+        });
+    }
+  }
+);
+
+app.get(
+  '/api/battles/:id',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const battleResult =
+        await pool.query(
+          `
+          SELECT *
+          FROM stream_battles
+          WHERE id = $1
+          `,
+          [req.params.id]
+        );
+
+      if (
+        battleResult.rows.length ===
+        0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Battle not found'
+          });
+      }
+
+      const participants =
+        await pool.query(
+          `
+          SELECT
+            bp.*,
+            u.username,
+            u.avatar_url
+
+          FROM battle_participants bp
+
+          JOIN users u
+            ON bp.user_id =
+               u.id
+
+          WHERE
+            bp.battle_id = $1
+          `,
+          [req.params.id]
+        );
+
+      const battle =
+        battleResult.rows[0];
+
+      res.json({
+        ok: true,
+        battle,
+        participants:
+          participants.rows,
+        ...battle
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch battle'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/battles/:id/start',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE stream_battles
+
+          SET
+            status = 'active',
+            started_at = NOW()
+
+          WHERE
+            id = $1
+            AND host_id = $2
+
+          RETURNING *
+          `,
+          [
+            req.params.id,
+            req.user.id
+          ]
+        );
+
+      if (
+        result.rows.length ===
+        0
+      ) {
+        return res
+          .status(404)
+          .json({
+            ok: false,
+            error:
+              'Battle not found'
+          });
+      }
+
+      io.emit(
+        'battle-started',
+        {
+          battleId:
+            req.params.id
+        }
+      );
+
+      io.emit(
+        'battle_started',
+        {
+          battleId:
+            req.params.id
+        }
+      );
+
+      res.json({
+        ok: true,
+        battle:
+          result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'Battle start error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            'Failed to start battle'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/battles/:id/end',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const participants =
+        await pool.query(
+          `
+          SELECT *
+          FROM battle_participants
+          WHERE battle_id = $1
+          ORDER BY
+            gifts_received DESC
+          `,
+          [req.params.id]
+        );
+
+      const winnerId =
+        participants.rows[0]
+          ?.user_id ||
+        null;
+
+      const result =
+        await pool.query(
+          `
+          UPDATE stream_battles
+
+          SET
+            status = 'ended',
+            ended_at = NOW(),
+            winner_id = $1
+
+          WHERE
+            id = $2
+            AND host_id = $3
+
+          RETURNING *
+          `,
+          [
+            winnerId,
+            req.params.id,
+            req.user.id
+          ]
+        );
+
+      if (
+        result.rows.length ===
+        0
+      ) {
+        return res
+          .status(404)
+          .json({
+            ok: false,
+            error:
+              'Battle not found'
+          });
+      }
+
+      io.emit(
+        'battle-ended',
+        {
+          battleId:
+            req.params.id,
+          winnerId
+        }
+      );
+
+      io.emit(
+        'battle_ended',
+        {
+          battleId:
+            req.params.id,
+          winnerId
+        }
+      );
+
+      res.json({
+        ok: true,
+        battle:
+          result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'Battle end error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            'Failed to end battle'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/battles/:id/attack',
+  authenticateToken,
+  async (req, res) => {
+    const {
+      gift_type,
+      cost,
+      damage,
+      stream_id
+    } = req.body;
+
+    const client =
+      await pool.connect();
+
+    try {
+      await client.query(
+        'BEGIN'
+      );
+
+      const numericCost =
+        Math.max(
+          0,
+          Number(cost) || 0
+        );
+
+      const senderResult =
+        await client.query(
+          `
+          SELECT
+            balance_credits
+          FROM users
+          WHERE id = $1
+          FOR UPDATE
+          `,
+          [req.user.id]
+        );
+
+      if (
+        parseFloat(
+          senderResult.rows[0]
+            .balance_credits
+        ) <
+        numericCost
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res.json({
+          ok: false,
+          error:
+            'Insufficient credits'
+        });
+      }
+
+      const targetResult =
+        await client.query(
+          `
+          SELECT
+            bp.id
+
+          FROM battle_participants bp
+
+          WHERE
+            bp.battle_id = $1
+            AND bp.user_id != $2
+            AND bp.status = 'active'
+
+          LIMIT 1
+          `,
+          [
+            req.params.id,
+            req.user.id
+          ]
+        );
+
+      if (
+        targetResult.rows.length ===
+        0
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res.json({
+          ok: false,
+          error:
+            'No active opponent found'
+        });
+      }
+
+      const targetParticipantId =
+        targetResult.rows[0]
+          .id;
+
+      const updated =
+        await client.query(
+          `
+          UPDATE users
+
+          SET
+            balance_credits =
+              balance_credits - $1
+
+          WHERE id = $2
+
+          RETURNING
+            balance_credits
+          `,
+          [
+            numericCost,
+            req.user.id
+          ]
+        );
+
+      await client.query(
+        `
+        UPDATE battle_participants
+
+        SET
+          gifts_received =
+            gifts_received + $1,
+
+          votes =
+            votes + 1
+
+        WHERE id = $2
+        `,
+        [
+          numericCost,
+          targetParticipantId
+        ]
+      );
+
+      await client.query(
+        `
+        INSERT INTO battle_attacks
+        (
+          battle_id,
+          attacker_id,
+          target_participant_id,
+          gift_type,
+          cost,
+          damage
+        )
+        VALUES
+        ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          req.params.id,
+          req.user.id,
+          targetParticipantId,
+          gift_type || null,
+          numericCost,
+          damage || 0
+        ]
+      );
+
+      await client.query(
+        'COMMIT'
+      );
+
+      io.emit(
+        'battle-attack',
+        {
+          battleId:
+            req.params.id,
+          targetParticipantId,
+          damage,
+          gift_type
+        }
+      );
+
+      res.json({
+        ok: true,
+
+        new_balance:
+          parseFloat(
+            updated.rows[0]
+              .balance_credits
+          )
+      });
+    } catch (error) {
+      await client.query(
+        'ROLLBACK'
+      );
+
+      console.error(
+        'Battle attack error:',
+        error.message
+      );
+
+      res.json({
+        ok: false,
+        error:
+          'Attack failed'
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+app.post(
+  '/api/battles/:id/background',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        participant_id,
+        bg_data_url
+      } = req.body;
+
+      await pool.query(
+        `
+        UPDATE battle_participants
+
+        SET
+          background_url = $1
+
+        WHERE
+          id = $2
+          AND user_id = $3
+        `,
+        [
+          bg_data_url,
+          participant_id,
+          req.user.id
+        ]
+      );
+
+      res.json({
+        ok: true
+      });
+    } catch (error) {
+      console.error(
+        'Battle background error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            'Failed to save background'
+        });
+    }
+  }
+);
 
 // ========================================
 // 💰 Wallet
 // ========================================
-app.get('/api/wallet/balance', authenticateToken, async (req, res) => {
-  const result = await pool.query('SELECT balance_credits, total_earned FROM users WHERE id = $1', [req.user.id]);
-  res.json({ balance: parseFloat(result.rows[0].balance_credits), total_earned: parseFloat(result.rows[0].total_earned) });
-});
 
-app.get('/api/wallet', authenticateToken, async (req, res) => {
-  const result = await pool.query('SELECT balance_credits, total_earned FROM users WHERE id = $1', [req.user.id]);
-  res.json({ balance: parseFloat(result.rows[0].balance_credits), total_earned: parseFloat(result.rows[0].total_earned) });
-});
-
-app.get('/api/wallet/transactions', authenticateToken, async (req, res) => {
-  const result = await pool.query(
-    'SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100',
-    [req.user.id]
-  );
-  res.json({ transactions: result.rows });
-});
-
-app.post('/api/wallet/connect', authenticateToken, async (req, res) => {
-  try {
-    const { address } = req.body;
-    if (!address) return res.status(400).json({ error: 'address is required' });
-    await pool.query('UPDATE users SET wallet_address = $1 WHERE id = $2', [address, req.user.id]);
-    res.json({ ok: true, address });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to connect wallet' });
-  }
-});
-
-app.post('/api/wallet/withdraw', authenticateToken, async (req, res) => {
-  try {
-    const { amount } = req.body;
-    const minAmount = parseFloat(process.env.MIN_PAYOUT_AMOUNT || 5);
-    if (!amount || amount < minAmount) return res.status(400).json({ error: `Minimum payout is $${minAmount}` });
-    if (!req.user.paypal_email) return res.status(400).json({ error: 'Set a PayPal email on your profile first' });
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const balanceResult = await client.query('SELECT balance_credits FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
-      if (parseFloat(balanceResult.rows[0].balance_credits) < amount) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Insufficient balance' });
-      }
-      await client.query('UPDATE users SET balance_credits = balance_credits - $1 WHERE id = $2', [amount, req.user.id]);
-      const tx = await client.query(
-        `INSERT INTO transactions (user_id, type, amount_usd, status, description)
-         VALUES ($1, 'withdrawal', $2, 'pending', $3) RETURNING *`,
-        [req.user.id, amount, `Payout to ${req.user.paypal_email}`]
+app.get(
+  '/api/wallet/balance',
+  authenticateToken,
+  async (req, res) => {
+    const result =
+      await pool.query(
+        `
+        SELECT
+          balance_credits,
+          total_earned
+        FROM users
+        WHERE id = $1
+        `,
+        [req.user.id]
       );
-      await client.query('COMMIT');
-      res.json({ success: true, transaction: tx.rows[0] });
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Withdraw error:', error);
-    res.status(500).json({ error: 'Failed to request payout' });
+
+    res.json({
+      balance:
+        parseFloat(
+          result.rows[0]
+            .balance_credits
+        ),
+
+      total_earned:
+        parseFloat(
+          result.rows[0]
+            .total_earned
+        )
+    });
   }
-});
+);
+
+app.get(
+  '/api/wallet',
+  authenticateToken,
+  async (req, res) => {
+    const result =
+      await pool.query(
+        `
+        SELECT
+          balance_credits,
+          total_earned
+        FROM users
+        WHERE id = $1
+        `,
+        [req.user.id]
+      );
+
+    res.json({
+      balance:
+        parseFloat(
+          result.rows[0]
+            .balance_credits
+        ),
+
+      total_earned:
+        parseFloat(
+          result.rows[0]
+            .total_earned
+        )
+    });
+  }
+);
+
+app.get(
+  '/api/wallet/transactions',
+  authenticateToken,
+  async (req, res) => {
+    const result =
+      await pool.query(
+        `
+        SELECT *
+        FROM transactions
+        WHERE user_id = $1
+        ORDER BY
+          created_at DESC
+        LIMIT 100
+        `,
+        [req.user.id]
+      );
+
+    res.json({
+      transactions:
+        result.rows
+    });
+  }
+);
+
+app.post(
+  '/api/wallet/connect',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        address
+      } = req.body;
+
+      if (!address) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'address is required'
+          });
+      }
+
+      await pool.query(
+        `
+        UPDATE users
+
+        SET
+          wallet_address = $1
+
+        WHERE id = $2
+        `,
+        [
+          address,
+          req.user.id
+        ]
+      );
+
+      res.json({
+        ok: true,
+        address
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to connect wallet'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/wallet/withdraw',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        amount
+      } = req.body;
+
+      const minAmount =
+        parseFloat(
+          process.env.MIN_PAYOUT_AMOUNT ||
+          5
+        );
+
+      if (
+        !amount ||
+        amount < minAmount
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              `Minimum payout is $${minAmount}`
+          });
+      }
+
+      if (
+        !req.user.paypal_email
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Set a PayPal email on your profile first'
+          });
+      }
+
+      const client =
+        await pool.connect();
+
+      try {
+        await client.query(
+          'BEGIN'
+        );
+
+        const balanceResult =
+          await client.query(
+            `
+            SELECT
+              balance_credits
+            FROM users
+            WHERE id = $1
+            FOR UPDATE
+            `,
+            [req.user.id]
+          );
+
+        if (
+          parseFloat(
+            balanceResult.rows[0]
+              .balance_credits
+          ) < amount
+        ) {
+          await client.query(
+            'ROLLBACK'
+          );
+
+          return res
+            .status(400)
+            .json({
+              error:
+                'Insufficient balance'
+            });
+        }
+
+        await client.query(
+          `
+          UPDATE users
+
+          SET
+            balance_credits =
+              balance_credits - $1
+
+          WHERE id = $2
+          `,
+          [
+            amount,
+            req.user.id
+          ]
+        );
+
+        const tx =
+          await client.query(
+            `
+            INSERT INTO transactions
+            (
+              user_id,
+              type,
+              amount_usd,
+              status,
+              description
+            )
+            VALUES
+            (
+              $1,
+              'withdrawal',
+              $2,
+              'pending',
+              $3
+            )
+            RETURNING *
+            `,
+            [
+              req.user.id,
+              amount,
+              `Payout to ${req.user.paypal_email}`
+            ]
+          );
+
+        await client.query(
+          'COMMIT'
+        );
+
+        res.json({
+          success: true,
+          transaction:
+            tx.rows[0]
+        });
+      } catch (err) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        throw err;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error(
+        'Withdraw error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to request payout'
+        });
+    }
+  }
+);
 
 // ========================================
 // 💳 PayPal
 // ========================================
-app.post('/api/payments/paypal/create-order', authenticateToken, async (req, res) => {
-  try {
-    const { plan } = req.body;
-    const amounts = { starter: '9.99', creator: '29.99', pro: '99.99' };
-    const value = amounts[plan];
-    if (!value) return res.status(400).json({ error: 'Unknown plan' });
-    const request = new paypal.orders.OrdersCreateRequest();
-    request.requestBody({
-      intent: 'CAPTURE',
-      purchase_units: [{ amount: { currency_code: 'USD', value } }]
-    });
-    const order = await paypalClient().execute(request);
-    res.json({ orderId: order.result.id });
-  } catch (error) {
-    console.error('PayPal create-order error:', error);
-    res.status(500).json({ error: 'Failed to create order' });
-  }
-});
 
-app.post('/api/payments/paypal/capture-order', authenticateToken, async (req, res) => {
-  try {
-    const { orderId } = req.body;
-    if (!orderId) return res.status(400).json({ error: 'orderId is required' });
-    const request = new paypal.orders.OrdersCaptureRequest(orderId);
-    request.requestBody({});
-    const capture = await paypalClient().execute(request);
-    const amountUsd = parseFloat(capture.result.purchase_units[0].payments.captures[0].amount.value);
-    await pool.query(
-      `UPDATE users SET balance_credits = balance_credits + $1 WHERE id = $2`,
-      [amountUsd, req.user.id]
-    );
-    const tx = await pool.query(
-      `INSERT INTO transactions (user_id, type, amount_usd, credits_amount, status, description)
-       VALUES ($1, 'credit_purchase', $2, $2, 'completed', $3) RETURNING *`,
-      [req.user.id, amountUsd, `PayPal order ${orderId}`]
-    );
-    res.json({ success: true, transaction: tx.rows[0] });
-  } catch (error) {
-    console.error('PayPal capture-order error:', error);
-    res.status(500).json({ error: 'Failed to capture order' });
+app.post(
+  '/api/payments/paypal/create-order',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        plan
+      } = req.body;
+
+      const amounts = {
+        starter: '9.99',
+        creator: '29.99',
+        pro: '99.99'
+      };
+
+      const value =
+        amounts[plan];
+
+      if (!value) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Unknown plan'
+          });
+      }
+
+      const request =
+        new paypal.orders
+          .OrdersCreateRequest();
+
+      request.requestBody({
+        intent:
+          'CAPTURE',
+
+        purchase_units: [
+          {
+            amount: {
+              currency_code:
+                'USD',
+
+              value
+            }
+          }
+        ]
+      });
+
+      const order =
+        await paypalClient()
+          .execute(
+            request
+          );
+
+      res.json({
+        orderId:
+          order.result.id
+      });
+    } catch (error) {
+      console.error(
+        'PayPal create-order error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to create order'
+        });
+    }
   }
-});
+);
+
+app.post(
+  '/api/payments/paypal/capture-order',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        orderId
+      } = req.body;
+
+      if (!orderId) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'orderId is required'
+          });
+      }
+
+      const request =
+        new paypal.orders
+          .OrdersCaptureRequest(
+            orderId
+          );
+
+      request.requestBody({});
+
+      const capture =
+        await paypalClient()
+          .execute(
+            request
+          );
+
+      const amountUsd =
+        parseFloat(
+          capture.result
+            .purchase_units[0]
+            .payments.captures[0]
+            .amount.value
+        );
+
+      await pool.query(
+        `
+        UPDATE users
+
+        SET
+          balance_credits =
+            balance_credits + $1
+
+        WHERE id = $2
+        `,
+        [
+          amountUsd,
+          req.user.id
+        ]
+      );
+
+      const tx =
+        await pool.query(
+          `
+          INSERT INTO transactions
+          (
+            user_id,
+            type,
+            amount_usd,
+            credits_amount,
+            status,
+            description
+          )
+          VALUES
+          (
+            $1,
+            'credit_purchase',
+            $2,
+            $2,
+            'completed',
+            $3
+          )
+          RETURNING *
+          `,
+          [
+            req.user.id,
+            amountUsd,
+            `PayPal order ${orderId}`
+          ]
+        );
+
+      res.json({
+        success: true,
+        transaction:
+          tx.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'PayPal capture-order error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to capture order'
+        });
+    }
+  }
+);
 
 // ========================================
 // 📡 WebSocket
 // ========================================
-io.on('connection', (socket) => {
-  const handshakeToken = (socket.handshake.auth && socket.handshake.auth.token)
-    || (socket.handshake.query && socket.handshake.query.token)
-    || null;
-  if (handshakeToken && process.env.JWT_SECRET) {
-    try {
-      const payload = jwt.verify(handshakeToken, process.env.JWT_SECRET);
-      if (payload && payload.id) {
-        socket.data.userId = payload.id;
-        socket.join('user-' + payload.id);
-      }
-    } catch (_) { /* anonymous viewer */ }
-  }
 
-  const onJoinUser = (p = {}) => {
-    const userId = p.userId || p.user_id;
-    if (userId) socket.join('user-' + userId);
-  };
-  socket.on('user-online', onJoinUser);
-  socket.on('user_online', onJoinUser);
+io.on(
+  'connection',
+  (socket) => {
+    const handshakeToken =
+      (
+        socket.handshake
+          .auth &&
+        socket.handshake.auth
+          .token
+      ) ||
 
-  const emitViewerCount = (streamId) => {
-    const room = io.sockets.adapter.rooms.get('stream-' + streamId);
-    const n = room ? room.size : 0;
-    io.to('stream-' + streamId).emit('viewer_count', { viewer_count: n, streamId });
-    io.to('stream-' + streamId).emit('viewer-count', { viewer_count: n, streamId });
-  };
+      (
+        socket.handshake
+          .query &&
+        socket.handshake.query
+          .token
+      ) ||
 
-  const onJoinStream = (p = {}) => {
-    const streamId = p.streamId || p.stream_id || p.id;
-    if (!streamId) return;
-    socket.join('stream-' + streamId);
-    emitViewerCount(streamId);
-  };
-  const onLeaveStream = (p = {}) => {
-    const streamId = p.streamId || p.stream_id || p.id;
-    if (!streamId) return;
-    socket.leave('stream-' + streamId);
-    emitViewerCount(streamId);
-  };
-  socket.on('join-stream', onJoinStream);
-  socket.on('join_stream', onJoinStream);
-  socket.on('leave-stream', onLeaveStream);
-  socket.on('leave_stream', onLeaveStream);
+      null;
 
-  socket.on('join-video', ({ videoId } = {}) => { if (videoId) socket.join('video-' + videoId); });
-  socket.on('leave-video', ({ videoId } = {}) => { if (videoId) socket.leave('video-' + videoId); });
+    if (
+      handshakeToken &&
+      process.env.JWT_SECRET
+    ) {
+      try {
+        const payload =
+          jwt.verify(
+            handshakeToken,
+            process.env.JWT_SECRET
+          );
 
-  const onChat = (p = {}) => {
-    const streamId = p.streamId || p.stream_id;
-    const message = p.message || p.text || p.content;
-    const username = p.username || p.user || 'Anonymous';
-    if (!streamId || !message) return;
-    const payload = { username, message, text: message, time: new Date().toISOString() };
-    io.to('stream-' + streamId).emit('new-message', payload);
-    io.to('stream-' + streamId).emit('live_chat', payload);
-    io.to('stream-' + streamId).emit('live-chat', payload);
-  };
-  socket.on('send-message', onChat);
-  socket.on('live_chat', onChat);
-  socket.on('live-chat', onChat);
+        if (
+          payload &&
+          payload.id
+        ) {
+          socket.data.userId =
+            payload.id;
 
-  const onJoinBattle = (p = {}) => {
-    const battleId = p.battleId || p.battle_id;
-    if (battleId) socket.join('battle-' + battleId);
-  };
-  socket.on('join_battle', onJoinBattle);
-  socket.on('join-battle', onJoinBattle);
-
-  const onGiftByName = async (p = {}) => {
-    const streamId = p.streamId || p.stream_id;
-    const giftName = p.giftName || p.gift_name || p.name;
-    if (!streamId || !giftName) {
-      socket.emit('gift_error', { error: 'stream and gift name required' });
-      return;
+          socket.join(
+            'user-' +
+              payload.id
+          );
+        }
+      } catch (_) {}
     }
-    const payload = {
-      giftName, emoji: p.emoji || '🎁', fromUser: p.username || 'fan',
-      quantity: p.quantity || 1, streamId
-    };
-    io.to('stream-' + streamId).emit('gift_received', payload);
-    io.to('stream-' + streamId).emit('new-gift', payload);
-  };
-  socket.on('send_gift_by_name', onGiftByName);
-  socket.on('send-gift-by-name', onGiftByName);
 
-  // WebRTC signaling for host/viewer (live test today)
-  ['webrtc_offer', 'webrtc_answer', 'webrtc_ice', 'webrtc_viewer_join'].forEach((ev) => {
-    socket.on(ev, (p = {}) => {
-      const target = p.targetSocketId;
-      const streamId = p.stream_id || p.streamId;
-      const payload = Object.assign({}, p, { from: socket.id });
-      if (target) return socket.to(target).emit(ev, payload);
-      if (streamId) return socket.to('stream-' + streamId).emit(ev, payload);
-    });
-  });
-});
+    const onJoinUser =
+      (p = {}) => {
+        const userId =
+          p.userId ||
+          p.user_id;
+
+        if (userId) {
+          socket.join(
+            'user-' +
+              userId
+          );
+        }
+      };
+
+    socket.on(
+      'user-online',
+      onJoinUser
+    );
+
+    socket.on(
+      'user_online',
+      onJoinUser
+    );
+
+    const emitViewerCount =
+      streamId => {
+        const room =
+          io.sockets
+            .adapter.rooms.get(
+              'stream-' +
+                streamId
+            );
+
+        const n =
+          room
+            ? room.size
+            : 0;
+
+        io.to(
+          'stream-' +
+            streamId
+        ).emit(
+          'viewer_count',
+          {
+            viewer_count:
+              n,
+
+            streamId
+          }
+        );
+
+        io.to(
+          'stream-' +
+            streamId
+        ).emit(
+          'viewer-count',
+          {
+            viewer_count:
+              n,
+
+            streamId
+          }
+        );
+      };
+
+    const onJoinStream =
+      (p = {}) => {
+        const streamId =
+          p.streamId ||
+          p.stream_id ||
+          p.id;
+
+        if (!streamId)
+          return;
+
+        socket.join(
+          'stream-' +
+            streamId
+        );
+
+        emitViewerCount(
+          streamId
+        );
+      };
+
+    const onLeaveStream =
+      (p = {}) => {
+        const streamId =
+          p.streamId ||
+          p.stream_id ||
+          p.id;
+
+        if (!streamId)
+          return;
+
+        socket.leave(
+          'stream-' +
+            streamId
+        );
+
+        emitViewerCount(
+          streamId
+        );
+      };
+
+    socket.on(
+      'join-stream',
+      onJoinStream
+    );
+
+    socket.on(
+      'join_stream',
+      onJoinStream
+    );
+
+    socket.on(
+      'leave-stream',
+      onLeaveStream
+    );
+
+    socket.on(
+      'leave_stream',
+      onLeaveStream
+    );
+
+    socket.on(
+      'join-video',
+      ({
+        videoId
+      } = {}) => {
+        if (videoId) {
+          socket.join(
+            'video-' +
+              videoId
+          );
+        }
+      }
+    );
+
+    socket.on(
+      'leave-video',
+      ({
+        videoId
+      } = {}) => {
+        if (videoId) {
+          socket.leave(
+            'video-' +
+              videoId
+          );
+        }
+      }
+    );
+
+    const onChat =
+      (p = {}) => {
+        const streamId =
+          p.streamId ||
+          p.stream_id;
+
+        const message =
+          p.message ||
+          p.text ||
+          p.content;
+
+        const username =
+          p.username ||
+          p.user ||
+          'Anonymous';
+
+        if (
+          !streamId ||
+          !message
+        ) {
+          return;
+        }
+
+        const payload = {
+          username,
+          message,
+          text:
+            message,
+
+          time:
+            new Date()
+              .toISOString()
+        };
+
+        io.to(
+          'stream-' +
+            streamId
+        ).emit(
+          'new-message',
+          payload
+        );
+
+        io.to(
+          'stream-' +
+            streamId
+        ).emit(
+          'live_chat',
+          payload
+        );
+
+        io.to(
+          'stream-' +
+            streamId
+        ).emit(
+          'live-chat',
+          payload
+        );
+      };
+
+    socket.on(
+      'send-message',
+      onChat
+    );
+
+    socket.on(
+      'live_chat',
+      onChat
+    );
+
+    socket.on(
+      'live-chat',
+      onChat
+    );
+
+    const onJoinBattle =
+      (p = {}) => {
+        const battleId =
+          p.battleId ||
+          p.battle_id;
+
+        if (battleId) {
+          socket.join(
+            'battle-' +
+              battleId
+          );
+        }
+      };
+
+    socket.on(
+      'join_battle',
+      onJoinBattle
+    );
+
+    socket.on(
+      'join-battle',
+      onJoinBattle
+    );
+
+    const onGiftByName =
+      async (p = {}) => {
+        const streamId =
+          p.streamId ||
+          p.stream_id;
+
+        const giftName =
+          p.giftName ||
+          p.gift_name ||
+          p.name;
+
+        if (
+          !streamId ||
+          !giftName
+        ) {
+          socket.emit(
+            'gift_error',
+            {
+              error:
+                'stream and gift name required'
+            }
+          );
+
+          return;
+        }
+
+        const payload = {
+          giftName,
+
+          emoji:
+            p.emoji ||
+            '🎁',
+
+          fromUser:
+            p.username ||
+            'fan',
+
+          quantity:
+            p.quantity ||
+            1,
+
+          streamId
+        };
+
+        io.to(
+          'stream-' +
+            streamId
+        ).emit(
+          'gift_received',
+          payload
+        );
+
+        io.to(
+          'stream-' +
+            streamId
+        ).emit(
+          'new-gift',
+          payload
+        );
+      };
+
+    socket.on(
+      'send_gift_by_name',
+      onGiftByName
+    );
+
+    socket.on(
+      'send-gift-by-name',
+      onGiftByName
+    );
+
+    // ------------------------------------
+    // WebRTC
+    // ------------------------------------
+
+    [
+      'webrtc_offer',
+      'webrtc_answer',
+      'webrtc_ice',
+      'webrtc_viewer_join'
+    ].forEach(
+      ev => {
+        socket.on(
+          ev,
+          (p = {}) => {
+            const target =
+              p.targetSocketId;
+
+            const streamId =
+              p.stream_id ||
+              p.streamId;
+
+            const payload =
+              Object.assign(
+                {},
+                p,
+                {
+                  from:
+                    socket.id
+                }
+              );
+
+            if (target) {
+              return socket
+                .to(target)
+                .emit(
+                  ev,
+                  payload
+                );
+            }
+
+            if (streamId) {
+              return socket
+                .to(
+                  'stream-' +
+                    streamId
+                )
+                .emit(
+                  ev,
+                  payload
+                );
+            }
+          }
+        );
+      }
+    );
+  }
+);
 
 // ========================================
 // 🏠 Serve Frontend
 // ========================================
-// Public profile page
-app.get('/u/:username', (req, res) => {
-  res.sendFile('profile-view.html', { root: 'public' });
-});
 
-app.get('/battles', (req, res) => res.sendFile('creator.html', { root: 'public' }));
-app.get('/profile', (req, res) => res.sendFile('app.html', { root: 'public' }));
-app.get('/discover', (req, res) => res.sendFile('app.html', { root: 'public' }));
-app.get('/inbox', (req, res) => res.sendFile('messages.html', { root: 'public' }));
-
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path.startsWith('/socket.io')) {
-    return res.status(404).json({ error: 'Not found' });
+app.get(
+  '/u/:username',
+  (req, res) => {
+    res.sendFile(
+      'profile-view.html',
+      {
+        root: 'public'
+      }
+    );
   }
-  res.sendFile('index.html', { root: 'public' });
-});
+);
+
+app.get(
+  '/battles',
+  (req, res) =>
+    res.sendFile(
+      'creator.html',
+      {
+        root: 'public'
+      }
+    )
+);
+
+app.get(
+  '/profile',
+  (req, res) =>
+    res.sendFile(
+      'app.html',
+      {
+        root: 'public'
+      }
+    )
+);
+
+app.get(
+  '/discover',
+  (req, res) =>
+    res.sendFile(
+      'app.html',
+      {
+        root: 'public'
+      }
+    )
+);
+
+app.get(
+  '/inbox',
+  (req, res) =>
+    res.sendFile(
+      'messages.html',
+      {
+        root: 'public'
+      }
+    )
+);
+
+app.get(
+  '*',
+  (req, res) => {
+    if (
+      req.path.startsWith(
+        '/api'
+      ) ||
+
+      req.path.startsWith(
+        '/auth'
+      ) ||
+
+      req.path.startsWith(
+        '/socket.io'
+      )
+    ) {
+      return res
+        .status(404)
+        .json({
+          error:
+            'Not found'
+        });
+    }
+
+    res.sendFile(
+      'index.html',
+      {
+        root: 'public'
+      }
+    );
+  }
+);
+
+// ========================================
+// 🧠 Background Intelligence Worker
+// ========================================
+
+let intelligenceWorkerRunning =
+  false;
+
+async function runIntelligenceCycle() {
+  if (
+    intelligenceWorkerRunning
+  ) {
+    return;
+  }
+
+  intelligenceWorkerRunning =
+    true;
+
+  try {
+    // ------------------------------------
+    // 1. Recalculate active trends
+    // ------------------------------------
+
+    const trends =
+      await pool.query(
+        `
+        SELECT id
+        FROM trending_topics
+
+        WHERE
+          status = 'active'
+          AND last_seen_at >
+            NOW() -
+            INTERVAL '7 days'
+
+        ORDER BY
+          trend_score DESC
+
+        LIMIT 50
+        `
+      );
+
+    for (
+      const trend of trends.rows
+    ) {
+      await calculateTrendScore(
+        trend.id
+      );
+    }
+
+    // ------------------------------------
+    // 2. Refresh video completion metrics
+    // ------------------------------------
+
+    await pool.query(
+      `
+      UPDATE videos v
+
+      SET
+        completion_rate =
+          COALESCE(
+            (
+              SELECT
+                AVG(
+                  CASE
+                    WHEN ve.video_duration_ms > 0
+                    THEN
+                      LEAST(
+                        1,
+                        GREATEST(
+                          0,
+                          ve.watch_ms::numeric /
+                          ve.video_duration_ms::numeric
+                        )
+                      )
+                    ELSE 0
+                  END
+                )
+
+              FROM video_events ve
+
+              WHERE
+                ve.video_id = v.id
+
+                AND ve.event_type IN
+                (
+                  'play',
+                  'complete',
+                  'rewatch',
+                  '50_percent',
+                  '75_percent'
+                )
+
+                AND ve.created_at >
+                  NOW() -
+                  INTERVAL '30 days'
+            ),
+            0
+          ),
+
+        avg_watch_ms =
+          COALESCE(
+            (
+              SELECT
+                AVG(
+                  ve.watch_ms
+                )
+
+              FROM video_events ve
+
+              WHERE
+                ve.video_id = v.id
+
+                AND ve.watch_ms > 0
+
+                AND ve.created_at >
+                  NOW() -
+                  INTERVAL '30 days'
+            ),
+            0
+          ),
+
+        last_ranked_at =
+          NOW()
+
+      WHERE
+        v.is_published = true
+      `
+    );
+
+    // ------------------------------------
+    // 3. Normalize recommendation scores
+    // ------------------------------------
+
+    await pool.query(
+      `
+      UPDATE videos
+
+      SET
+        recommendation_score =
+          GREATEST(
+            -100,
+            LEAST(
+              100,
+              recommendation_score * 0.995
+            )
+          )
+
+      WHERE
+        recommendation_score IS NOT NULL
+      `
+    );
+
+    // ------------------------------------
+    // 4. Expire old trends
+    // ------------------------------------
+
+    await pool.query(
+      `
+      UPDATE trending_topics
+
+      SET
+        status = 'expired',
+        updated_at = NOW()
+
+      WHERE
+        status = 'active'
+
+        AND last_seen_at <
+          NOW() -
+          INTERVAL '7 days'
+      `
+    );
+  } catch (error) {
+    console.error(
+      '🧠 Intelligence worker error:',
+      error.message
+    );
+  } finally {
+    intelligenceWorkerRunning =
+      false;
+  }
+}
 
 // ========================================
 // 🚀 Start Server
 // ========================================
-server.listen(PORT, () => {
-  console.log(`🚀 NVME.live running on http://localhost:${PORT}`);
-  console.log(`🔐 Auth: register/login/me/google — enabled`);
-  console.log(`❤️  Likes / 💬 Comments / 👥 Follows / 🔒 Privacy / 🔎 Search: enabled`);
-  console.log(`💰 Gifts, wallet, PayPal: enabled`);
-  console.log(`⚔️  Battles: enabled`);
-});
 
-process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));
-process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
+async function startServer() {
+  try {
+    await initializeIntelligenceDatabase();
+
+    server.listen(
+      PORT,
+      () => {
+        console.log('');
+        console.log(
+          '========================================'
+        );
+
+        console.log(
+          `🚀 NVME.live running on port ${PORT}`
+        );
+
+        console.log(
+          '========================================'
+        );
+
+        console.log(
+          '🔐 Auth: register/login/me/google — enabled'
+        );
+
+        console.log(
+          '❤️ Likes / 💬 Comments / 👥 Follows / 🔒 Privacy / 🔎 Search — enabled'
+        );
+
+        console.log(
+          '💰 Gifts / Wallet / PayPal — enabled'
+        );
+
+        console.log(
+          '⚔️ Battles — enabled'
+        );
+
+        console.log(
+          '📹 Video upload / Cloudinary — enabled'
+        );
+
+        console.log(
+          '🔥 Trending Engine — enabled'
+        );
+
+        console.log(
+          '🧠 Atomic Claims — enabled'
+        );
+
+        console.log(
+          '♻️ Claim Deduplication — enabled'
+        );
+
+        console.log(
+          '📊 Behavioral Events — enabled'
+        );
+
+        console.log(
+          '🚫 Not Interested — enabled'
+        );
+
+        console.log(
+          '🎯 Personalized Ranking — enabled'
+        );
+
+        console.log(
+          '🔁 Recommendation Feedback Loop — enabled'
+        );
+
+        console.log(
+          '========================================'
+        );
+        console.log('');
+      }
+    );
+
+    // Run shortly after startup.
+
+    setTimeout(
+      () => {
+        runIntelligenceCycle()
+          .catch(
+            console.error
+          );
+      },
+      10000
+    );
+
+    // Every 5 minutes.
+
+    setInterval(
+      () => {
+        runIntelligenceCycle()
+          .catch(
+            console.error
+          );
+      },
+      5 * 60 * 1000
+    );
+  } catch (error) {
+    console.error(
+      '❌ Failed to start NVME.live:',
+      error
+    );
+
+    process.exit(1);
+  }
+}
+
+startServer();
+
+// ========================================
+// 🛑 Process Error Handling
+// ========================================
+
+process.on(
+  'unhandledRejection',
+  err =>
+    console.error(
+      'Unhandled Rejection:',
+      err
+    )
+);
+
+process.on(
+  'uncaughtException',
+  err =>
+    console.error(
+      'Uncaught Exception:',
+      err
+    )
+);

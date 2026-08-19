@@ -1,6 +1,3 @@
-/* Centralized API layer — wired to the VERIFIED live NVME monolith.
-   Same-origin by default (Next rewrites proxy /api + /auth + /socket.io). */
-
 const BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 export interface NvmeUser {
@@ -29,6 +26,8 @@ export interface NvmeVideo {
   comment_count?: number;
   views?: number;
   created_at?: string;
+  tags?: string[];
+  is_trending?: boolean;
 }
 
 export interface NvmeComment {
@@ -43,106 +42,293 @@ export interface NvmeComment {
 
 function token(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token') || localStorage.getItem('empire_token');
+
+  return (
+    localStorage.getItem('nvme_token') ||
+    sessionStorage.getItem('nvme_token') ||
+    localStorage.getItem('empire_token')
+  );
 }
 
 export function authHeaders(json = true): Record<string, string> {
-  const h: Record<string, string> = {};
-  if (json) h['Content-Type'] = 'application/json';
+  const headers: Record<string, string> = {};
+
+  if (json) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const t = token();
-  if (t) h['Authorization'] = `Bearer ${t}`;
-  return h;
+
+  if (t) {
+    headers['Authorization'] = `Bearer ${t}`;
+  }
+
+  return headers;
 }
 
-async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
+async function req<T>(
+  path: string,
+  opts: RequestInit = {}
+): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
-    headers: { ...authHeaders(!(opts.body instanceof FormData)), ...(opts.headers || {}) }
+    headers: {
+      ...authHeaders(!(opts.body instanceof FormData)),
+      ...(opts.headers || {})
+    }
   });
+
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { const d = await res.json(); msg = d.error || d.message || msg; } catch { /* non-json */ }
+
+    try {
+      const data = await res.json();
+      msg = data.error || data.message || msg;
+    } catch {}
+
     throw new Error(msg);
   }
+
   return res.json();
 }
 
-/* ---------- AUTH ---------- */
 export const auth = {
   login: (email: string, password: string) =>
-    req<{ token: string; user: NvmeUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  register: (username: string, email: string, password: string) =>
-    req<{ token: string; user: NvmeUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, email, password }) }),
-  me: () => req<{ user: NvmeUser } | NvmeUser>('/api/auth/me'),
+    req<{ token: string; user: NvmeUser }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    }),
+
+  register: (
+    username: string,
+    email: string,
+    password: string
+  ) =>
+    req<{ token: string; user: NvmeUser }>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, email, password })
+    }),
+
+  me: () =>
+    req<{ user: NvmeUser } | NvmeUser>('/api/auth/me'),
+
   googleUrl: () => `${BASE}/auth/google`
 };
 
-/* ---------- FEED / VIDEOS ---------- */
 export const videos = {
-  feed: async (cursor?: string): Promise<{ items: NvmeVideo[]; nextCursor?: string }> => {
-    const d = await req<any>(`/api/feed${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`);
-    const items: NvmeVideo[] = d.feed || d.videos || (Array.isArray(d) ? d : []);
-    return { items: items.filter(v => v && v.url), nextCursor: d.nextCursor };
+  feed: async (
+    cursor?: string,
+    sessionId?: string
+  ): Promise<{
+    items: NvmeVideo[];
+    nextCursor?: string;
+    sessionId?: string;
+  }> => {
+    const params = new URLSearchParams();
+
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
+
+    if (sessionId) {
+      params.set('session_id', sessionId);
+    }
+
+    const query = params.toString();
+
+    const d = await req<{
+      feed?: NvmeVideo[];
+      items?: NvmeVideo[];
+      videos?: NvmeVideo[];
+      nextCursor?: string;
+      sessionId?: string;
+    }>(
+      `/api/feed/v2${query ? `?${query}` : ''}`
+    );
+
+    const items =
+      d.items ||
+      d.feed ||
+      d.videos ||
+      [];
+
+    return {
+      items: items.filter(
+        (video) => video && video.url
+      ),
+      nextCursor: d.nextCursor,
+      sessionId: d.sessionId
+    };
   },
-  get: (id: string) => req<NvmeVideo>(`/api/videos/${id}`),
-  like: (id: string) => req<any>(`/api/videos/${id}/like`, { method: 'POST' }),
-  view: (id: string) => fetch(`${BASE}/api/videos/${id}/view`, { method: 'POST' }).catch(() => {}),
-  comments: async (id: string): Promise<NvmeComment[]> => {
-    const d = await req<any>(`/api/videos/${id}/comments`);
-    return d.comments || d || [];
+
+  event: (
+    eventType: string,
+    videoId?: string,
+    payload: Record<string, unknown> = {}
+  ) => {
+    const sessionId =
+      typeof window !== 'undefined'
+        ? sessionStorage.getItem('nvme_feed_session') ||
+          (() => {
+            const value = crypto.randomUUID();
+            sessionStorage.setItem(
+              'nvme_feed_session',
+              value
+            );
+            return value;
+          })()
+        : undefined;
+
+    return req('/api/feed/events', {
+      method: 'POST',
+      body: JSON.stringify({
+        event_type: eventType,
+        video_id: videoId,
+        session_id: sessionId,
+        ...payload
+      })
+    });
   },
-  postComment: (id: string, text: string, image?: string | null) =>
-    req<any>(`/api/videos/${id}/comments`, { method: 'POST', body: JSON.stringify({ text, image: image || undefined }) }),
-  byUser: async (username: string): Promise<NvmeVideo[]> => {
-    const d = await req<any>(`/api/users/${encodeURIComponent(username)}/videos`);
+
+  notInterested: (videoId: string) => {
+    const sessionId =
+      typeof window !== 'undefined'
+        ? sessionStorage.getItem('nvme_feed_session') || undefined
+        : undefined;
+
+    return req('/api/feed/not-interested', {
+      method: 'POST',
+      body: JSON.stringify({
+        video_id: videoId,
+        session_id: sessionId
+      })
+    });
+  },
+
+  get: (id: string) =>
+    req(`/api/videos/${id}`),
+
+  like: (id: string) =>
+    req(`/api/videos/${id}/like`, {
+      method: 'POST'
+    }),
+
+  view: (id: string) =>
+    fetch(`${BASE}/api/videos/${id}/view`, {
+      method: 'POST',
+      headers: authHeaders(false)
+    }).catch(() => {}),
+
+  comments: async (
+    id: string
+  ): Promise<NvmeComment[]> => {
+    const d = await req<{
+      comments?: NvmeComment[];
+    }>(`/api/videos/${id}/comments`);
+
+    return d.comments || [];
+  },
+
+  postComment: (
+    id: string,
+    text: string,
+    image?: string | null
+  ) =>
+    req(`/api/videos/${id}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        text,
+        image: image || undefined
+      })
+    }),
+
+  byUser: async (
+    username: string
+  ): Promise<NvmeVideo[]> => {
+    const d = await req<{
+      videos?: NvmeVideo[];
+    }>(
+      `/api/users/${encodeURIComponent(username)}/videos`
+    );
+
     return d.videos || [];
   }
 };
 
-/* ---------- USERS / SOCIAL ---------- */
-export const users = {
-  discover: async (): Promise<NvmeUser[]> => {
-    const d = await req<any>('/api/users/discover');
-    return d.users || d || [];
-  },
-  follow: (userId: string) => req<{ ok: boolean; following?: boolean }>(`/api/users/${userId}/follow`, { method: 'POST' }),
-  stats: (username: string) => req<any>(`/api/users/${encodeURIComponent(username)}/stats`),
-  updateProfile: (body: Partial<NvmeUser>) => req<{ ok: boolean; user: NvmeUser }>('/api/profile', { method: 'PUT', body: JSON.stringify(body) })
-};
-
-/* ---------- SEARCH ---------- */
-export async function search(q: string): Promise<{ users: NvmeUser[]; videos: NvmeVideo[] }> {
-  const d = await req<any>(`/api/search?q=${encodeURIComponent(q)}`);
-  return { users: d.users || [], videos: (d.videos || []).filter((v: NvmeVideo) => v.url) };
-}
-
-/* ---------- UPLOAD ---------- */
-export async function uploadVideo(file: File, title: string, description: string): Promise<{ url?: string; thumbnail?: string }> {
+export async function uploadVideo(
+  file: File,
+  title: string,
+  description: string
+): Promise<{
+  url?: string;
+  thumbnail?: string;
+}> {
   const fd = new FormData();
+
   fd.append('video', file);
   fd.append('title', title);
   fd.append('description', description);
-  return req('/api/upload', { method: 'POST', body: fd });
+
+  return req('/api/upload', {
+    method: 'POST',
+    body: fd
+  });
 }
 
-/* ---------- AI STUDIO ---------- */
 export const ai = {
-  status: () => req<any>('/api/ai/status'),
-  captions: (topic: string) => req<any>('/api/ai/captions', { method: 'POST', body: JSON.stringify({ topic }) }),
-  hashtags: (topic: string) => req<any>('/api/ai/hashtags', { method: 'POST', body: JSON.stringify({ topic }) }),
-  script: (topic: string) => req<any>('/api/ai/script', { method: 'POST', body: JSON.stringify({ topic }) }),
-  generate: (prompt: string) => req<any>('/api/ai/generate', { method: 'POST', body: JSON.stringify({ prompt }) })
+  status: () => req('/api/ai/status'),
+
+  captions: (topic: string) =>
+    req('/api/ai/captions', {
+      method: 'POST',
+      body: JSON.stringify({ topic })
+    }),
+
+  hashtags: (topic: string) =>
+    req('/api/ai/hashtags', {
+      method: 'POST',
+      body: JSON.stringify({ topic })
+    }),
+
+  script: (topic: string) =>
+    req('/api/ai/script', {
+      method: 'POST',
+      body: JSON.stringify({ topic })
+    }),
+
+  generate: (prompt: string) =>
+    req('/api/ai/generate', {
+      method: 'POST',
+      body: JSON.stringify({ prompt })
+    })
 };
 
-/* ---------- WALLET ---------- */
 export const wallet = {
-  balance: () => req<{ balance?: number; coins?: number }>('/api/wallet/balance'),
-  transactions: () => req<any>('/api/wallet/transactions'),
-  connect: (address: string) => req<any>('/api/wallet/connect', { method: 'POST', body: JSON.stringify({ address }) })
+  balance: () =>
+    req<{ balance?: number; coins?: number }>(
+      '/api/wallet/balance'
+    ),
+
+  transactions: () =>
+    req('/api/wallet/transactions'),
+
+  connect: (address: string) =>
+    req('/api/wallet/connect', {
+      method: 'POST',
+      body: JSON.stringify({ address })
+    })
 };
 
-/* ---------- PAYMENTS ---------- */
 export const payments = {
-  createOrder: (plan: string) => req<any>('/api/payments/paypal/create-order', { method: 'POST', body: JSON.stringify({ plan }) }),
-  captureOrder: (orderId: string) => req<any>('/api/payments/paypal/capture-order', { method: 'POST', body: JSON.stringify({ orderId }) })
+  createOrder: (plan: string) =>
+    req('/api/payments/paypal/create-order', {
+      method: 'POST',
+      body: JSON.stringify({ plan })
+    }),
+
+  captureOrder: (orderId: string) =>
+    req('/api/payments/paypal/capture-order', {
+      method: 'POST',
+      body: JSON.stringify({ orderId })
+    })
 };

@@ -1,0 +1,10 @@
+// Landing.jsx — Marketing landing page
+// Login.jsx — Login form (uses useAuth().login)
+// Register.jsx — Registration form (uses useAuth().register)
+// Dashboard.jsx — User dashboard overview
+// Feed.jsx — Content feed (fetch /api/content/feed)
+// Profile.jsx — User profile (fetch /api/users/:username)
+// Wallet.jsx — Wallet view (fetch /api/wallet/balance, /api/wallet/transactions)
+// Create.jsx — Content creation form (POST /api/content)
+// Settings.jsx — Profile settings (PUT /api/users/me)
+// Admin.jsx — Admin panel (fetch /api/admin/users, etc.

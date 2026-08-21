@@ -19,6 +19,17 @@ CREATE TABLE IF NOT EXISTS notifications (
   read_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ── HEAL legacy/drifted notifications tables ─────────────────────────────
+-- An older experiment created notifications with a different shape
+-- (title/message/data/is_read) on some databases; add the columns the code
+-- uses so both shapes converge.
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS actor_id UUID;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS video_id UUID;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS comment_id UUID;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_actor ON notifications(actor_id);
 

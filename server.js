@@ -12416,39 +12416,6 @@ app.get(
     )
 );
 
-app.get(
-  '*',
-  (req, res) => {
-    if (
-      req.path.startsWith(
-        '/api'
-      ) ||
-
-      req.path.startsWith(
-        '/auth'
-      ) ||
-
-      req.path.startsWith(
-        '/socket.io'
-      )
-    ) {
-      return res
-        .status(404)
-        .json({
-          error:
-            'Not found'
-        });
-    }
-
-    res.sendFile(
-      'index.html',
-      {
-        root: 'public'
-      }
-    );
-  }
-);
-
 // ========================================
 // 🧠 Background Intelligence Worker
 // ========================================
@@ -13418,6 +13385,45 @@ app.post(
     } finally {
       client.release();
     }
+  }
+);
+
+// ========================================
+// Catch-all — MUST stay after every route
+// registration; anything below this line
+// is unreachable for GET requests.
+// ========================================
+
+app.get(
+  '*',
+  (req, res) => {
+    if (
+      req.path.startsWith(
+        '/api'
+      ) ||
+
+      req.path.startsWith(
+        '/auth'
+      ) ||
+
+      req.path.startsWith(
+        '/socket.io'
+      )
+    ) {
+      return res
+        .status(404)
+        .json({
+          error:
+            'Not found'
+        });
+    }
+
+    res.sendFile(
+      'index.html',
+      {
+        root: 'public'
+      }
+    );
   }
 );
 

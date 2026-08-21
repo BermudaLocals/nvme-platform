@@ -37,6 +37,30 @@ CREATE TABLE IF NOT EXISTS dm_messages (
 CREATE INDEX IF NOT EXISTS idx_dm_messages_conversation ON dm_messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_dm_messages_sender ON dm_messages(sender_id);
 
+-- ── HEAL legacy/drifted DM tables ────────────────────────────────────────
+-- An older experiment created dm_conversations/dm_messages with a different
+-- shape (participant_a/participant_b, content NOT NULL) on some databases;
+-- CREATE TABLE IF NOT EXISTS no-ops there, so converge them to the shape
+-- the code actually uses.
+ALTER TABLE dm_conversations ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE dm_conversations ADD COLUMN IF NOT EXISTS last_message_at TIMESTAMPTZ;
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS body TEXT;
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS media_url TEXT;
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dm_conversations' AND column_name = 'participant_a') THEN
+    ALTER TABLE dm_conversations ALTER COLUMN participant_a DROP NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dm_conversations' AND column_name = 'participant_b') THEN
+    ALTER TABLE dm_conversations ALTER COLUMN participant_b DROP NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dm_messages' AND column_name = 'content') THEN
+    ALTER TABLE dm_messages ALTER COLUMN content DROP NOT NULL;
+  END IF;
+END $$;
+
 -- ── BLOCKS (either direction kills DM creation/sending and hides the
 -- blocked user's videos from the blocker's /api/feed) ─────────────────────
 CREATE TABLE IF NOT EXISTS blocks (

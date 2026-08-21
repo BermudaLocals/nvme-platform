@@ -93,6 +93,8 @@ input,textarea{font-family:inherit}
 .follow-btn.on{border-color:rgba(255,255,255,.3);color:rgba(255,255,255,.6)}
 .feed-cap{font-size:.9rem;line-height:1.35;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 .feed-desc{font-size:.78rem;color:rgba(255,255,255,.65);margin-top:4px}
+.taglink{color:#fff;font-weight:800;cursor:pointer;text-decoration:none}
+.taglink:hover{text-decoration:underline}
 .feed-actions{position:absolute;right:8px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:2;display:flex;flex-direction:column;align-items:center;gap:18px}
 .fact{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 .fact-ic{width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:1.45rem;transition:transform .15s}
@@ -583,6 +585,9 @@ function authHeaders(){
 }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function num(n){ return Number(n||0).toLocaleString(); }
+/* Escape first, then turn #tag tokens into links that run a search via doSearch (/api/search?q=). */
+function linkTags(s){ return esc(s).replace(/#([A-Za-z0-9_]+)/g, '<a class="taglink" onclick="event.stopPropagation();searchTag(\'$1\')">#$1</a>'); }
+function searchTag(tag){ showScreen('explore'); const i=$('searchInput'); if(i) i.value='#'+tag; doSearch('#'+tag); }
 function avatarHtml(u, cls){
   cls = cls || '';
   if(u && u.avatar_url) return '<div class="'+cls+'"><img src="'+esc(u.avatar_url)+'" onerror="this.parentNode.textContent=\''+((u.username||'U')[0].toUpperCase())+'\'"></div>';
@@ -775,8 +780,8 @@ function feedItemHtml(v){
     '<div class="feed-grad"></div>' +
     '<div class="feed-info">' +
       '<div class="feed-user"><span class="feed-uname">@'+uname+'</span></div>' +
-      (v.title?'<div class="feed-cap">'+esc(v.title)+'</div>':'') +
-      (v.description?'<div class="feed-desc clamped" onclick="event.stopPropagation();this.classList.remove(\'clamped\')">'+esc(String(v.description).slice(0,180))+' <span class="more">more</span></div>':'') +
+      (v.title?'<div class="feed-cap">'+linkTags(v.title)+'</div>':'') +
+      (v.description?'<div class="feed-desc clamped" onclick="event.stopPropagation();this.classList.remove(\'clamped\')">'+linkTags(String(v.description).slice(0,180))+' <span class="more">more</span></div>':'') +
       '<div class="fticker"><span class="note">♪</span><div class="track"><span>'+esc(v.title||('original sound · @'+uname))+' · @'+uname+' · '+esc(v.title||'original sound')+' · @'+uname+'</span></div><div class="fdisc">🎵</div></div>' +
     '</div>' +
     '<div class="feed-actions">' +

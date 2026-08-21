@@ -14102,6 +14102,22 @@ app.delete(
 );
 
 // ========================================
+// 🏷️ Discovery — hashtags / sounds /
+// duets / challenges. Salvaged from the
+// old TikTok-parity module; schema lives
+// in db/migration_013_discovery.sql.
+// MUST stay above the catch-all.
+// ========================================
+
+require('./nvme-tiktok-features')(
+  app,
+  pool,
+  authenticateToken,
+  optionalAuth,
+  requireAdmin
+);
+
+// ========================================
 // Catch-all — MUST stay after every route
 // registration; anything below this line
 // is unreachable for GET requests.

@@ -770,7 +770,7 @@ function feedItemHtml(v){
   const vid = esc(v.id), uname = esc(v.username||'creator');
   return '<div class="feed-item" data-vid="'+vid+'">' +
     (v.url
-      ? '<video class="feed-video" src="'+esc(v.url)+'" '+(v.thumbnail?'poster="'+esc(v.thumbnail)+'"':'')+' muted loop playsinline preload="metadata" onclick="tapVideo(this,'+"'"+vid+"'"+')" ondblclick="dblLike(event,'+"'"+vid+"'"+')"></video>'
+      ? '<video class="feed-video" '+(v.hls_url?'data-hls="'+esc(v.hls_url)+'" data-mp4="'+esc(v.url)+'"':'src="'+esc(v.url)+'"')+' '+(v.thumbnail?'poster="'+esc(v.thumbnail)+'"':'')+' muted loop playsinline preload="metadata" onclick="tapVideo(this,'+"'"+vid+"'"+')" ondblclick="dblLike(event,'+"'"+vid+"'"+')"></video>'
       : '<div class="feed-empty-bg">🎬</div>') +
     '<div class="feed-grad"></div>' +
     '<div class="feed-info">' +
@@ -813,13 +813,60 @@ function adItemHtml(v){
 function emptyFeedHtml(){
   return '<div class="feed-state"><div class="big">🎬</div><div style="font-weight:800;font-size:1.05rem;color:#fff">No videos yet — be the first!</div><div>Tap ＋ to record your first clip</div><div style="width:100%;max-width:420px"><div class="sect" style="padding-left:0">✨ Creators to follow</div><div class="rail" id="feedRailSlot"></div></div></div>';
 }
+/* HLS playback: native where supported (Safari), hls.js lazy-loaded from CDN only when an
+   hls_url actually shows up. Any failure — CDN down, unsupported browser, transcode still
+   running — falls back to the plain MP4 so playback never breaks. */
+let hlsJsPromise = null;
+const hlsLive = new Set();
+function loadHlsJs(){
+  if(window.Hls) return Promise.resolve();
+  if(!hlsJsPromise){
+    hlsJsPromise = new Promise((res,rej)=>{
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1';
+      s.onload = ()=>res();
+      s.onerror = ()=>{ hlsJsPromise = null; rej(new Error('hls.js load failed')); };
+      document.head.appendChild(s);
+    });
+  }
+  return hlsJsPromise;
+}
+function playVisible(el){ const r = el.getBoundingClientRect(); if(r.bottom > 0 && r.top < (window.innerHeight||document.documentElement.clientHeight)) el.play().catch(()=>{}); }
+function playVideo(el, hlsUrl, mp4Url){
+  if(el.canPlayType && el.canPlayType('application/vnd.apple.mpegurl')){
+    el.src = hlsUrl;
+    el.addEventListener('error', ()=>{ if(el.src !== mp4Url){ el.src = mp4Url; playVisible(el); } }, {once:true});
+    return;
+  }
+  loadHlsJs().then(()=>{
+    if(window.Hls && Hls.isSupported()){
+      const hls = new Hls();
+      hlsLive.add(hls);
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(el);
+      el._hls = hls;
+      playVisible(el);
+      hls.on(Hls.Events.ERROR, (ev,data)=>{
+        if(data && data.fatal){
+          hlsLive.delete(hls);
+          hls.destroy();
+          if(el._hls === hls) el._hls = null;
+          el.src = mp4Url;
+          playVisible(el);
+        }
+      });
+    } else { el.src = mp4Url; playVisible(el); }
+  }).catch(()=>{ el.src = mp4Url; playVisible(el); });
+}
 function wireFeedObserver(){
   if(feedObs) feedObs.disconnect();
+  hlsLive.forEach(h=>{ try{ h.destroy(); }catch(e){} }); hlsLive.clear();
   feedObs = new IntersectionObserver(entries=>{
     entries.forEach(en=>{
       const v = en.target;
       if(en.intersectionRatio>=0.6){
         document.querySelectorAll('.feed-video').forEach(o=>{ if(o!==v && o.pause) o.pause(); });
+        if(v.dataset && v.dataset.hls && !v._hlsReady){ v._hlsReady = true; playVideo(v, v.dataset.hls, v.dataset.mp4); }
         if(v.play){ v.muted = !soundOn; v.play().catch(()=>{}); }
         const item = v.closest('.feed-item');
         if(item && !item._viewed){ item._viewed = true; if(item.dataset.adid){ fetch(API+'/api/ads/'+item.dataset.adid+'/impression',{method:'POST'}).catch(()=>{}); } else { fetch(API+'/api/videos/'+item.dataset.vid+'/view',{method:'POST'}).catch(()=>{}); } }

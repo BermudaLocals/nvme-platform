@@ -14,6 +14,7 @@ const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const { Pool } = require('pg');
 const http = require('http');
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const socketIo = require('socket.io');
@@ -3311,10 +3312,48 @@ cloudinary.config({
     process.env.CLOUDINARY_API_SECRET
 });
 
+// Uploads land on disk first, not in
+// memory — a 2GB upload held in a RAM
+// buffer can OOM the process. The
+// route streams the temp file to
+// Cloudinary, then unlinks it.
+// mkdirSync because git doesn't ship
+// empty dirs, so storage/temp may not
+// exist on a fresh deploy.
+
+const uploadTempDir =
+  path.join(
+    __dirname,
+    'storage',
+    'temp'
+  );
+
+fs.mkdirSync(
+  uploadTempDir,
+  { recursive: true }
+);
+
+// Adaptive HLS: requested as an async
+// eager transformation at upload time
+// (Cloudinary transcodes — no local
+// ffmpeg). The derived master playlist
+// URL is deterministic, so the row
+// stores it immediately; playback
+// falls back to the MP4 until the
+// transcode finishes.
+
+const HLS_STREAMING_PROFILE =
+  process.env
+    .CLOUDINARY_STREAMING_PROFILE ||
+  'full_hd';
+
 const upload =
   multer({
     storage:
-      multer.memoryStorage(),
+      multer.diskStorage({
+        destination:
+          uploadTempDir
+      }),
 
     limits: {
       fileSize:
@@ -3386,6 +3425,7 @@ app.post(
 
       let videoUrl = '';
       let thumbnailUrl = '';
+      let hlsUrl = '';
 
       try {
         const result =
@@ -3409,10 +3449,28 @@ app.post(
                         'nvme-videos',
 
                       eager: [
+                        // eager[0] stays
+                        // the 720x480 pad —
+                        // the thumbnail
+                        // below reads it.
                         {
                           width: 720,
                           height: 480,
                           crop: 'pad'
+                        },
+                        // Adaptive HLS
+                        // ladder (.m3u8);
+                        // eager_async is
+                        // already true, so
+                        // the response
+                        // doesn't wait on
+                        // transcoding.
+                        {
+                          streaming_profile:
+                            HLS_STREAMING_PROFILE,
+
+                          format:
+                            'm3u8'
                         }
                       ],
 
@@ -3433,8 +3491,18 @@ app.post(
                           )
                   );
 
-              uploadStream.end(
-                req.file.buffer
+              const fileStream =
+                fs.createReadStream(
+                  req.file.path
+                );
+
+              fileStream.on(
+                'error',
+                reject
+              );
+
+              fileStream.pipe(
+                uploadStream
               );
             }
           );
@@ -3449,6 +3517,26 @@ app.post(
             .replace(
               '.mp4',
               '.jpg'
+            );
+
+        // Deterministic eager URL —
+        // same rewrite trick as the
+        // thumbnail: sp_<profile> after
+        // /upload/, trailing extension
+        // swapped for .m3u8. Async
+        // transcode means the playlist
+        // 404s briefly; the player
+        // falls back to the MP4
+        // meanwhile.
+        hlsUrl =
+          result.secure_url
+            .replace(
+              '/upload/',
+              `/upload/sp_${HLS_STREAMING_PROFILE}/`
+            )
+            .replace(
+              /\.[a-z0-9]+$/i,
+              '.m3u8'
             );
       } catch (
         uploadError
@@ -3477,6 +3565,7 @@ app.post(
             description,
             video_url,
             thumbnail_url,
+            hls_url,
             tags,
             topic,
             category,
@@ -3492,11 +3581,12 @@ app.post(
             $4,
             $5,
             $6,
-            $7::text[],
-            $8,
+            $7,
+            $8::text[],
             $9,
             $10,
             $11,
+            $12,
             true
           )
           RETURNING *
@@ -3508,6 +3598,7 @@ app.post(
             description || '',
             videoUrl,
             thumbnailUrl,
+            hlsUrl || null,
 
             tags
               ? tags
@@ -3561,6 +3652,21 @@ app.post(
           error:
             'Failed to upload video'
         });
+    } finally {
+      // Disk-backed upload: drop the
+      // temp file on every exit path —
+      // success, Cloudinary failure,
+      // and the early 400 above all
+      // land here. ENOENT is fine.
+      if (
+        req.file &&
+        req.file.path
+      ) {
+        fs.unlink(
+          req.file.path,
+          () => {}
+        );
+      }
     }
   }
 );
@@ -3900,6 +4006,7 @@ async function getRankedFeed({
         v.id,
         v.video_url AS url,
         v.thumbnail_url AS thumbnail,
+        v.hls_url,
         v.title,
         v.description,
 

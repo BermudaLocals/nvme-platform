@@ -6,15 +6,30 @@
 const { ethers } = require('ethers');
 const axios = require('axios');
 
-const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || 'lISFoByFf_aNHkYkW0NgX';
+const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
+if (!ALCHEMY_API_KEY) {
+  throw new Error(
+    'crypto-wallet: ALCHEMY_API_KEY env var is required (no hardcoded fallback — get a key from alchemy.com)'
+  );
+}
 const ALCHEMY_URL = `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
-const EMPIRE_WALLET = process.env.EMPIRE_ETH_WALLET || '0xE1451DC45B4D1Ba97CC6c9Be746e531dE8a60CD2';
+
+const EMPIRE_WALLET = process.env.EMPIRE_ETH_WALLET;
+if (!EMPIRE_WALLET) {
+  throw new Error(
+    'crypto-wallet: EMPIRE_ETH_WALLET env var is required (no hardcoded fallback)'
+  );
+}
 
 // Derive deterministic wallet for a user using their user index
-// Uses NVME_WALLET_SEED from env or falls back to a deterministic seed from JWT_SECRET
+// Requires NVME_WALLET_SEED (or JWT_SECRET) from env — never a
+// hardcoded seed, which would let anyone derive every user wallet.
 function getUserWalletAddress(userIndex) {
   try {
-    const seed = process.env.NVME_WALLET_SEED || process.env.JWT_SECRET || 'nvme-empire-wallet-seed-2026';
+    const seed = process.env.NVME_WALLET_SEED || process.env.JWT_SECRET;
+    if (!seed) {
+      throw new Error('NVME_WALLET_SEED (or JWT_SECRET) env var is required');
+    }
     const seedHash = ethers.id(seed + '-nvme-hd-wallet-v1');
     const hdNode = ethers.HDNodeWallet.fromSeed(ethers.getBytes(seedHash));
     const child = hdNode.derivePath(`m/44'/60'/0'/0/${userIndex}`);

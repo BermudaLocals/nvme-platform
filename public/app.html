@@ -513,6 +513,7 @@ input,textarea{font-family:inherit}
       <div class="up-prev" id="uploadPrev">🎬</div>
       <div class="fgroup"><label>Title</label><input id="upTitle" maxlength="100" placeholder="Give it a title"></div>
       <div class="fgroup"><label>Description / #tags</label><textarea id="upDesc" maxlength="300" placeholder="Describe your video… #nvme"></textarea></div>
+      <div id="upProg" style="display:none;height:5px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:2px 0 10px"><div id="upProgIn" style="height:100%;width:0%;background:linear-gradient(135deg,var(--purple),var(--pink));transition:width .15s"></div></div>
       <button class="save-btn" id="upPostBtn" onclick="submitUpload()">🚀 Post video</button>
     </div>
   </div>
@@ -531,6 +532,12 @@ input,textarea{font-family:inherit}
     <button class="auth-btn" id="authGoBtn" onclick="submitAuth()">Sign in</button>
     <button class="g-btn" onclick="googleAuth()">🇬 Sign in with Google</button>
     <div class="auth-swap" id="authSwap" onclick="toggleAuthMode()">New here? <b>Create account</b></div>
+    <div class="auth-swap" id="forgotLink" style="margin-top:8px" onclick="forgotPassword()">Forgot password?</div>
+    <div id="authResetFields" style="display:none;width:100%">
+      <input class="auth-in" id="resetPw1" placeholder="New password" type="password" autocomplete="new-password">
+      <input class="auth-in" id="resetPw2" placeholder="Confirm new password" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitReset()">
+      <button class="auth-btn" id="resetGoBtn" onclick="submitReset()">Reset password</button>
+    </div>
     <div class="auth-err" id="authErr"></div>
   </div>
 </div>
@@ -598,14 +605,54 @@ async function submitAuth(){
     const d = await r.json();
     if(!r.ok || !d.token){ $('authErr').textContent = d.error || 'Auth failed'; $('authGoBtn').textContent = authMode==='register'?'Create account':'Sign in'; return; }
     localStorage.setItem('nvme_token', d.token);
+    if(d.refreshToken) localStorage.setItem('nvme_refresh', d.refreshToken);
     await bootUser();
     hideAuth(); toast('Welcome to NVME 👑');
   }catch(e){ $('authErr').textContent='Network error'; }
   $('authGoBtn').textContent = authMode==='register'?'Create account':'Sign in';
 }
 function googleAuth(){ window.location = '/auth/google'; }
+
+/* -------- Forgot / reset password -------- */
+let resetToken = null;
+function enterResetMode(t){
+  resetToken = t;
+  ['authRegFields','authEmail','authPassword','authGoBtn','authSwap','forgotLink'].forEach(id=>{ const el=$(id); if(el) el.style.display='none'; });
+  const g = document.querySelector('#auth-screen .g-btn'); if(g) g.style.display='none';
+  $('authErr').textContent = '';
+  $('authResetFields').style.display = 'block';
+  showAuth();
+}
+function exitResetMode(){
+  resetToken = null;
+  $('authResetFields').style.display = 'none';
+  ['authEmail','authPassword','authGoBtn','authSwap','forgotLink'].forEach(id=>{ const el=$(id); if(el) el.style.display=''; });
+  const g = document.querySelector('#auth-screen .g-btn'); if(g) g.style.display='';
+}
+async function forgotPassword(){
+  const email = $('authEmail').value.trim() || prompt('Enter your account email:');
+  if(!email) return;
+  try{ await fetch(API+'/api/auth/forgot-password', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})}); }catch(e){}
+  toast('Check your email for a reset link 📩');
+}
+async function submitReset(){
+  const p1 = $('resetPw1').value, p2 = $('resetPw2').value;
+  if(p1.length < 8){ $('authErr').textContent = 'Password must be at least 8 characters'; return; }
+  if(p1 !== p2){ $('authErr').textContent = 'Passwords do not match'; return; }
+  $('resetGoBtn').textContent = '…';
+  try{
+    const r = await fetch(API+'/api/auth/reset-password', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:resetToken,password:p1})});
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok){ $('authErr').textContent = d.error || 'Reset failed — link may be expired'; $('resetGoBtn').textContent = 'Reset password'; return; }
+    exitResetMode();
+    toast('Password updated — sign in ✅');
+  }catch(e){ $('authErr').textContent = 'Network error'; }
+  $('resetGoBtn').textContent = 'Reset password';
+}
 function doLogout(){
-  localStorage.removeItem('nvme_token'); localStorage.removeItem('nvme_user'); localStorage.removeItem('empire_token');
+  const rt = localStorage.getItem('nvme_refresh');
+  if(rt){ fetch(API+'/api/auth/logout', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken:rt})}).catch(()=>{}); }
+  localStorage.removeItem('nvme_token'); localStorage.removeItem('nvme_user'); localStorage.removeItem('nvme_refresh'); localStorage.removeItem('empire_token');
   sessionStorage.removeItem('nvme_token');
   currentUser = null; showAuth();
 }
@@ -642,7 +689,17 @@ async function renderFeedWithFilter(){
   const c = $('feedContainer');
   let vids = feedCache.slice();
   if(feedFilter==='following'){
-    vids = vids.filter(v=>v.is_following || v.followed || (currentUser && v.username===currentUser.username));
+    if(!currentUser){ c.innerHTML = '<div class="feed-state"><div class="big">👥</div><div style="font-weight:800;color:#fff">Sign in to see your Following feed</div><span class="rail-btn" onclick="showAuth()" style="padding:8px 22px">Sign in</span></div>'; return; }
+    c.innerHTML = '<div class="feed-state"><div class="spinner"></div><div style="font-weight:700">Loading your Following feed…</div></div>';
+    try{
+      const r = await fetch(API+'/api/feed?type=following', {headers:authHeaders()});
+      const d = await r.json();
+      vids = d.feed || d.videos || (Array.isArray(d)?d:[]);
+    }catch(e){ c.innerHTML = '<div class="feed-state"><div class="big">📡</div><div style="font-weight:700">Could not load Following feed</div><span class="rail-btn" onclick="renderFeedWithFilter()" style="padding:8px 22px">Retry</span></div>'; return; }
+    if(!vids.length){ c.innerHTML = '<div class="feed-state"><div class="big">👥</div><div style="font-weight:800;color:#fff">No videos from people you follow yet</div><div>Follow creators to fill this feed</div></div>'; return; }
+    c.innerHTML = vids.map(feedItemHtml).join('');
+    wireFeedObserver();
+    return;
   } else if(feedFilter==='live'){
     c.innerHTML = '<div class="feed-state"><div class="spinner"></div><div style="font-weight:700">Finding live creators…</div></div>';
     try{
@@ -1076,21 +1133,40 @@ function openUploadWithFile(f){
   $('uploadSheet').classList.add('open');
 }
 function closeUpload(){ $('uploadSheet').classList.remove('open'); }
-async function submitUpload(){
+function submitUpload(){
   if(!pendingFile){ toast('Record or pick a video first 👆'); return; }
   const btn = $('upPostBtn'); btn.textContent='⏫ Uploading…'; btn.disabled=true;
-  try{
-    const fd = new FormData();
-    fd.append('video', pendingFile);
-    fd.append('title', $('upTitle').value.trim() || 'NVME clip');
-    fd.append('description', $('upDesc').value.trim());
-    const t = localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token');
-    const r = await fetch(API+'/api/upload',{method:'POST',headers:{'Authorization':'Bearer '+t},body:fd});
-    const d = await r.json();
-    if(!r.ok){ toast(d.error||'Upload failed'); }
-    else { toast('🚀 Video posted!'); closeUpload(); pendingFile=null; loadFeed(); }
-  }catch(e){ toast('Network error — check connection'); }
-  btn.textContent='🚀 Post video'; btn.disabled=false;
+  const prog = $('upProg'), progIn = $('upProgIn');
+  prog.style.display='block'; progIn.style.width='0%';
+  const fd = new FormData();
+  fd.append('video', pendingFile);
+  fd.append('title', $('upTitle').value.trim() || 'NVME clip');
+  fd.append('description', $('upDesc').value.trim());
+  const t = localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token');
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', API+'/api/upload');
+  if(t) xhr.setRequestHeader('Authorization','Bearer '+t);
+  xhr.upload.onprogress = function(e){
+    if(e.lengthComputable){
+      const pct = Math.round(e.loaded/e.total*100);
+      progIn.style.width = pct+'%';
+      btn.textContent = '⏫ Uploading '+pct+'%';
+    }
+  };
+  xhr.onload = function(){
+    let d = {};
+    try{ d = JSON.parse(xhr.responseText||'{}'); }catch(e){}
+    if(xhr.status>=400){ toast(d.error||'Upload failed'); }
+    else { progIn.style.width='100%'; toast('🚀 Video posted!'); closeUpload(); pendingFile=null; loadFeed(); }
+    btn.textContent='🚀 Post video'; btn.disabled=false;
+    setTimeout(()=>{ prog.style.display='none'; progIn.style.width='0%'; },400);
+  };
+  xhr.onerror = function(){
+    toast('Network error — check connection');
+    btn.textContent='🚀 Post video'; btn.disabled=false;
+    prog.style.display='none'; progIn.style.width='0%';
+  };
+  xhr.send(fd);
 }
 
 /* ================= PWA ================= */
@@ -1108,10 +1184,35 @@ if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').cat
 
 /* ================= BOOT ================= */
 (async function boot(){
-  // OAuth ?token= handoff (Google sign-in callback lands here)
+  // OAuth handoff (Google sign-in callback lands here):
+  // ?code= (one-time, 5min) is exchanged for tokens.
   const qs = new URLSearchParams(location.search);
-  const tk = qs.get('token');
-  if(tk){ localStorage.setItem('nvme_token', tk); history.replaceState({},'',location.pathname); }
+  const code = qs.get('code');
+  if(code){
+    history.replaceState({},'',location.pathname);
+    try{
+      const r = await fetch(API+'/api/auth/oauth-exchange', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+      const d = await r.json();
+      if(r.ok && d.token){
+        localStorage.setItem('nvme_token', d.token);
+        if(d.refreshToken) localStorage.setItem('nvme_refresh', d.refreshToken);
+      }
+    }catch(e){}
+  }
+  // Password-reset link lands here as ?reset_token=<raw> (emailed by forgot-password).
+  const resetT = qs.get('reset_token');
+  if(resetT){
+    history.replaceState({},'',location.pathname);
+    enterResetMode(resetT);
+  }
+  // Email-verification redirects: /app?verified=1 / ?verify_error=1 — toast once, then clean URL.
+  if(qs.get('verified')){
+    history.replaceState({},'',location.pathname);
+    toast('Email verified — welcome to NVME ✅');
+  } else if(qs.get('verify_error')){
+    history.replaceState({},'',location.pathname);
+    toast('Verification link invalid or expired — try again');
+  }
   const tok = localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token');
   if(tok){ await bootUser(); }
   loadFeed();

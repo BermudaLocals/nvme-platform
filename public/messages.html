@@ -1595,6 +1595,16 @@ function handleVcReject() {
   endCall();
 }
 
+function handleVcUnreachable() {
+  showToast('User is not reachable', 'error');
+  endCall();
+}
+
+function handleVcBusy() {
+  showToast('User is busy', 'error');
+  endCall();
+}
+
 let currentCallPeer = null; // userId of the person we're calling/in a call with
 
 function endCall(notify = true) {

@@ -1,6 +1,7 @@
 // ========================================
 // 🗄️ NVME.live — DB Migration
-// Runs every db/migration_*.sql file, in filename order. Idempotent — safe
+// Runs db/schema.sql (base schema) first, then every db/migration_*.sql
+// file, in filename order. Idempotent — safe
 // to re-run; already-applied files just no-op on their IF NOT EXISTS checks.
 // Run with: npm run migrate
 // ========================================
@@ -20,6 +21,12 @@ async function migrate() {
   const files = fs.readdirSync(dbDir)
     .filter(f => /^migration_\d+.*\.sql$/.test(f))
     .sort();
+
+  // Base schema first — the numbered migrations ALTER tables it creates,
+  // so a fresh database fails without it. Idempotent (IF NOT EXISTS).
+  if (fs.existsSync(path.join(dbDir, 'schema.sql'))) {
+    files.unshift('schema.sql');
+  }
 
   if (files.length === 0) {
     console.log('No migration_*.sql files found in db/.');

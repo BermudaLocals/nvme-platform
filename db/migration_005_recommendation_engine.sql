@@ -1,3 +1,7 @@
+-- videos.is_trending is otherwise only added by create-tables.js — make this
+-- migration self-sufficient on a fresh database.
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS is_trending BOOLEAN DEFAULT FALSE;
+
 CREATE TABLE IF NOT EXISTS feed_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,

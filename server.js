@@ -9,10 +9,13 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
+const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const { Pool } = require('pg');
 const http = require('http');
+const path = require('path');
+const crypto = require('crypto');
 const socketIo = require('socket.io');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -129,6 +132,7 @@ async function initializeIntelligenceDatabase() {
     // Add missing columns safely.
 
     const trendColumns = [
+      ['topic', 'TEXT'],
       ['normalized_topic', 'TEXT'],
       ['source', 'TEXT'],
       ['source_url', 'TEXT'],
@@ -144,7 +148,17 @@ async function initializeIntelligenceDatabase() {
       ['metadata', 'JSONB DEFAULT \'{}\'::jsonb'],
       ['first_seen_at', 'TIMESTAMPTZ DEFAULT NOW()'],
       ['last_seen_at', 'TIMESTAMPTZ DEFAULT NOW()'],
-      ['updated_at', 'TIMESTAMPTZ DEFAULT NOW()']
+      ['updated_at', 'TIMESTAMPTZ DEFAULT NOW()'],
+
+      // Scraper-side columns (create-tables.js /
+      // src/backend/lib/scraper.js) — both writers
+      // share this one table.
+      ['title', 'TEXT'],
+      ['summary', 'TEXT'],
+      ['keywords', 'TEXT[]'],
+      ['score', 'INTEGER DEFAULT 50'],
+      ['fetched_at', 'TIMESTAMP DEFAULT NOW()'],
+      ['nvme_version_id', 'UUID']
     ];
 
     for (const [column, definition] of trendColumns) {
@@ -153,6 +167,20 @@ async function initializeIntelligenceDatabase() {
         ADD COLUMN IF NOT EXISTS ${column} ${definition}
       `);
     }
+
+    // Server INSERTs omit `title`, scraper INSERTs omit
+    // `topic` — whichever path created the table first left
+    // one of them NOT NULL, which would break the other
+    // writer. DROP NOT NULL is a no-op when already nullable.
+    await client.query(`
+      ALTER TABLE trending_topics
+      ALTER COLUMN topic DROP NOT NULL
+    `);
+
+    await client.query(`
+      ALTER TABLE trending_topics
+      ALTER COLUMN title DROP NOT NULL
+    `);
 
     // ------------------------------------
     // Atomic claims
@@ -420,13 +448,102 @@ function publicUser(u) {
     email: u.email,
     avatar_url: u.avatar_url,
     bio: u.bio,
+    profile_link: u.profile_link,
     is_creator: u.is_creator,
     is_verified: u.is_verified,
+    email_verified: u.email_verified,
+    is_admin: u.is_admin,
     followers: u.follower_count,
     following: u.following_count,
     balance_credits: u.balance_credits,
     paypal_email: u.paypal_email
   };
+}
+
+// ========================================
+// ✉️ Email (optional SMTP)
+// ========================================
+
+// No mail provider is configured by
+// default: when SMTP_URL (or SMTP_HOST +
+// SMTP_USER/SMTP_PASS) is set AND the
+// optional `nodemailer` package is
+// installed, mail is delivered for real.
+// Otherwise the message is logged so auth
+// flows stay testable in development.
+
+function smtpTransportConfig() {
+  if (process.env.SMTP_URL) {
+    return process.env.SMTP_URL;
+  }
+
+  if (process.env.SMTP_HOST) {
+    return {
+      host: process.env.SMTP_HOST,
+
+      port:
+        Number(
+          process.env.SMTP_PORT
+        ) || 587,
+
+      auth:
+        process.env.SMTP_USER
+          ? {
+              user:
+                process.env
+                  .SMTP_USER,
+              pass:
+                process.env
+                  .SMTP_PASS
+            }
+          : undefined
+    };
+  }
+
+  return null;
+}
+
+async function sendEmail({
+  to,
+  subject,
+  text
+}) {
+  const transportConfig =
+    smtpTransportConfig();
+
+  if (transportConfig) {
+    try {
+      const nodemailer =
+        require('nodemailer');
+
+      const transport =
+        nodemailer.createTransport(
+          transportConfig
+        );
+
+      await transport.sendMail({
+        from:
+          process.env.EMAIL_FROM ||
+          'no-reply@nvme.live',
+        to,
+        subject,
+        text
+      });
+
+      return true;
+    } catch (error) {
+      console.error(
+        '✉️ SMTP send failed, logging instead:',
+        error.message
+      );
+    }
+  }
+
+  console.log(
+    `✉️ [email:not-sent] To: ${to} | Subject: ${subject}\n${text}`
+  );
+
+  return false;
 }
 
 // ========================================
@@ -533,6 +650,141 @@ function paypalClient() {
   return new paypal.core.PayPalHttpClient(env);
 }
 
+// ----------------------------------------
+// PayPal Payouts (creator withdrawals) —
+// the checkout SDK has no Payouts support,
+// so these call the REST API directly with
+// the same env credentials and the same
+// sandbox/live switch as paypalClient().
+// ----------------------------------------
+
+function paypalApiBase() {
+  return process.env.PAYPAL_MODE ===
+    'live'
+    ? 'https://api-m.paypal.com'
+    : 'https://api-m.sandbox.paypal.com';
+}
+
+function paypalConfigured() {
+  return Boolean(
+    process.env.PAYPAL_CLIENT_ID &&
+      process.env.PAYPAL_CLIENT_SECRET
+  );
+}
+
+async function paypalAccessToken() {
+  const auth =
+    Buffer.from(
+      `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`
+    ).toString('base64');
+
+  const response =
+    await fetch(
+      `${paypalApiBase()}/v1/oauth2/token`,
+      {
+        method: 'POST',
+
+        headers: {
+          Authorization: `Basic ${auth}`,
+          'Content-Type':
+            'application/x-www-form-urlencoded'
+        },
+
+        body:
+          'grant_type=client_credentials'
+      }
+    );
+
+  if (!response.ok) {
+    throw new Error(
+      `PayPal auth failed (${response.status})`
+    );
+  }
+
+  const data =
+    await response.json();
+
+  return data.access_token;
+}
+
+// sender_item_id = transaction id, so a
+// retried approve is idempotent on
+// PayPal's side too.
+
+async function paypalSendPayout({
+  transactionId,
+  email,
+  amountUsd
+}) {
+  const token =
+    await paypalAccessToken();
+
+  const response =
+    await fetch(
+      `${paypalApiBase()}/v1/payments/payouts`,
+      {
+        method: 'POST',
+
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type':
+            'application/json'
+        },
+
+        body: JSON.stringify({
+          sender_batch_header: {
+            sender_batch_id: `withdrawal_${transactionId}`,
+            email_subject:
+              'Your NVME.live payout is here',
+            email_message:
+              'Your creator withdrawal from NVME.live has been paid.'
+          },
+
+          items: [
+            {
+              recipient_type:
+                'EMAIL',
+
+              amount: {
+                value:
+                  Number(
+                    amountUsd
+                  ).toFixed(2),
+                currency: 'USD'
+              },
+
+              receiver: email,
+              note:
+                'NVME.live creator withdrawal',
+              sender_item_id:
+                String(transactionId)
+            }
+          ]
+        })
+      }
+    );
+
+  const data =
+    await response
+      .json()
+      .catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      `PayPal payout failed (${response.status}): ${
+        data.message ||
+        data.name ||
+        'unknown error'
+      }`
+    );
+  }
+
+  return (
+    data.batch_header
+      ?.payout_batch_id || null
+  );
+}
+
 // ========================================
 // 🔒 Middleware
 // ========================================
@@ -565,6 +817,8 @@ app.use(
 
 app.use(morgan('dev'));
 
+app.use(cookieParser());
+
 app.use(
   express.json({
     limit: '100mb'
@@ -585,7 +839,9 @@ app.use(
       createTableIfMissing: true
     }),
 
-    secret: process.env.JWT_SECRET,
+    secret:
+      process.env.SESSION_SECRET ||
+      `${process.env.JWT_SECRET}:session`,
 
     resave: false,
 
@@ -749,7 +1005,9 @@ const optionalAuth =
 function issueToken(user) {
   return jwt.sign(
     {
-      id: user.id
+      id: user.id,
+      is_admin:
+        !!user.is_admin
     },
 
     process.env.JWT_SECRET,
@@ -761,6 +1019,144 @@ function issueToken(user) {
     }
   );
 }
+
+// ----------------------------------------
+// Refresh / one-time token helpers
+// ----------------------------------------
+
+function hashToken(token) {
+  return crypto
+    .createHash('sha256')
+    .update(String(token))
+    .digest('hex');
+}
+
+function generateSecureToken() {
+  const raw =
+    crypto
+      .randomBytes(48)
+      .toString('hex');
+
+  return {
+    raw,
+    hash: hashToken(raw)
+  };
+}
+
+// 30d refresh token — only the SHA-256
+// hash is stored, never the raw token.
+
+async function issueRefreshToken(
+  userId
+) {
+  const { raw, hash } =
+    generateSecureToken();
+
+  await pool.query(
+    `
+    INSERT INTO refresh_tokens
+    (
+      user_id,
+      token_hash,
+      expires_at
+    )
+    VALUES
+    (
+      $1,
+      $2,
+      NOW() + INTERVAL '30 days'
+    )
+    `,
+    [userId, hash]
+  );
+
+  return raw;
+}
+
+async function revokeUserRefreshTokens(
+  userId
+) {
+  await pool.query(
+    `
+    UPDATE refresh_tokens
+    SET revoked_at = NOW()
+    WHERE
+      user_id = $1
+      AND revoked_at IS NULL
+    `,
+    [userId]
+  );
+}
+
+// 24h single-use email verification
+// token — returns the raw token so the
+// caller can build the verify URL.
+
+async function createEmailVerification(
+  userId
+) {
+  const { raw, hash } =
+    generateSecureToken();
+
+  await pool.query(
+    `
+    INSERT INTO email_verifications
+    (
+      user_id,
+      token_hash,
+      expires_at
+    )
+    VALUES
+    (
+      $1,
+      $2,
+      NOW() + INTERVAL '24 hours'
+    )
+    `,
+    [userId, hash]
+  );
+
+  return raw;
+}
+
+// ----------------------------------------
+// Admin gate — is_admin is re-read from
+// the DB on every request (the JWT claim
+// alone is never trusted), so demotion
+// takes effect immediately.
+// ----------------------------------------
+
+const requireAdmin =
+  async (req, res, next) => {
+    try {
+      const result =
+        await pool.query(
+          'SELECT is_admin FROM users WHERE id = $1',
+          [req.user?.id]
+        );
+
+      if (
+        result.rows.length === 0 ||
+        !result.rows[0].is_admin
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'Admin access required'
+          });
+      }
+
+      next();
+    } catch (error) {
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to verify admin access'
+        });
+    }
+  };
 
 // ========================================
 // 🔑 Auth Routes
@@ -843,9 +1239,43 @@ app.post(
       const user =
         result.rows[0];
 
+      const refreshToken =
+        await issueRefreshToken(
+          user.id
+        );
+
+      const verificationToken =
+        await createEmailVerification(
+          user.id
+        );
+
+      const verificationUrl =
+        `${FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}`;
+
+      await sendEmail({
+        to: user.email,
+        subject:
+          'Verify your NVME.live email',
+        text: `Welcome to NVME.live! Verify your email address:\n\n${verificationUrl}\n\nThis link expires in 24 hours.`
+      });
+
       res.json({
         token: issueToken(user),
-        user: publicUser(user)
+        refreshToken,
+        user: publicUser(user),
+
+        // No mail provider in dev —
+        // the URL is logged by sendEmail
+        // and echoed here outside prod.
+
+        ...(process.env
+            .NODE_ENV !==
+          'production'
+          ? {
+              devVerificationUrl:
+                verificationUrl
+            }
+          : {})
       });
     } catch (error) {
       console.error(
@@ -923,8 +1353,19 @@ app.post(
           });
       }
 
+      // Unverified email does not block
+      // login (product decision: warn
+      // only — emailVerified is exposed
+      // via /api/auth/me).
+
+      const refreshToken =
+        await issueRefreshToken(
+          user.id
+        );
+
       res.json({
         token: issueToken(user),
+        refreshToken,
         user: publicUser(user)
       });
     } catch (error) {
@@ -948,7 +1389,10 @@ app.get(
   authenticateToken,
   (req, res) => {
     res.json({
-      user: publicUser(req.user)
+      user: publicUser(req.user),
+      emailVerified:
+        !!req.user
+          .email_verified
     });
   }
 );
@@ -1041,10 +1485,15 @@ if (
                   password_hash,
                   display_name,
                   avatar_url,
-                  is_verified
+                  is_verified,
+                  email_verified
                 )
                 VALUES
-                ($1, $2, $3, $4, $5, false)
+                (
+                  $1, $2, $3, $4, $5,
+                  false,
+                  true
+                )
                 RETURNING *
                 `,
                 [
@@ -1120,13 +1569,65 @@ if (
       }
     ),
 
-    (req, res) => {
-      const jwtToken =
-        issueToken(req.user);
+    async (req, res) => {
+      try {
+        // Never put the JWT in the
+        // redirect URL (leaks into logs
+        // and browser history) — hand
+        // out a 5-minute single-use
+        // code instead; the client
+        // swaps it via
+        // POST /api/auth/oauth-exchange.
 
-      res.redirect(
-        `${FRONTEND_URL}/app?token=${jwtToken}`
-      );
+        const { raw, hash } =
+          generateSecureToken();
+
+        await pool.query(
+          `
+          INSERT INTO oauth_codes
+          (
+            user_id,
+            code_hash,
+            expires_at
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            NOW() + INTERVAL '5 minutes'
+          )
+          `,
+          [req.user.id, hash]
+        );
+
+        res.cookie(
+          'oauth_code',
+          raw,
+          {
+            httpOnly: true,
+            secure:
+              process.env
+                .NODE_ENV ===
+              'production',
+            sameSite: 'lax',
+            maxAge:
+              5 * 60 * 1000
+          }
+        );
+
+        res.redirect(
+          `${FRONTEND_URL}/app?code=${raw}`
+        );
+      } catch (error) {
+        console.error(
+          'OAuth callback error:',
+          error
+        );
+
+        res.redirect(
+          `${FRONTEND_URL}/?auth_error=1`
+        );
+      }
     }
   );
 } else {
@@ -1141,6 +1642,613 @@ if (
         })
   );
 }
+
+// ========================================
+// 🔄 Refresh / Logout
+// ========================================
+
+app.post(
+  '/api/auth/refresh',
+  async (req, res) => {
+    try {
+      const { refreshToken } =
+        req.body;
+
+      if (!refreshToken) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'refreshToken is required'
+          });
+      }
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            id,
+            user_id
+          FROM refresh_tokens
+          WHERE
+            token_hash = $1
+            AND revoked_at IS NULL
+            AND expires_at > NOW()
+          `,
+          [hashToken(refreshToken)]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(401)
+          .json({
+            error:
+              'Invalid or expired refresh token'
+          });
+      }
+
+      const stored =
+        result.rows[0];
+
+      const userResult =
+        await pool.query(
+          'SELECT * FROM users WHERE id = $1',
+          [stored.user_id]
+        );
+
+      if (
+        userResult.rows.length === 0
+      ) {
+        return res
+          .status(401)
+          .json({
+            error:
+              'Invalid or expired refresh token'
+          });
+      }
+
+      const user =
+        userResult.rows[0];
+
+      if (user.is_banned) {
+        await revokeUserRefreshTokens(
+          user.id
+        );
+
+        return res
+          .status(403)
+          .json({
+            error:
+              'Account suspended'
+          });
+      }
+
+      // Rotate: the presented token is
+      // revoked and a fresh pair issued.
+
+      await pool.query(
+        `
+        UPDATE refresh_tokens
+        SET revoked_at = NOW()
+        WHERE id = $1
+        `,
+        [stored.id]
+      );
+
+      res.json({
+        token: issueToken(user),
+        refreshToken:
+          await issueRefreshToken(
+            user.id
+          ),
+        user: publicUser(user)
+      });
+    } catch (error) {
+      console.error(
+        'Refresh error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to refresh token'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/auth/logout',
+  async (req, res) => {
+    try {
+      const { refreshToken } =
+        req.body;
+
+      if (refreshToken) {
+        await pool.query(
+          `
+          UPDATE refresh_tokens
+          SET revoked_at = NOW()
+          WHERE
+            token_hash = $1
+            AND revoked_at IS NULL
+          `,
+          [hashToken(refreshToken)]
+        );
+      }
+
+      // Idempotent — unknown tokens get
+      // the same success response.
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error(
+        'Logout error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to log out'
+        });
+    }
+  }
+);
+
+// ========================================
+// ✉️ Email Verification
+// ========================================
+
+app.get(
+  '/api/auth/verify-email',
+  async (req, res) => {
+    try {
+      const { token } =
+        req.query;
+
+      if (token) {
+        const result =
+          await pool.query(
+            `
+            SELECT
+              id,
+              user_id
+            FROM email_verifications
+            WHERE
+              token_hash = $1
+              AND used_at IS NULL
+              AND expires_at > NOW()
+            `,
+            [hashToken(token)]
+          );
+
+        if (
+          result.rows.length > 0
+        ) {
+          const row =
+            result.rows[0];
+
+          await pool.query(
+            `
+            UPDATE email_verifications
+            SET used_at = NOW()
+            WHERE id = $1
+            `,
+            [row.id]
+          );
+
+          await pool.query(
+            `
+            UPDATE users
+            SET
+              email_verified =
+                true
+            WHERE id = $1
+            `,
+            [row.user_id]
+          );
+
+          return res.redirect(
+            `${FRONTEND_URL}/app?verified=1`
+          );
+        }
+      }
+
+      return res.redirect(
+        `${FRONTEND_URL}/app?verify_error=1`
+      );
+    } catch (error) {
+      console.error(
+        'Verify email error:',
+        error
+      );
+
+      return res.redirect(
+        `${FRONTEND_URL}/app?verify_error=1`
+      );
+    }
+  }
+);
+
+app.post(
+  '/api/auth/resend-verification',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      if (
+        req.user.email_verified
+      ) {
+        return res.json({
+          success: true,
+          alreadyVerified: true
+        });
+      }
+
+      const verificationToken =
+        await createEmailVerification(
+          req.user.id
+        );
+
+      const verificationUrl =
+        `${FRONTEND_URL}/api/auth/verify-email?token=${verificationToken}`;
+
+      await sendEmail({
+        to: req.user.email,
+        subject:
+          'Verify your NVME.live email',
+        text: `Verify your email address:\n\n${verificationUrl}\n\nThis link expires in 24 hours.`
+      });
+
+      res.json({
+        success: true,
+
+        ...(process.env
+            .NODE_ENV !==
+          'production'
+          ? {
+              devVerificationUrl:
+                verificationUrl
+            }
+          : {})
+      });
+    } catch (error) {
+      console.error(
+        'Resend verification error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to resend verification'
+        });
+    }
+  }
+);
+
+// ========================================
+// 🔑 Password Reset
+// ========================================
+
+app.post(
+  '/api/auth/forgot-password',
+  async (req, res) => {
+    try {
+      const { email } =
+        req.body;
+
+      // Always succeed — the response
+      // must not reveal whether the
+      // email is registered.
+
+      if (email) {
+        const result =
+          await pool.query(
+            'SELECT id, email FROM users WHERE email = $1',
+            [email]
+          );
+
+        if (
+          result.rows.length > 0
+        ) {
+          const user =
+            result.rows[0];
+
+          const {
+            raw,
+            hash
+          } =
+            generateSecureToken();
+
+          await pool.query(
+            `
+            INSERT INTO password_resets
+            (
+              user_id,
+              token_hash,
+              expires_at
+            )
+            VALUES
+            (
+              $1,
+              $2,
+              NOW() + INTERVAL '1 hour'
+            )
+            `,
+            [user.id, hash]
+          );
+
+          const resetUrl =
+            `${FRONTEND_URL}/app?reset_token=${raw}`;
+
+          await sendEmail({
+            to: user.email,
+            subject:
+              'Reset your NVME.live password',
+            text: `A password reset was requested for your account:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you did not request it, ignore this email.`
+          });
+
+          if (
+            process.env
+              .NODE_ENV !==
+            'production'
+          ) {
+            console.log(
+              `🔑 Dev reset URL for ${user.email}: ${resetUrl}`
+            );
+          }
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error(
+        'Forgot password error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to process request'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/auth/reset-password',
+  async (req, res) => {
+    try {
+      const {
+        token,
+        password
+      } = req.body;
+
+      if (!token || !password) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'token and password are required'
+          });
+      }
+
+      if (password.length < 8) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Password must be at least 8 characters'
+          });
+      }
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            id,
+            user_id
+          FROM password_resets
+          WHERE
+            token_hash = $1
+            AND used_at IS NULL
+            AND expires_at > NOW()
+          `,
+          [hashToken(token)]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Invalid or expired reset token'
+          });
+      }
+
+      const reset =
+        result.rows[0];
+
+      const passwordHash =
+        await bcrypt.hash(
+          password,
+          12
+        );
+
+      await pool.query(
+        `
+        UPDATE users
+        SET
+          password_hash = $1
+        WHERE id = $2
+        `,
+        [
+          passwordHash,
+          reset.user_id
+        ]
+      );
+
+      await pool.query(
+        `
+        UPDATE password_resets
+        SET used_at = NOW()
+        WHERE id = $1
+        `,
+        [reset.id]
+      );
+
+      // Force re-login on every other
+      // device/session.
+
+      await revokeUserRefreshTokens(
+        reset.user_id
+      );
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error(
+        'Reset password error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to reset password'
+        });
+    }
+  }
+);
+
+// ========================================
+// 🔁 OAuth Code Exchange
+// ========================================
+
+app.post(
+  '/api/auth/oauth-exchange',
+  async (req, res) => {
+    try {
+      const { code } =
+        req.body;
+
+      if (!code) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'code is required'
+          });
+      }
+
+      // When the browser carries the
+      // HttpOnly cookie set by the OAuth
+      // callback, it must match the code
+      // being exchanged.
+
+      if (
+        req.cookies?.oauth_code &&
+        req.cookies
+          .oauth_code !== code
+      ) {
+        return res
+          .status(401)
+          .json({
+            error:
+              'Invalid or expired code'
+          });
+      }
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            id,
+            user_id
+          FROM oauth_codes
+          WHERE
+            code_hash = $1
+            AND used_at IS NULL
+            AND expires_at > NOW()
+          `,
+          [hashToken(code)]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(401)
+          .json({
+            error:
+              'Invalid or expired code'
+          });
+      }
+
+      const oauthCode =
+        result.rows[0];
+
+      await pool.query(
+        `
+        UPDATE oauth_codes
+        SET used_at = NOW()
+        WHERE id = $1
+        `,
+        [oauthCode.id]
+      );
+
+      const userResult =
+        await pool.query(
+          'SELECT * FROM users WHERE id = $1',
+          [oauthCode.user_id]
+        );
+
+      if (
+        userResult.rows.length === 0
+      ) {
+        return res
+          .status(401)
+          .json({
+            error:
+              'Invalid or expired code'
+          });
+      }
+
+      const user =
+        userResult.rows[0];
+
+      res.clearCookie(
+        'oauth_code'
+      );
+
+      res.json({
+        token: issueToken(user),
+        refreshToken:
+          await issueRefreshToken(
+            user.id
+          ),
+        user: publicUser(user)
+      });
+    } catch (error) {
+      console.error(
+        'OAuth exchange error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to exchange code'
+        });
+    }
+  }
+);
 
 // ========================================
 // 🤖 AI Studio
@@ -2659,7 +3767,8 @@ async function calculateVideoScore(
 async function getRankedFeed({
   userId,
   limit,
-  cursor
+  cursor,
+  followingOnly = false
 }) {
   const params = [];
 
@@ -2667,6 +3776,92 @@ async function getRankedFeed({
     `
     WHERE v.is_published = true
     `;
+
+  // $index of the viewer's id when
+  // authenticated — reused by the
+  // is_following / is_saved select
+  // flags and the Following feed
+  // filter below.
+
+  let viewerParam =
+    null;
+
+  // Hide videos from users involved in a
+  // block with the viewer (either
+  // direction).
+
+  if (userId) {
+    params.push(userId);
+
+    viewerParam =
+      params.length;
+
+    where +=
+      ` AND NOT EXISTS (
+        SELECT 1
+        FROM blocks b
+        WHERE (
+            b.blocker_id =
+              $${params.length}
+            AND b.blocked_id =
+              v.user_id
+          )
+          OR (
+            b.blocker_id =
+              v.user_id
+            AND b.blocked_id =
+              $${params.length}
+          )
+      )`;
+  }
+
+  // Following feed: only creators the
+  // viewer follows.
+
+  if (
+    followingOnly &&
+    viewerParam
+  ) {
+    where +=
+      ` AND EXISTS (
+        SELECT 1
+        FROM follows ff
+        WHERE ff.follower_id =
+          $${viewerParam}
+          AND ff.following_id =
+            v.user_id
+      )`;
+  }
+
+  // Per-viewer flags joined onto every
+  // feed item (anonymous viewers get
+  // false for both).
+
+  const viewerFlags =
+    viewerParam
+      ? `
+        EXISTS (
+          SELECT 1
+          FROM follows vf
+          WHERE vf.follower_id =
+            $${viewerParam}
+            AND vf.following_id =
+              v.user_id
+        ) AS is_following,
+
+        EXISTS (
+          SELECT 1
+          FROM saves vs
+          WHERE vs.user_id =
+            $${viewerParam}
+            AND vs.video_id =
+              v.id
+        ) AS is_saved
+        `
+      : `
+        false AS is_following,
+        false AS is_saved
+        `;
 
   if (cursor) {
     params.push(cursor);
@@ -2754,7 +3949,9 @@ async function getRankedFeed({
         u.username,
         u.display_name,
         u.avatar_url,
-        u.is_verified
+        u.is_verified,
+
+        ${viewerFlags}
 
       FROM videos v
 
@@ -2943,6 +4140,28 @@ app.get(
         req.query.cursor ||
         null;
 
+      const type =
+        req.query.type ||
+        req.query.feed ||
+        null;
+
+      // The Following feed is
+      // per-user — anonymous viewers
+      // get a clear 401 instead of an
+      // unfiltered feed.
+
+      if (
+        type === 'following' &&
+        !req.user
+      ) {
+        return res
+          .status(401)
+          .json({
+            error:
+              'Sign in to see your Following feed'
+          });
+      }
+
       const feed =
         await getRankedFeed({
           userId:
@@ -2950,7 +4169,10 @@ app.get(
             null,
 
           limit,
-          cursor
+          cursor,
+
+          followingOnly:
+            type === 'following'
         });
 
       const nextCursor =
@@ -4069,7 +5291,8 @@ app.post(
           `
           SELECT
             id,
-            topic
+            topic,
+            user_id
           FROM videos
           WHERE id = $1
           FOR UPDATE
@@ -4234,6 +5457,30 @@ app.post(
         }
       );
 
+      // Notify the video owner — only
+      // when a like is added, never on
+      // unlike or self-like (the helper
+      // skips self-notifications too).
+
+      if (liked) {
+        createNotification({
+          userId:
+            videoResult.rows[0]
+              .user_id,
+
+          actorId:
+            user.id,
+
+          actorUsername:
+            user.username,
+
+          type:
+            'like',
+
+          videoId
+        }).catch(() => {});
+      }
+
       res.json({
         success: true,
         liked,
@@ -4354,7 +5601,8 @@ app.post(
           `
           SELECT
             id,
-            topic
+            topic,
+            user_id
           FROM videos
           WHERE id = $1
           `,
@@ -4457,6 +5705,30 @@ app.post(
         comment
       );
 
+      // Notify the video owner
+      // (self-comments are skipped by
+      // the helper).
+
+      createNotification({
+        userId:
+          videoResult.rows[0]
+            .user_id,
+
+        actorId:
+          req.user.id,
+
+        actorUsername:
+          req.user.username,
+
+        type:
+          'comment',
+
+        videoId,
+
+        commentId:
+          result.rows[0].id
+      }).catch(() => {});
+
       res.json({
         success: true,
         comment
@@ -4473,6 +5745,150 @@ app.post(
           error:
             'Failed to post comment'
         });
+    }
+  }
+);
+
+// Delete a comment — allowed for the
+// comment author or the video owner.
+
+app.delete(
+  '/api/videos/:videoId/comments/:commentId',
+  authenticateToken,
+  async (req, res) => {
+    const videoId =
+      req.params.videoId;
+
+    const commentId =
+      req.params.commentId;
+
+    const client =
+      await pool.connect();
+
+    try {
+      await client.query(
+        'BEGIN'
+      );
+
+      const result =
+        await client.query(
+          `
+          SELECT
+            c.id,
+            c.user_id,
+            v.user_id
+              AS video_owner_id
+
+          FROM comments c
+
+          JOIN videos v
+            ON c.video_id = v.id
+
+          WHERE c.id = $1
+            AND c.video_id = $2
+          `,
+          [
+            commentId,
+            videoId
+          ]
+        );
+
+      if (
+        result.rows.length === 0
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res
+          .status(404)
+          .json({
+            error:
+              'Comment not found'
+          });
+      }
+
+      const commentRow =
+        result.rows[0];
+
+      if (
+        commentRow.user_id !==
+          req.user.id &&
+        commentRow.video_owner_id !==
+          req.user.id
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res
+          .status(403)
+          .json({
+            error:
+              'Not allowed to delete this comment'
+          });
+      }
+
+      await client.query(
+        `
+        DELETE FROM comments
+        WHERE id = $1
+        `,
+        [commentId]
+      );
+
+      await client.query(
+        `
+        UPDATE videos
+        SET
+          comment_count =
+            GREATEST(
+              COALESCE(
+                comment_count,
+                0
+              ) - 1,
+              0
+            )
+        WHERE id = $1
+        `,
+        [videoId]
+      );
+
+      await client.query(
+        'COMMIT'
+      );
+
+      io.to(
+        `video-${videoId}`
+      ).emit(
+        'comment-deleted',
+        {
+          videoId,
+          commentId
+        }
+      );
+
+      res.json({
+        success: true
+      });
+    } catch (error) {
+      await client.query(
+        'ROLLBACK'
+      );
+
+      console.error(
+        'Comment delete error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to delete comment'
+        });
+    } finally {
+      client.release();
     }
   }
 );
@@ -4857,6 +6273,20 @@ app.post(
           'COMMIT'
         );
 
+        createNotification({
+          userId:
+            targetId,
+
+          actorId:
+            user.id,
+
+          actorUsername:
+            user.username,
+
+          type:
+            'follow_request'
+        }).catch(() => {});
+
         return res.json({
           ok: true,
           following: false,
@@ -4916,6 +6346,20 @@ app.post(
         'follow',
         {}
       ).catch(() => {});
+
+      createNotification({
+        userId:
+          targetId,
+
+        actorId:
+          user.id,
+
+        actorUsername:
+          user.username,
+
+        type:
+          'follow'
+      }).catch(() => {});
 
       res.json({
         ok: true,
@@ -5082,6 +6526,24 @@ app.post(
             request.requester_id
           ]
         );
+
+        // Tell the original requester
+        // their follow request was
+        // accepted.
+
+        createNotification({
+          userId:
+            request.requester_id,
+
+          actorId:
+            req.user.id,
+
+          actorUsername:
+            req.user.username,
+
+          type:
+            'follow_accept'
+        }).catch(() => {});
       }
 
       await pool.query(
@@ -5102,6 +6564,1325 @@ app.post(
         .json({
           error:
             e.message
+        });
+    }
+  }
+);
+
+// ========================================
+// 🔔 Notifications
+// ========================================
+
+// Human-readable line the Navbar bell
+// renders (NvmeNotification.message).
+
+function notificationMessage(
+  type,
+  actorUsername,
+  extra = {}
+) {
+  const actor =
+    '@' +
+    (actorUsername || 'someone');
+
+  switch (type) {
+    case 'like':
+      return `${actor} liked your video`;
+
+    case 'comment':
+      return `${actor} commented on your video`;
+
+    case 'follow':
+      return `${actor} started following you`;
+
+    case 'follow_request':
+      return `${actor} requested to follow you`;
+
+    case 'follow_accept':
+      return `${actor} accepted your follow request`;
+
+    case 'gift':
+      return `${actor} sent you ${
+        extra.giftName || 'a gift'
+      }${
+        extra.quantity > 1
+          ? ' x' + extra.quantity
+          : ''
+      }`;
+
+    default:
+      return `${actor} interacted with you`;
+  }
+}
+
+// Insert a notifications row and push it
+// to the recipient's `user-<id>` room on
+// both event names the frontend listens
+// for ('notification' and 'notify').
+// Never throws — a notification failure
+// must not break the action that
+// triggered it. Self-notifications are
+// skipped.
+
+async function createNotification({
+  userId,
+  actorId,
+  actorUsername,
+  type,
+  videoId = null,
+  commentId = null,
+  extra = {}
+}) {
+  try {
+    if (
+      !userId ||
+      userId === actorId
+    ) {
+      return;
+    }
+
+    const result =
+      await pool.query(
+        `
+        INSERT INTO notifications
+        (
+          user_id,
+          actor_id,
+          type,
+          video_id,
+          comment_id
+        )
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5
+        )
+        RETURNING *
+        `,
+        [
+          userId,
+          actorId,
+          type,
+          videoId,
+          commentId
+        ]
+      );
+
+    const payload = {
+      id:
+        result.rows[0].id,
+
+      type,
+
+      message:
+        notificationMessage(
+          type,
+          actorUsername,
+          extra
+        ),
+
+      from:
+        actorUsername ||
+        'someone',
+
+      video_id:
+        videoId,
+
+      comment_id:
+        commentId,
+
+      created_at:
+        result.rows[0]
+          .created_at,
+
+      ts:
+        Date.now()
+    };
+
+    io.to(
+      `user-${userId}`
+    ).emit(
+      'notification',
+      payload
+    );
+
+    io.to(
+      `user-${userId}`
+    ).emit(
+      'notify',
+      payload
+    );
+  } catch (error) {
+    console.error(
+      'Notification error:',
+      error
+    );
+  }
+}
+
+app.get(
+  '/api/notifications',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const limit =
+        clamp(
+          parseInt(
+            req.query.limit
+          ) || 30,
+          1,
+          100
+        );
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            n.id,
+            n.type,
+            n.video_id,
+            n.comment_id,
+            n.read_at,
+            n.created_at,
+
+            a.id AS actor_id,
+            a.username
+              AS actor_username,
+            a.display_name
+              AS actor_display_name,
+            a.avatar_url
+              AS actor_avatar_url
+
+          FROM notifications n
+
+          LEFT JOIN users a
+            ON n.actor_id = a.id
+
+          WHERE n.user_id = $1
+
+          ORDER BY
+            n.created_at DESC
+
+          LIMIT $2
+          `,
+          [
+            req.user.id,
+            limit
+          ]
+        );
+
+      const unread =
+        await pool.query(
+          `
+          SELECT COUNT(*) AS count
+          FROM notifications
+          WHERE user_id = $1
+            AND read_at IS NULL
+          `,
+          [req.user.id]
+        );
+
+      res.json({
+        notifications:
+          result.rows.map(n => ({
+            ...n,
+
+            message:
+              notificationMessage(
+                n.type,
+                n.actor_username
+              ),
+
+            from:
+              n.actor_username ||
+              'someone'
+          })),
+
+        unreadCount:
+          parseInt(
+            unread.rows[0]
+              .count
+          ) || 0
+      });
+    } catch (error) {
+      console.error(
+        'Notifications error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch notifications'
+        });
+    }
+  }
+);
+
+// Mark notifications read — every one of
+// the recipient's, or just the ids in
+// `{ ids: [...] }`.
+
+app.post(
+  '/api/notifications/read',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const ids =
+        Array.isArray(
+          req.body?.ids
+        )
+          ? req.body.ids.filter(
+              id =>
+                typeof id ===
+                  'string' &&
+                /^[0-9a-f-]{36}$/i.test(
+                  id
+                )
+            )
+          : [];
+
+      if (ids.length) {
+        await pool.query(
+          `
+          UPDATE notifications
+          SET read_at = NOW()
+          WHERE user_id = $1
+            AND id = ANY($2::uuid[])
+            AND read_at IS NULL
+          `,
+          [
+            req.user.id,
+            ids
+          ]
+        );
+      } else {
+        await pool.query(
+          `
+          UPDATE notifications
+          SET read_at = NOW()
+          WHERE user_id = $1
+            AND read_at IS NULL
+          `,
+          [req.user.id]
+        );
+      }
+
+      res.json({
+        ok: true
+      });
+    } catch (error) {
+      console.error(
+        'Notifications read error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to mark notifications read'
+        });
+    }
+  }
+);
+
+// ========================================
+// 🔖 Saves
+// ========================================
+
+// Toggle a save — same shape as the
+// like route. On save the save_count /
+// score bump goes through
+// updateVideoSignal('save'), exactly
+// like a save feed event; on unsave the
+// counter is decremented directly.
+
+app.post(
+  '/api/videos/:id/save',
+  authenticateToken,
+  async (req, res) => {
+    const videoId =
+      req.params.id;
+
+    const user =
+      req.user;
+
+    const client =
+      await pool.connect();
+
+    try {
+      await client.query(
+        'BEGIN'
+      );
+
+      const videoResult =
+        await client.query(
+          `
+          SELECT id
+          FROM videos
+          WHERE id = $1
+          FOR UPDATE
+          `,
+          [videoId]
+        );
+
+      if (
+        videoResult.rows.length ===
+        0
+      ) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        return res
+          .status(404)
+          .json({
+            error:
+              'Video not found'
+          });
+      }
+
+      const existing =
+        await client.query(
+          `
+          SELECT 1
+          FROM saves
+          WHERE user_id = $1
+            AND video_id = $2
+          `,
+          [
+            user.id,
+            videoId
+          ]
+        );
+
+      let saved;
+
+      if (
+        existing.rows.length >
+        0
+      ) {
+        await client.query(
+          `
+          DELETE FROM saves
+          WHERE user_id = $1
+            AND video_id = $2
+          `,
+          [
+            user.id,
+            videoId
+          ]
+        );
+
+        await client.query(
+          `
+          UPDATE videos
+          SET
+            save_count =
+              GREATEST(
+                COALESCE(
+                  save_count,
+                  0
+                ) - 1,
+                0
+              )
+          WHERE id = $1
+          `,
+          [videoId]
+        );
+
+        saved = false;
+      } else {
+        await client.query(
+          `
+          INSERT INTO saves
+          (
+            user_id,
+            video_id
+          )
+          VALUES
+          ($1, $2)
+          `,
+          [
+            user.id,
+            videoId
+          ]
+        );
+
+        saved = true;
+      }
+
+      await client.query(
+        'COMMIT'
+      );
+
+      if (saved) {
+        // Increments save_count and the
+        // recommendation score, same as
+        // a 'save' event from
+        // /api/videos/:id/event.
+
+        await updateVideoSignal(
+          videoId,
+          'save',
+          {}
+        );
+      }
+
+      const countResult =
+        await pool.query(
+          `
+          SELECT save_count
+          FROM videos
+          WHERE id = $1
+          `,
+          [videoId]
+        );
+
+      res.json({
+        success: true,
+        saved,
+
+        save_count:
+          countResult.rows[0]
+            ?.save_count || 0
+      });
+    } catch (error) {
+      await client.query(
+        'ROLLBACK'
+      );
+
+      console.error(
+        'Save error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to update save'
+        });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+// The viewer's saved videos, newest save
+// first — same item shape as /api/feed.
+
+app.get(
+  '/api/users/me/saves',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            v.id,
+            v.video_url AS url,
+            v.thumbnail_url AS thumbnail,
+            v.title,
+            v.description,
+
+            v.view_count AS views,
+            v.like_count,
+            v.comment_count,
+
+            COALESCE(
+              v.share_count,
+              0
+            ) AS share_count,
+
+            COALESCE(
+              v.save_count,
+              0
+            ) AS save_count,
+
+            v.created_at,
+            s.created_at AS saved_at,
+
+            u.id AS author_id,
+            u.username,
+            u.display_name,
+            u.avatar_url,
+
+            true AS is_saved,
+
+            EXISTS (
+              SELECT 1
+              FROM follows f
+              WHERE f.follower_id = $1
+                AND f.following_id =
+                  v.user_id
+            ) AS is_following
+
+          FROM saves s
+
+          JOIN videos v
+            ON s.video_id = v.id
+
+          JOIN users u
+            ON v.user_id = u.id
+
+          WHERE s.user_id = $1
+            AND v.is_published = true
+
+          ORDER BY
+            s.created_at DESC
+
+          LIMIT 100
+          `,
+          [req.user.id]
+        );
+
+      res.json({
+        videos:
+          result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Saves error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch saved videos'
+        });
+    }
+  }
+);
+
+// ========================================
+// 💬 Direct Messages
+// ========================================
+
+// Shape a dm_messages row the way
+// public/messages.html consumes it.
+
+function dmMessageJson(m) {
+  return {
+    id: m.id,
+    conversationId:
+      m.conversation_id,
+    fromUserId: m.sender_id,
+    content: m.body,
+    mediaUrl: m.media_url,
+    createdAt: m.created_at,
+    isRead: !!m.read_at
+  };
+}
+
+// True when either user has blocked
+// the other.
+
+async function isBlockedEitherWay(
+  a,
+  b
+) {
+  const { rows } =
+    await pool.query(
+      `
+      SELECT 1
+      FROM blocks
+      WHERE (
+          blocker_id = $1
+          AND blocked_id = $2
+        )
+        OR (
+          blocker_id = $2
+          AND blocked_id = $1
+        )
+      LIMIT 1
+      `,
+      [a, b]
+    );
+
+  return rows.length > 0;
+}
+
+// Find the existing 1:1 conversation
+// between two users, if any.
+
+async function findDmConversation(
+  a,
+  b
+) {
+  const { rows } =
+    await pool.query(
+      `
+      SELECT c.id
+      FROM dm_conversations c
+
+      JOIN dm_participants pa
+        ON pa.conversation_id = c.id
+       AND pa.user_id = $1
+
+      JOIN dm_participants pb
+        ON pb.conversation_id = c.id
+       AND pb.user_id = $2
+
+      LIMIT 1
+      `,
+      [a, b]
+    );
+
+  return rows.length
+    ? rows[0].id
+    : null;
+}
+
+app.get(
+  '/api/dm/conversations',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { rows } =
+        await pool.query(
+          `
+          SELECT
+            c.id,
+
+            o.id AS other_id,
+            o.username AS other_username,
+            o.display_name
+              AS other_display_name,
+            o.avatar_url
+              AS other_avatar,
+
+            lm.body AS last_body,
+            lm.created_at AS last_at,
+
+            (
+              SELECT
+                COUNT(*)::int
+              FROM dm_messages um
+              WHERE
+                um.conversation_id =
+                  c.id
+                AND um.sender_id <> $1
+                AND um.created_at >
+                  COALESCE(
+                    p.last_read_at,
+                    '-infinity'
+                  )
+            ) AS unread_count
+
+          FROM dm_participants p
+
+          JOIN dm_conversations c
+            ON c.id =
+              p.conversation_id
+
+          JOIN dm_participants op
+            ON op.conversation_id =
+              c.id
+           AND op.user_id <> $1
+
+          JOIN users o
+            ON o.id = op.user_id
+
+          LEFT JOIN LATERAL (
+            SELECT
+              m.body,
+              m.created_at
+            FROM dm_messages m
+            WHERE
+              m.conversation_id = c.id
+            ORDER BY
+              m.created_at DESC
+            LIMIT 1
+          ) lm ON true
+
+          WHERE p.user_id = $1
+
+          ORDER BY
+            c.last_message_at
+              DESC NULLS LAST,
+            c.created_at DESC
+          `,
+          [req.user.id]
+        );
+
+      res.json(
+        rows.map(r => ({
+          id: r.id,
+          userId: r.other_id,
+          username:
+            r.other_username,
+
+          otherUser: {
+            id: r.other_id,
+            username:
+              r.other_username,
+            displayName:
+              r.other_display_name,
+            avatar:
+              r.other_avatar
+          },
+
+          lastMessage:
+            r.last_body,
+
+          lastAt:
+            r.last_at ||
+            r.last_message_at,
+
+          unreadCount:
+            r.unread_count
+        }))
+      );
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error: e.message
+        });
+    }
+  }
+);
+
+// Create (or reuse) the 1:1
+// conversation with another user.
+
+app.post(
+  '/api/dm/conversations',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        userId,
+        username
+      } = req.body || {};
+
+      let target = null;
+
+      if (userId || username) {
+        const found =
+          await pool.query(
+            `
+            SELECT
+              id,
+              username,
+              display_name,
+              avatar_url
+            FROM users
+            WHERE id = $1
+               OR username = $2
+            LIMIT 1
+            `,
+            [
+              userId || null,
+              username || null
+            ]
+          );
+
+        target =
+          found.rows[0] || null;
+      }
+
+      if (!target) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'User not found'
+          });
+      }
+
+      if (
+        target.id === req.user.id
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "You can't message yourself"
+          });
+      }
+
+      if (
+        await isBlockedEitherWay(
+          req.user.id,
+          target.id
+        )
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'User is blocked'
+          });
+      }
+
+      let convId =
+        await findDmConversation(
+          req.user.id,
+          target.id
+        );
+
+      if (!convId) {
+        const client =
+          await pool.connect();
+
+        try {
+          await client.query(
+            'BEGIN'
+          );
+
+          const created =
+            await client.query(
+              `
+              INSERT INTO
+                dm_conversations
+              DEFAULT VALUES
+              RETURNING id
+              `
+            );
+
+          convId =
+            created.rows[0].id;
+
+          await client.query(
+            `
+            INSERT INTO
+              dm_participants
+            (
+              conversation_id,
+              user_id
+            )
+            VALUES
+              ($1, $2),
+              ($1, $3)
+            `,
+            [
+              convId,
+              req.user.id,
+              target.id
+            ]
+          );
+
+          await client.query(
+            'COMMIT'
+          );
+        } catch (e) {
+          await client.query(
+            'ROLLBACK'
+          );
+
+          throw e;
+        } finally {
+          client.release();
+        }
+      }
+
+      res.json({
+        id: convId,
+        userId: target.id,
+        username:
+          target.username,
+
+        otherUser: {
+          id: target.id,
+          username:
+            target.username,
+          displayName:
+            target.display_name,
+          avatar:
+            target.avatar_url
+        },
+
+        lastMessage: null,
+        lastAt: null,
+        unreadCount: 0
+      });
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error: e.message
+        });
+    }
+  }
+);
+
+app.get(
+  '/api/dm/:id/messages',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const convId =
+        req.params.id;
+
+      const part =
+        await pool.query(
+          `
+          SELECT 1
+          FROM dm_participants
+          WHERE
+            conversation_id = $1
+            AND user_id = $2
+          `,
+          [
+            convId,
+            req.user.id
+          ]
+        );
+
+      if (
+        part.rows.length === 0
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'Not a participant'
+          });
+      }
+
+      const limit = clamp(
+        parseInt(
+          req.query.limit
+        ) || 50,
+        1,
+        100
+      );
+
+      const before =
+        req.query.before || null;
+
+      const params = [
+        convId,
+        limit
+      ];
+
+      let where =
+        `
+        WHERE
+          conversation_id = $1
+        `;
+
+      if (before) {
+        params.push(before);
+
+        where +=
+          ` AND created_at < $${params.length}`;
+      }
+
+      const { rows } =
+        await pool.query(
+          `
+          SELECT
+            id,
+            conversation_id,
+            sender_id,
+            body,
+            media_url,
+            created_at,
+            read_at
+          FROM dm_messages
+          ${where}
+          ORDER BY
+            created_at DESC
+          LIMIT $2
+          `,
+          params
+        );
+
+      // The page renders oldest
+      // first and scrolls down.
+
+      const messages = rows
+        .reverse()
+        .map(dmMessageJson);
+
+      // Opening the conversation
+      // marks it read and tells the
+      // other participant (the page
+      // only listens for dm_read, it
+      // never emits it).
+
+      if (!before) {
+        await pool.query(
+          `
+          UPDATE dm_participants
+          SET
+            last_read_at = NOW()
+          WHERE
+            conversation_id = $1
+            AND user_id = $2
+          `,
+          [
+            convId,
+            req.user.id
+          ]
+        );
+
+        await pool.query(
+          `
+          UPDATE dm_messages
+          SET read_at = NOW()
+          WHERE
+            conversation_id = $1
+            AND sender_id <> $2
+            AND read_at IS NULL
+          `,
+          [
+            convId,
+            req.user.id
+          ]
+        );
+
+        const others =
+          await pool.query(
+            `
+            SELECT user_id
+            FROM dm_participants
+            WHERE
+              conversation_id = $1
+              AND user_id <> $2
+            `,
+            [
+              convId,
+              req.user.id
+            ]
+          );
+
+        for (
+          const o of others.rows
+        ) {
+          io.to(
+            `user-${o.user_id}`
+          ).emit(
+            'dm_read',
+            {
+              conversationId:
+                convId,
+              readerId:
+                req.user.id
+            }
+          );
+        }
+      }
+
+      res.json(messages);
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error: e.message
+        });
+    }
+  }
+);
+
+// ========================================
+// 🚫 Blocks & Mutes
+// ========================================
+
+app.post(
+  '/api/users/:userId/block',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const targetId =
+        req.params.userId;
+
+      if (
+        targetId === req.user.id
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "You can't block yourself"
+          });
+      }
+
+      const target =
+        await pool.query(
+          `
+          SELECT 1
+          FROM users
+          WHERE id = $1
+          `,
+          [targetId]
+        );
+
+      if (
+        target.rows.length === 0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'User not found'
+          });
+      }
+
+      await pool.query(
+        `
+        INSERT INTO blocks
+          (blocker_id, blocked_id)
+        VALUES
+          ($1, $2)
+        ON CONFLICT DO NOTHING
+        `,
+        [
+          req.user.id,
+          targetId
+        ]
+      );
+
+      res.json({
+        ok: true,
+        blocked: true
+      });
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error: e.message
+        });
+    }
+  }
+);
+
+app.delete(
+  '/api/users/:userId/block',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      await pool.query(
+        `
+        DELETE FROM blocks
+        WHERE blocker_id = $1
+          AND blocked_id = $2
+        `,
+        [
+          req.user.id,
+          req.params.userId
+        ]
+      );
+
+      res.json({
+        ok: true,
+        blocked: false
+      });
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error: e.message
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/users/:userId/mute',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const targetId =
+        req.params.userId;
+
+      if (
+        targetId === req.user.id
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "You can't mute yourself"
+          });
+      }
+
+      const target =
+        await pool.query(
+          `
+          SELECT 1
+          FROM users
+          WHERE id = $1
+          `,
+          [targetId]
+        );
+
+      if (
+        target.rows.length === 0
+      ) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'User not found'
+          });
+      }
+
+      await pool.query(
+        `
+        INSERT INTO mutes
+          (muter_id, muted_id)
+        VALUES
+          ($1, $2)
+        ON CONFLICT DO NOTHING
+        `,
+        [
+          req.user.id,
+          targetId
+        ]
+      );
+
+      res.json({
+        ok: true,
+        muted: true
+      });
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error: e.message
+        });
+    }
+  }
+);
+
+app.delete(
+  '/api/users/:userId/mute',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      await pool.query(
+        `
+        DELETE FROM mutes
+        WHERE muter_id = $1
+          AND muted_id = $2
+        `,
+        [
+          req.user.id,
+          req.params.userId
+        ]
+      );
+
+      res.json({
+        ok: true,
+        muted: false
+      });
+    } catch (e) {
+      res
+        .status(500)
+        .json({
+          error: e.message
         });
     }
   }
@@ -5324,7 +8105,8 @@ app.put(
         bio,
         avatar_url,
         username,
-        profile_link
+        profile_link,
+        paypal_email
       } = req.body;
 
       const result =
@@ -5356,10 +8138,22 @@ app.put(
                 username
               ),
 
+            profile_link =
+              COALESCE(
+                $5,
+                profile_link
+              ),
+
+            paypal_email =
+              COALESCE(
+                $6,
+                paypal_email
+              ),
+
             updated_at =
               NOW()
 
-          WHERE id = $5
+          WHERE id = $7
 
           RETURNING *
           `,
@@ -5368,6 +8162,8 @@ app.put(
             bio,
             avatar_url,
             username,
+            profile_link,
+            paypal_email,
             req.user.id
           ]
         );
@@ -5600,6 +8396,7 @@ app.get(
 app.get(
   '/api/intelligence/stats',
   authenticateToken,
+  requireAdmin,
   async (req, res) => {
     try {
       const [
@@ -5698,6 +8495,7 @@ app.get(
 app.post(
   '/api/intelligence/process-trend/:id',
   authenticateToken,
+  requireAdmin,
   async (req, res) => {
     try {
       const result =
@@ -6862,6 +9660,30 @@ app.post(
             `/sounds/gift-${gift.name.toLowerCase()}.mp3`
         }
       );
+
+      // Notify the gift receiver
+      // (self-gifts are skipped by the
+      // helper).
+
+      createNotification({
+        userId:
+          toUserId,
+
+        actorId:
+          fromUser.id,
+
+        actorUsername:
+          fromUser.username,
+
+        type:
+          'gift',
+
+        extra: {
+          giftName:
+            gift.name,
+          quantity
+        }
+      }).catch(() => {});
 
       res.json({
         success: true,
@@ -8140,6 +10962,31 @@ app.post(
           });
       }
 
+      // Idempotency: a replayed capture for an order we
+      // already credited must not double-credit.
+      const existing =
+        await pool.query(
+          `
+          SELECT *
+          FROM transactions
+          WHERE user_id = $1
+            AND type = 'credit_purchase'
+            AND description = $2
+          `,
+          [
+            req.user.id,
+            `PayPal order ${orderId}`
+          ]
+        );
+
+      if (existing.rows.length) {
+        return res.json({
+          success: true,
+          transaction:
+            existing.rows[0]
+        });
+      }
+
       const request =
         new paypal.orders
           .OrdersCaptureRequest(
@@ -8230,8 +11077,306 @@ app.post(
 );
 
 // ========================================
+// 🪙 Credits (shop checkout)
+// ========================================
+
+// Mirrors the packs in public/shop.html — `value` is the
+// PayPal charge in USD, `credits` is what the buyer gets.
+const CREDIT_PACKAGES = {
+  starter: { credits: 100, value: '0.99' },
+  captain: { credits: 500, value: '3.99' },
+  commander: { credits: 1200, value: '7.99' },
+  elite: { credits: 3000, value: '17.99' },
+  cxo: { credits: 7000, value: '34.99' },
+  king: { credits: 20000, value: '89.99' }
+};
+
+app.get(
+  '/api/credits/balance',
+  authenticateToken,
+  async (req, res) => {
+    const result =
+      await pool.query(
+        `
+        SELECT
+          balance_credits,
+          total_earned
+        FROM users
+        WHERE id = $1
+        `,
+        [req.user.id]
+      );
+
+    res.json({
+      balance:
+        parseFloat(
+          result.rows[0]
+            .balance_credits
+        ),
+
+      total_earned:
+        parseFloat(
+          result.rows[0]
+            .total_earned
+        )
+    });
+  }
+);
+
+app.post(
+  '/api/credits/create-order',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        packageId
+      } = req.body;
+
+      const pack =
+        CREDIT_PACKAGES[packageId];
+
+      if (!pack) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Unknown package'
+          });
+      }
+
+      const request =
+        new paypal.orders
+          .OrdersCreateRequest();
+
+      request.requestBody({
+        intent:
+          'CAPTURE',
+
+        purchase_units: [
+          {
+            amount: {
+              currency_code:
+                'USD',
+
+              value:
+                pack.value
+            }
+          }
+        ]
+      });
+
+      const order =
+        await paypalClient()
+          .execute(
+            request
+          );
+
+      res.json({
+        orderId:
+          order.result.id
+      });
+    } catch (error) {
+      console.error(
+        'Credits create-order error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to create order'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/credits/capture-order',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        orderId
+      } = req.body;
+
+      if (!orderId) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'orderId is required'
+          });
+      }
+
+      // Idempotency: a replayed capture for an order we
+      // already credited must not double-credit.
+      const existing =
+        await pool.query(
+          `
+          SELECT *
+          FROM transactions
+          WHERE user_id = $1
+            AND type = 'credit_purchase'
+            AND description = $2
+          `,
+          [
+            req.user.id,
+            `PayPal order ${orderId}`
+          ]
+        );
+
+      if (existing.rows.length) {
+        const balanceRows =
+          await pool.query(
+            `
+            SELECT balance_credits
+            FROM users
+            WHERE id = $1
+            `,
+            [req.user.id]
+          );
+
+        return res.json({
+          success: true,
+
+          newBalance:
+            parseFloat(
+              balanceRows.rows[0]
+                .balance_credits
+            ),
+
+          transaction:
+            existing.rows[0]
+        });
+      }
+
+      const request =
+        new paypal.orders
+          .OrdersCaptureRequest(
+            orderId
+          );
+
+      request.requestBody({});
+
+      const capture =
+        await paypalClient()
+          .execute(
+            request
+          );
+
+      const amountUsd =
+        parseFloat(
+          capture.result
+            .purchase_units[0]
+            .payments.captures[0]
+            .amount.value
+        );
+
+      // Map the captured amount back to its shop pack and
+      // credit the pack's credits (packs are not 1:1 USD).
+      // Orders from other flows fall back to 1:1.
+      const pack =
+        Object.values(
+          CREDIT_PACKAGES
+        ).find(
+          (p) =>
+            parseFloat(p.value) ===
+            amountUsd
+        );
+
+      const credits =
+        pack
+          ? pack.credits
+          : amountUsd;
+
+      const balanceResult =
+        await pool.query(
+          `
+          UPDATE users
+
+          SET
+            balance_credits =
+              balance_credits + $1
+
+          WHERE id = $2
+
+          RETURNING balance_credits
+          `,
+          [
+            credits,
+            req.user.id
+          ]
+        );
+
+      const tx =
+        await pool.query(
+          `
+          INSERT INTO transactions
+          (
+            user_id,
+            type,
+            amount_usd,
+            credits_amount,
+            status,
+            description
+          )
+          VALUES
+          (
+            $1,
+            'credit_purchase',
+            $2,
+            $3,
+            'completed',
+            $4
+          )
+          RETURNING *
+          `,
+          [
+            req.user.id,
+            amountUsd,
+            credits,
+            `PayPal order ${orderId}`
+          ]
+        );
+
+      res.json({
+        success: true,
+
+        newBalance:
+          parseFloat(
+            balanceResult.rows[0]
+              .balance_credits
+          ),
+
+        transaction:
+          tx.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'Credits capture-order error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to capture order'
+        });
+    }
+  }
+);
+
+// ========================================
 // 📡 WebSocket
 // ========================================
+
+// userId -> open socket count, for DM
+// presence (user_online / user_offline).
+
+const onlineUserSockets =
+  new Map();
 
 io.on(
   'connection',
@@ -8278,6 +11423,84 @@ io.on(
         }
       } catch (_) {}
     }
+
+    // ------------------------------------
+    // Presence (DM online indicators)
+    // ------------------------------------
+
+    const authedUserId =
+      socket.data.userId ||
+      null;
+
+    if (authedUserId) {
+      // Catch the new client up on who
+      // is already online, then announce
+      // this user to everyone.
+
+      for (
+        const uid of
+        onlineUserSockets.keys()
+      ) {
+        socket.emit(
+          'user_online',
+          { userId: uid }
+        );
+      }
+
+      const onlineCount =
+        onlineUserSockets.get(
+          authedUserId
+        ) || 0;
+
+      onlineUserSockets.set(
+        authedUserId,
+        onlineCount + 1
+      );
+
+      if (onlineCount === 0) {
+        io.emit(
+          'user_online',
+          {
+            userId:
+              authedUserId
+          }
+        );
+      }
+    }
+
+    socket.on(
+      'disconnect',
+      () => {
+        if (!authedUserId)
+          return;
+
+        const onlineCount =
+          (
+            onlineUserSockets.get(
+              authedUserId
+            ) || 1
+          ) - 1;
+
+        if (onlineCount <= 0) {
+          onlineUserSockets.delete(
+            authedUserId
+          );
+
+          io.emit(
+            'user_offline',
+            {
+              userId:
+                authedUserId
+            }
+          );
+        } else {
+          onlineUserSockets.set(
+            authedUserId,
+            onlineCount
+          );
+        }
+      }
+    );
 
     const onJoinUser =
       (p = {}) => {
@@ -8656,6 +11879,476 @@ io.on(
         );
       }
     );
+
+    // ------------------------------------
+    // Direct messages
+    // ------------------------------------
+
+    socket.on(
+      'dm_send',
+      async (p = {}) => {
+        try {
+          const fromUserId =
+            socket.data.userId;
+
+          if (!fromUserId)
+            return;
+
+          const toUserId =
+            p.toUserId;
+
+          const content =
+            String(
+              p.content || ''
+            )
+              .trim()
+              .slice(0, 2000);
+
+          if (
+            !toUserId ||
+            !content ||
+            toUserId ===
+              fromUserId
+          ) {
+            return;
+          }
+
+          if (
+            await isBlockedEitherWay(
+              fromUserId,
+              toUserId
+            )
+          ) {
+            return;
+          }
+
+          let convId =
+            p.conversationId ||
+            null;
+
+          if (convId) {
+            const part =
+              await pool.query(
+                `
+                SELECT 1
+                FROM
+                  dm_participants
+                WHERE
+                  conversation_id =
+                    $1
+                  AND user_id = $2
+                `,
+                [
+                  convId,
+                  fromUserId
+                ]
+              );
+
+            if (
+              part.rows.length ===
+              0
+            ) {
+              return;
+            }
+          } else {
+            // No conversation yet —
+            // reuse or create the 1:1
+            // with the recipient.
+
+            convId =
+              await findDmConversation(
+                fromUserId,
+                toUserId
+              );
+
+            if (!convId) {
+              const created =
+                await pool.query(
+                  `
+                  INSERT INTO
+                    dm_conversations
+                  DEFAULT VALUES
+                  RETURNING id
+                  `
+                );
+
+              convId =
+                created.rows[0].id;
+
+              await pool.query(
+                `
+                INSERT INTO
+                  dm_participants
+                (
+                  conversation_id,
+                  user_id
+                )
+                VALUES
+                  ($1, $2),
+                  ($1, $3)
+                `,
+                [
+                  convId,
+                  fromUserId,
+                  toUserId
+                ]
+              );
+            }
+          }
+
+          const inserted =
+            await pool.query(
+              `
+              INSERT INTO
+                dm_messages
+              (
+                conversation_id,
+                sender_id,
+                body,
+                media_url
+              )
+              VALUES
+                ($1, $2, $3, $4)
+              RETURNING
+                id,
+                conversation_id,
+                sender_id,
+                body,
+                media_url,
+                created_at,
+                read_at
+              `,
+              [
+                convId,
+                fromUserId,
+                content,
+                p.mediaUrl ||
+                  null
+              ]
+            );
+
+          await pool.query(
+            `
+            UPDATE
+              dm_conversations
+            SET
+              last_message_at =
+                NOW()
+            WHERE id = $1
+            `,
+            [convId]
+          );
+
+          // The sender renders its own
+          // bubble optimistically, so
+          // only deliver to the
+          // recipient's room.
+
+          io.to(
+            'user-' + toUserId
+          ).emit(
+            'dm_message',
+            dmMessageJson(
+              inserted.rows[0]
+            )
+          );
+        } catch (e) {
+          console.error(
+            'dm_send error:',
+            e.message
+          );
+        }
+      }
+    );
+
+    socket.on(
+      'dm_typing',
+      (p = {}) => {
+        const fromUserId =
+          socket.data.userId;
+
+        if (
+          !fromUserId ||
+          !p.toUserId
+        ) {
+          return;
+        }
+
+        io.to(
+          'user-' + p.toUserId
+        ).emit(
+          'dm_typing',
+          {
+            fromUserId,
+            isTyping:
+              !!p.isTyping
+          }
+        );
+      }
+    );
+
+    socket.on(
+      'dm_read',
+      async (p = {}) => {
+        try {
+          const readerId =
+            socket.data.userId;
+
+          const convId =
+            p.conversationId;
+
+          if (
+            !readerId ||
+            !convId
+          ) {
+            return;
+          }
+
+          const part =
+            await pool.query(
+              `
+              SELECT 1
+              FROM
+                dm_participants
+              WHERE
+                conversation_id =
+                  $1
+                AND user_id = $2
+              `,
+              [
+                convId,
+                readerId
+              ]
+            );
+
+          if (
+            part.rows.length === 0
+          ) {
+            return;
+          }
+
+          await pool.query(
+            `
+            UPDATE
+              dm_participants
+            SET
+              last_read_at =
+                NOW()
+            WHERE
+              conversation_id = $1
+              AND user_id = $2
+            `,
+            [
+              convId,
+              readerId
+            ]
+          );
+
+          await pool.query(
+            `
+            UPDATE dm_messages
+            SET
+              read_at = NOW()
+            WHERE
+              conversation_id = $1
+              AND sender_id <> $2
+              AND read_at IS NULL
+            `,
+            [
+              convId,
+              readerId
+            ]
+          );
+
+          const others =
+            await pool.query(
+              `
+              SELECT user_id
+              FROM
+                dm_participants
+              WHERE
+                conversation_id =
+                  $1
+                AND user_id <> $2
+              `,
+              [
+                convId,
+                readerId
+              ]
+            );
+
+          for (
+            const o of others.rows
+          ) {
+            io.to(
+              'user-' +
+                o.user_id
+            ).emit(
+              'dm_read',
+              {
+                conversationId:
+                  convId,
+                readerId
+              }
+            );
+          }
+        } catch (e) {
+          console.error(
+            'dm_read error:',
+            e.message
+          );
+        }
+      }
+    );
+
+    // ------------------------------------
+    // 1:1 call signaling (pure relays
+    // to the target user's room)
+    // ------------------------------------
+
+    socket.on(
+      'vc_offer',
+      (p = {}) => {
+        const fromUserId =
+          socket.data.userId;
+
+        if (
+          !fromUserId ||
+          !p.toUserId
+        ) {
+          return;
+        }
+
+        const targetRoom =
+          io.sockets.adapter
+            .rooms.get(
+              'user-' +
+                p.toUserId
+            );
+
+        if (
+          !targetRoom ||
+          targetRoom.size === 0
+        ) {
+          socket.emit(
+            'vc_unreachable',
+            {
+              toUserId:
+                p.toUserId
+            }
+          );
+
+          return;
+        }
+
+        io.to(
+          'user-' + p.toUserId
+        ).emit(
+          'vc_offer',
+          {
+            fromUserId,
+            offer: p.offer,
+            withVideo:
+              p.withVideo
+          }
+        );
+      }
+    );
+
+    socket.on(
+      'vc_answer',
+      (p = {}) => {
+        const fromUserId =
+          socket.data.userId;
+
+        if (
+          !fromUserId ||
+          !p.toUserId
+        ) {
+          return;
+        }
+
+        io.to(
+          'user-' + p.toUserId
+        ).emit(
+          'vc_answer',
+          {
+            fromUserId,
+            answer: p.answer
+          }
+        );
+      }
+    );
+
+    socket.on(
+      'vc_ice_candidate',
+      (p = {}) => {
+        const fromUserId =
+          socket.data.userId;
+
+        if (
+          !fromUserId ||
+          !p.toUserId
+        ) {
+          return;
+        }
+
+        io.to(
+          'user-' + p.toUserId
+        ).emit(
+          'vc_ice_candidate',
+          {
+            fromUserId,
+            candidate:
+              p.candidate
+          }
+        );
+      }
+    );
+
+    socket.on(
+      'vc_reject',
+      (p = {}) => {
+        const fromUserId =
+          socket.data.userId;
+
+        if (
+          !fromUserId ||
+          !p.toUserId
+        ) {
+          return;
+        }
+
+        io.to(
+          'user-' + p.toUserId
+        ).emit(
+          'vc_reject',
+          { fromUserId }
+        );
+      }
+    );
+
+    socket.on(
+      'vc_hangup',
+      (p = {}) => {
+        const fromUserId =
+          socket.data.userId;
+
+        if (
+          !fromUserId ||
+          !p.toUserId
+        ) {
+          return;
+        }
+
+        io.to(
+          'user-' + p.toUserId
+        ).emit(
+          'vc_hangup',
+          { fromUserId }
+        );
+      }
+    );
   }
 );
 
@@ -8669,7 +12362,11 @@ app.get(
     res.sendFile(
       'profile-view.html',
       {
-        root: 'public'
+        root:
+          path.join(
+            __dirname,
+            'frontend'
+          )
       }
     );
   }
@@ -8934,6 +12631,795 @@ async function runIntelligenceCycle() {
       false;
   }
 }
+
+// ========================================
+// 🛡️ Admin / Moderation
+// ========================================
+// All routes require a valid token AND a
+// DB-verified is_admin row (requireAdmin
+// re-checks per request). First admin is
+// granted manually in the database:
+//   UPDATE users SET is_admin = true
+//   WHERE email = 'you@example.com';
+
+app.get(
+  '/api/admin/users',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const q =
+        String(
+          req.query.q || ''
+        ).trim();
+
+      const limit =
+        Math.min(
+          Number(
+            req.query.limit
+          ) || 50,
+          100
+        );
+
+      const offset =
+        Math.max(
+          Number(
+            req.query.offset
+          ) || 0,
+          0
+        );
+
+      const params = [];
+
+      let where = '';
+
+      if (q) {
+        params.push(`%${q}%`);
+
+        where =
+          `WHERE
+            username ILIKE $1
+            OR email ILIKE $1`;
+      }
+
+      params.push(limit, offset);
+
+      // Explicit column list — never
+      // SELECT * (password_hash must not
+      // leave the database).
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            id,
+            username,
+            email,
+            is_admin,
+            is_banned,
+            email_verified,
+            created_at
+          FROM users
+          ${where}
+          ORDER BY created_at DESC
+          LIMIT $${params.length - 1}
+          OFFSET $${params.length}
+          `,
+          params
+        );
+
+      res.json({
+        users: result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Admin users error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch users'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/admin/users/:id/ban',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE users
+          SET is_banned = true
+          WHERE id = $1
+          RETURNING id
+          `,
+          [req.params.id]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'User not found'
+          });
+      }
+
+      // Kill every active session —
+      // access JWTs expire on their own,
+      // refresh tokens do not get to.
+
+      await revokeUserRefreshTokens(
+        req.params.id
+      );
+
+      res.json({
+        success: true,
+        is_banned: true
+      });
+    } catch (error) {
+      console.error(
+        'Admin ban error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to ban user'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/admin/users/:id/unban',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE users
+          SET is_banned = false
+          WHERE id = $1
+          RETURNING id
+          `,
+          [req.params.id]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'User not found'
+          });
+      }
+
+      res.json({
+        success: true,
+        is_banned: false
+      });
+    } catch (error) {
+      console.error(
+        'Admin unban error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to unban user'
+        });
+    }
+  }
+);
+
+// Moderation queue — video_feedback rows
+// with feedback_type = 'report', joined
+// with the video, its author, and the
+// reporter. (video_feedback stores no
+// free-text reason; feedback_type is
+// surfaced as `reason`.)
+
+app.get(
+  '/api/admin/reports',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const limit =
+        Math.min(
+          Number(
+            req.query.limit
+          ) || 50,
+          100
+        );
+
+      const offset =
+        Math.max(
+          Number(
+            req.query.offset
+          ) || 0,
+          0
+        );
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            vf.id,
+            vf.feedback_type
+              AS reason,
+            vf.created_at,
+
+            v.id AS video_id,
+            v.title
+              AS video_title,
+            v.video_url,
+            v.thumbnail_url,
+            v.is_published,
+
+            author.id
+              AS author_id,
+            author.username
+              AS author_username,
+
+            reporter.id
+              AS reporter_id,
+            reporter.username
+              AS reporter_username
+
+          FROM video_feedback vf
+
+          JOIN videos v
+            ON v.id = vf.video_id
+
+          LEFT JOIN users author
+            ON author.id = v.user_id
+
+          JOIN users reporter
+            ON reporter.id =
+              vf.user_id
+
+          WHERE
+            vf.feedback_type =
+              'report'
+
+          ORDER BY
+            vf.created_at DESC
+
+          LIMIT $1
+          OFFSET $2
+          `,
+          [limit, offset]
+        );
+
+      res.json({
+        reports: result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Admin reports error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch reports'
+        });
+    }
+  }
+);
+
+// Soft-remove — is_published = false
+// drops the video from every feed query
+// (they all filter is_published = true)
+// without deleting data.
+
+app.post(
+  '/api/admin/videos/:id/remove',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE videos
+          SET
+            is_published = false
+          WHERE id = $1
+          RETURNING id
+          `,
+          [req.params.id]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Video not found'
+          });
+      }
+
+      res.json({
+        success: true,
+        is_published: false
+      });
+    } catch (error) {
+      console.error(
+        'Admin remove video error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to remove video'
+        });
+    }
+  }
+);
+
+// ----------------------------------------
+// Withdrawal queue — creators request
+// payouts via POST /api/wallet/withdraw
+// (balance debited up front, transaction
+// row 'pending'). An admin then approves
+// (real PayPal payout) or rejects
+// (refund) here.
+// ----------------------------------------
+
+app.get(
+  '/api/admin/withdrawals',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const status =
+        String(
+          req.query.status || ''
+        ).trim();
+
+      const allowed = [
+        'pending',
+        'processing',
+        'failed',
+        'completed',
+        'rejected'
+      ];
+
+      if (
+        status &&
+        !allowed.includes(status)
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Invalid status filter'
+          });
+      }
+
+      const limit =
+        Math.min(
+          Number(
+            req.query.limit
+          ) || 50,
+          100
+        );
+
+      const offset =
+        Math.max(
+          Number(
+            req.query.offset
+          ) || 0,
+          0
+        );
+
+      const params = [];
+
+      let where =
+        `WHERE t.type = 'withdrawal'`;
+
+      if (status) {
+        params.push(status);
+
+        where +=
+          ` AND t.status = $${params.length}`;
+      }
+
+      params.push(limit, offset);
+
+      // Explicit column list — user rows
+      // are joined for context, but only
+      // payout-relevant fields leave the
+      // database.
+
+      const result =
+        await pool.query(
+          `
+          SELECT
+            t.id,
+            t.amount_usd,
+            t.status,
+            t.description,
+            t.payout_batch_id,
+            t.created_at,
+
+            u.id AS user_id,
+            u.username,
+            u.email,
+            u.paypal_email
+
+          FROM transactions t
+
+          JOIN users u
+            ON u.id = t.user_id
+
+          ${where}
+
+          ORDER BY
+            CASE
+              WHEN t.status = 'pending'
+                THEN 0
+              ELSE 1
+            END,
+            t.created_at DESC
+
+          LIMIT $${params.length - 1}
+          OFFSET $${params.length}
+          `,
+          params
+        );
+
+      res.json({
+        withdrawals:
+          result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Admin withdrawals error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch withdrawals'
+        });
+    }
+  }
+);
+
+// Approve = send the real payout through
+// the PayPal Payouts API. The pending row
+// is first claimed atomically
+// ('processing') so a double approve can
+// never pay twice; sender_item_id is the
+// transaction id, so PayPal-side retries
+// are idempotent as well. On any PayPal
+// failure the row goes 'failed' and the
+// debited amount is refunded to the
+// user's balance in one DB transaction.
+
+app.post(
+  '/api/admin/withdrawals/:id/approve',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      if (!paypalConfigured()) {
+        return res
+          .status(503)
+          .json({
+            error:
+              'PayPal is not configured — set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET'
+          });
+      }
+
+      const claim =
+        await pool.query(
+          `
+          UPDATE transactions
+          SET status = 'processing'
+          WHERE id = $1
+            AND type = 'withdrawal'
+            AND status = 'pending'
+          RETURNING
+            user_id,
+            amount_usd
+          `,
+          [req.params.id]
+        );
+
+      if (claim.rows.length === 0) {
+        const existing =
+          await pool.query(
+            `
+            SELECT status
+            FROM transactions
+            WHERE id = $1
+              AND type = 'withdrawal'
+            `,
+            [req.params.id]
+          );
+
+        if (
+          existing.rows.length === 0
+        ) {
+          return res
+            .status(404)
+            .json({
+              error:
+                'Withdrawal not found'
+            });
+        }
+
+        return res
+          .status(409)
+          .json({
+            error:
+              `Withdrawal is already ${existing.rows[0].status}`
+          });
+      }
+
+      const {
+        user_id,
+        amount_usd
+      } = claim.rows[0];
+
+      const userResult =
+        await pool.query(
+          `
+          SELECT paypal_email
+          FROM users
+          WHERE id = $1
+          `,
+          [user_id]
+        );
+
+      const paypalEmail =
+        userResult.rows[0]
+          ?.paypal_email;
+
+      let payoutBatchId =
+        null;
+
+      try {
+        if (!paypalEmail) {
+          throw new Error(
+            'User has no PayPal email'
+          );
+        }
+
+        payoutBatchId =
+          await paypalSendPayout({
+            transactionId:
+              req.params.id,
+            email: paypalEmail,
+            amountUsd: amount_usd
+          });
+      } catch (payoutError) {
+        // Payout failed — mark the
+        // transaction failed and refund
+        // the debited balance atomically.
+
+        const client =
+          await pool.connect();
+
+        try {
+          await client.query(
+            'BEGIN'
+          );
+
+          await client.query(
+            `
+            UPDATE transactions
+            SET status = 'failed'
+            WHERE id = $1
+            `,
+            [req.params.id]
+          );
+
+          await client.query(
+            `
+            UPDATE users
+            SET
+              balance_credits =
+                balance_credits + $1
+            WHERE id = $2
+            `,
+            [amount_usd, user_id]
+          );
+
+          await client.query(
+            'COMMIT'
+          );
+        } catch (err) {
+          await client.query(
+            'ROLLBACK'
+          );
+
+          throw err;
+        } finally {
+          client.release();
+        }
+
+        return res
+          .status(502)
+          .json({
+            error:
+              `PayPal payout failed: ${payoutError.message}`,
+            refunded: true
+          });
+      }
+
+      await pool.query(
+        `
+        UPDATE transactions
+        SET
+          status = 'completed',
+          payout_batch_id = $2
+        WHERE id = $1
+        `,
+        [
+          req.params.id,
+          payoutBatchId
+        ]
+      );
+
+      res.json({
+        success: true,
+        status: 'completed',
+        payout_batch_id:
+          payoutBatchId
+      });
+    } catch (error) {
+      console.error(
+        'Admin approve withdrawal error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to approve withdrawal'
+        });
+    }
+  }
+);
+
+// Reject = no payout; the debited amount
+// is refunded and the row goes
+// 'rejected', all in one transaction.
+
+app.post(
+  '/api/admin/withdrawals/:id/reject',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    const client =
+      await pool.connect();
+
+    try {
+      await client.query(
+        'BEGIN'
+      );
+
+      const claim =
+        await client.query(
+          `
+          UPDATE transactions
+          SET status = 'rejected'
+          WHERE id = $1
+            AND type = 'withdrawal'
+            AND status = 'pending'
+          RETURNING
+            user_id,
+            amount_usd
+          `,
+          [req.params.id]
+        );
+
+      if (claim.rows.length === 0) {
+        await client.query(
+          'ROLLBACK'
+        );
+
+        const existing =
+          await pool.query(
+            `
+            SELECT status
+            FROM transactions
+            WHERE id = $1
+              AND type = 'withdrawal'
+            `,
+            [req.params.id]
+          );
+
+        if (
+          existing.rows.length === 0
+        ) {
+          return res
+            .status(404)
+            .json({
+              error:
+                'Withdrawal not found'
+            });
+        }
+
+        return res
+          .status(409)
+          .json({
+            error:
+              `Withdrawal is already ${existing.rows[0].status}`
+          });
+      }
+
+      await client.query(
+        `
+        UPDATE users
+        SET
+          balance_credits =
+            balance_credits + $1
+        WHERE id = $2
+        `,
+        [
+          claim.rows[0].amount_usd,
+          claim.rows[0].user_id
+        ]
+      );
+
+      await client.query(
+        'COMMIT'
+      );
+
+      res.json({
+        success: true,
+        status: 'rejected',
+        refunded: true
+      });
+    } catch (error) {
+      await client.query(
+        'ROLLBACK'
+      );
+
+      console.error(
+        'Admin reject withdrawal error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to reject withdrawal'
+        });
+    } finally {
+      client.release();
+    }
+  }
+);
 
 // ========================================
 // 🚀 Start Server

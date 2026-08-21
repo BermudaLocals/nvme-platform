@@ -17,7 +17,7 @@ const VideoCard = forwardRef<HTMLDivElement, Props>(function VideoCard({ video, 
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(video.like_count || 0);
   const [commentCount, setCommentCount] = useState(video.comment_count || 0);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(!!video.is_saved);
   const [muted, setMuted] = useState(true);
   const [heartBurst, setHeartBurst] = useState<number | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -38,6 +38,12 @@ const VideoCard = forwardRef<HTMLDivElement, Props>(function VideoCard({ video, 
     setLikeCount((c) => c + 1);
     try { await videos.like(video.id); } catch { setLiked(false); setLikeCount((c) => Math.max(0, c - 1)); }
   }, [liked, video.id]);
+
+  const doSave = useCallback(async () => {
+    const next = !saved;
+    setSaved(next);
+    try { await videos.save(video.id); } catch { setSaved(!next); }
+  }, [saved, video.id]);
 
   function onTap() {
     const now = Date.now();
@@ -154,7 +160,7 @@ const VideoCard = forwardRef<HTMLDivElement, Props>(function VideoCard({ video, 
           <Share2 size={30} className="text-white" />
           <span className="text-xs font-bold">Share</span>
         </button>
-        <button aria-label="Save" onClick={() => setSaved(!saved)} className="flex flex-col items-center gap-1">
+        <button aria-label="Save" onClick={doSave} className="flex flex-col items-center gap-1">
           <Bookmark size={30} className={saved ? 'fill-nvme-gold text-nvme-gold' : 'text-white'} />
           <span className="text-xs font-bold">Save</span>
         </button>

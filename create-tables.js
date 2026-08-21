@@ -129,6 +129,58 @@ async function ensureTrendingSchema(client) {
 
   console.log('trending_topics table ready.');
 
+  // server.js reads/writes this same table with its own column set
+  // (topic, trend_score, status, ...) — heal those in when the table
+  // already exists, so both writers work regardless of who ran first.
+  await client.query(`
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS topic TEXT;
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS normalized_topic TEXT;
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS source_external_id TEXT;
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS region TEXT;
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en';
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS trend_score NUMERIC DEFAULT 0;
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS velocity_score NUMERIC DEFAULT 0;
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS engagement_score NUMERIC DEFAULT 0;
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS freshness_score NUMERIC DEFAULT 0;
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMPTZ DEFAULT NOW();
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ DEFAULT NOW();
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
+    ALTER TABLE trending_topics
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+  `);
+
+  console.log('trending_topics server columns ready.');
+
   const videosExists = await tableExists(
     client,
     'videos'

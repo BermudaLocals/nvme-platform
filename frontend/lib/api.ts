@@ -44,6 +44,9 @@ export interface NvmeVideo {
   trending_score?: number;
   trending_rank?: number;
 
+  is_following?: boolean;
+  is_saved?: boolean;
+
   duration?: number;
   width?: number;
   height?: number;
@@ -99,6 +102,7 @@ export interface NvmeFeedResponse {
 export interface NvmeAuthResponse {
   token: string;
   user: NvmeUser;
+  refreshToken?: string;
 }
 
 export interface NvmeMeResponse {
@@ -246,6 +250,17 @@ export const auth = {
       NvmeMeResponse | NvmeUser
     >('/api/auth/me'),
 
+  oauthExchange: (code: string) =>
+    req<NvmeAuthResponse>(
+      '/api/auth/oauth-exchange',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          code
+        })
+      }
+    ),
+
   googleUrl: () =>
     `${BASE}/auth/google`,
 
@@ -300,7 +315,7 @@ export const videos = {
       sessionId?: string;
       session_id?: string;
     }>(
-      `/api/feed/v2${
+      `/api/feed${
         query ? `?${query}` : ''
       }`
     );
@@ -345,14 +360,18 @@ export const videos = {
         : undefined;
 
     return req(
-      '/api/feed/events',
+      '/api/videos/events',
       {
         method: 'POST',
         body: JSON.stringify({
-          event_type: eventType,
-          video_id: videoId,
-          session_id: sessionId,
-          ...payload
+          events: [
+            {
+              event_type: eventType,
+              video_id: videoId,
+              session_id: sessionId,
+              ...payload
+            }
+          ]
         })
       }
     );
@@ -366,20 +385,13 @@ export const videos = {
   notInterested: (
     videoId: string
   ) => {
-    const sessionId =
-      typeof window !== 'undefined'
-        ? sessionStorage.getItem(
-            'nvme_feed_session'
-          ) || undefined
-        : undefined;
-
     return req(
-      '/api/feed/not-interested',
+      `/api/videos/${videoId}/feedback`,
       {
         method: 'POST',
         body: JSON.stringify({
-          video_id: videoId,
-          session_id: sessionId
+          feedback_type:
+            'not_interested'
         })
       }
     );
@@ -403,6 +415,23 @@ export const videos = {
   like: (id: string) =>
     req(
       `/api/videos/${encodeURIComponent(id)}/like`,
+      {
+        method: 'POST'
+      }
+    ),
+
+
+  /* =======================================================
+     SAVE
+  ======================================================= */
+
+  save: (id: string) =>
+    req<{
+      success?: boolean;
+      saved?: boolean;
+      save_count?: number;
+    }>(
+      `/api/videos/${encodeURIComponent(id)}/save`,
       {
         method: 'POST'
       }
@@ -677,6 +706,66 @@ export const trending = {
 
 
 /* =========================================================
+   USERS
+========================================================= */
+
+export const users = {
+  discover: async (): Promise<NvmeUser[]> => {
+    const d = await req<{
+      users?: NvmeUser[];
+      items?: NvmeUser[];
+    }>('/api/users/discover');
+
+    return d.users || d.items || [];
+  },
+
+  stats: (username: string) =>
+    req<{
+      followers?: number;
+      following?: number;
+      videos?: number;
+      total_views?: number;
+    }>(
+      `/api/users/${encodeURIComponent(username)}/stats`
+    ),
+
+  follow: (userId: string) =>
+    req(
+      `/api/users/${encodeURIComponent(userId)}/follow`,
+      {
+        method: 'POST'
+      }
+    )
+};
+
+
+/* =========================================================
+   SEARCH
+========================================================= */
+
+export async function search(
+  q: string
+): Promise<{
+  videos: NvmeVideo[];
+  users: NvmeUser[];
+}> {
+  const params = new URLSearchParams();
+
+  params.set('q', q);
+
+  const d = await req<{
+    videos?: NvmeVideo[];
+    users?: NvmeUser[];
+  }>(`/api/search?${params.toString()}`);
+
+  return {
+    videos: d.videos || [],
+    users: d.users || []
+  };
+}
+
+
+/* =========================================================
    UPLOAD
 ========================================================= */
 
@@ -724,7 +813,10 @@ export async function uploadVideo(
 export const ai = {
 
   status: () =>
-    req(
+    req<{
+      model?: string;
+      online?: boolean;
+    }>(
       '/api/ai/status'
     ),
 
@@ -906,6 +998,8 @@ export default {
   auth,
   videos,
   trending,
+  users,
+  search,
   ai,
   wallet,
   payments,

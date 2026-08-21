@@ -50,13 +50,10 @@ CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
 
 -- ── GIFT TRANSACTIONS (schema's `gifts` table is a catalog of gift TYPES —
 -- there was never a table logging who-sent-what-to-whom) ───────────────────
--- DROP + recreate rather than IF NOT EXISTS: an earlier partial run left a
--- gift_transactions table missing the to_user_id column, which then made
--- CREATE TABLE IF NOT EXISTS silently skip it and broke the index below.
--- Nothing could have written real rows here yet (the only writer,
--- /api/gifts/send, would 500 without to_user_id), so dropping is safe.
-DROP TABLE IF EXISTS gift_transactions CASCADE;
-CREATE TABLE gift_transactions (
+-- Non-destructive: this used to DROP + recreate because an earlier partial
+-- run left gift_transactions missing to_user_id. The ALTERs below heal that
+-- same drift without wiping rows that /api/gifts/send has written since.
+CREATE TABLE IF NOT EXISTS gift_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   gift_id UUID NOT NULL REFERENCES gifts(id),
   stream_id UUID REFERENCES livestreams(id) ON DELETE SET NULL,
@@ -69,6 +66,18 @@ CREATE TABLE gift_transactions (
   message TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Heal columns on tables left over from partial/old runs (no-ops when the
+-- CREATE above just made the table).
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS gift_id UUID;
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS stream_id UUID;
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS from_user_id UUID;
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS to_user_id UUID;
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1;
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS credits_spent NUMERIC(12,2);
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS creator_credits NUMERIC(12,2);
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS platform_credits NUMERIC(12,2);
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS message TEXT;
+ALTER TABLE gift_transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 CREATE INDEX IF NOT EXISTS idx_gift_tx_stream ON gift_transactions(stream_id);
 CREATE INDEX IF NOT EXISTS idx_gift_tx_to_user ON gift_transactions(to_user_id);
 

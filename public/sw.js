@@ -1,10 +1,10 @@
-/* NVME service worker — STABLE (nvme-v47)
+/* NVME service worker — STABLE (nvme-v48)
    v35 kill-switch caused an infinite reload loop: it unregistered
    itself + navigated clients, while app.html re-registered it on
    every load. v36 clears stale caches once, claims clients, and
    NEVER navigates or unregisters. Network-first for HTML/JS so
    deploys propagate; cache-first for static assets. */
-const VER = 'nvme-v47-stable';
+const VER = 'nvme-v48-stable';
 const STATIC_CACHE = VER + '-static';
 
 self.addEventListener('install', (e) => {

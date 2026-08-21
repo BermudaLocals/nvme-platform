@@ -75,6 +75,10 @@
         let targetUserId = null;
         let currentRelationship = 'none';
 
+        // === AUTH ===
+        const token = () => localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token') || '';
+        const authHeaders = () => token() ? { 'Authorization': 'Bearer ' + token() } : {};
+
         // === GET USERNAME FROM URL ===
         const pathSegments = window.location.pathname.split('/');
         const username = pathSegments[pathSegments.length - 1];
@@ -87,6 +91,7 @@
         async function loadProfile() {
             try {
                 const res = await fetch(`${API_BASE}/api/users/${username}`, {
+                    headers: authHeaders(),
                     credentials: 'include'
                 });
                 const data = await res.json();
@@ -156,7 +161,7 @@
             } else if (data.relationship === 'following') {
                 container.innerHTML = `
                     <button onclick="toggleFollow()" class="px-4 py-2 bg-gray-800 hover:bg-red-900 hover:text-red-400 rounded-lg text-sm border border-gray-700 transition">Unfollow</button>
-                    <button class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition">Message</button>
+                    <button onclick="messageUser()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition">Message</button>
                 `;
             } else if (data.relationship === 'requested') {
                 container.innerHTML = `
@@ -165,22 +170,47 @@
             } else {
                 container.innerHTML = `
                     <button onclick="toggleFollow()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition">Follow</button>
-                    <button class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm border border-gray-700 transition">Message</button>
+                    <button onclick="messageUser()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm border border-gray-700 transition">Message</button>
                 `;
             }
         }
 
         // === ACTIONS ===
         async function toggleFollow() {
+            if (!token()) { window.location = '/app'; return; }
             const res = await fetch(`${API_BASE}/api/users/${targetUserId}/follow`, {
                 method: 'POST',
+                headers: authHeaders(),
                 credentials: 'include'
             });
+            if (res.status === 401 || res.status === 403) { window.location = '/app'; return; }
             const data = await res.json();
             if (data.ok) {
-                loadProfile(); // Reload page state
+                currentRelationship = data.following ? 'following' : (data.status === 'requested' ? 'requested' : 'none');
+                renderButtons({ relationship: currentRelationship, user: {} });
+                loadProfile(); // Refresh counts
             } else {
                 alert(data.error || 'Failed to update follow status.');
+            }
+        }
+
+        async function messageUser() {
+            if (!token()) { window.location = '/app'; return; }
+            try {
+                const res = await fetch(`${API_BASE}/api/dm/conversations`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                    body: JSON.stringify({ userId: targetUserId })
+                });
+                if (res.status === 401) { window.location = '/app'; return; }
+                const data = await res.json();
+                if (res.ok) {
+                    window.location = '/inbox';
+                } else {
+                    alert(data.error || 'Could not open conversation.');
+                }
+            } catch {
+                alert('Network error — try again.');
             }
         }
 
@@ -240,13 +270,17 @@
         // Quick check if user is logged in (for nav bar)
         async function checkAuth() {
             try {
-                const res = await fetch(`${API_BASE}/api/me`, { credentials: 'include' });
+                const res = await fetch(`${API_BASE}/api/auth/me`, {
+                    headers: authHeaders(),
+                    credentials: 'include'
+                });
                 if (res.ok) {
                     const me = await res.json();
+                    const u = me.user || {};
                     document.getElementById('navUserInfo').innerHTML = `
-                        <span class="text-gray-300">${me.username}</span>
+                        <span class="text-gray-300">${u.username}</span>
                         <a href="/profile" class="w-8 h-8 rounded-full bg-gray-700 block overflow-hidden">
-                            ${me.avatar ? `<img src="${me.avatar}" class="w-full h-full object-cover" />` : ''}
+                            ${u.avatar_url ? `<img src="${u.avatar_url}" class="w-full h-full object-cover" />` : ''}
                         </a>
                     `;
                 }

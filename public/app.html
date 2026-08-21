@@ -98,6 +98,7 @@ input,textarea{font-family:inherit}
 .fact-ic{width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:1.45rem;transition:transform .15s}
 .fact:active .fact-ic{transform:scale(1.25)}
 .fact-n{font-size:.72rem;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.fact.liked .fact-ic{filter:drop-shadow(0 0 10px rgba(255,46,91,.9))}
 .fact-ava{width:46px;height:46px;border-radius:50%;border:2px solid #fff;overflow:hidden;background:#2a0a4a;display:flex;align-items:center;justify-content:center;font-weight:800}
 .fact-ava img{width:100%;height:100%;object-fit:cover}
 .feed-state{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--muted);text-align:center;padding:2rem}
@@ -752,14 +753,14 @@ function feedItemHtml(v){
       : '<div class="feed-empty-bg">🎬</div>') +
     '<div class="feed-grad"></div>' +
     '<div class="feed-info">' +
-      '<div class="feed-user">'+avatarHtml(v,'feed-ava')+'<span class="feed-uname">@'+uname+'</span></div>' +
+      '<div class="feed-user"><span class="feed-uname">@'+uname+'</span></div>' +
       (v.title?'<div class="feed-cap">'+esc(v.title)+'</div>':'') +
       (v.description?'<div class="feed-desc clamped" onclick="event.stopPropagation();this.classList.remove(\'clamped\')">'+esc(String(v.description).slice(0,180))+' <span class="more">more</span></div>':'') +
       '<div class="fticker"><span class="note">♪</span><div class="track"><span>'+esc(v.title||('original sound · @'+uname))+' · @'+uname+' · '+esc(v.title||'original sound')+' · @'+uname+'</span></div><div class="fdisc">🎵</div></div>' +
     '</div>' +
     '<div class="feed-actions">' +
       '<div class="fact-ava" style="margin-bottom:10px">'+(v.avatar_url?'<img src="'+esc(v.avatar_url)+'">':((v.username||'U')[0].toUpperCase()))+(currentUser && currentUser.username===v.username ? '' : '<div class="fbadge" id="fb_'+vid+'" onclick="event.stopPropagation();this.classList.add(\'done\');this.textContent=\'✓\';followUser(\''+esc(v.author_id||'')+'\',\''+uname.replace(/'/g,'')+'\',this)">+</div>')+'</div>' +
-      '<div class="fact" onclick="event.stopPropagation();likeVideo(\''+vid+'\',this)"><div class="fact-ic">❤️</div><div class="fact-n" id="lk_'+vid+'">'+num(v.like_count)+'</div></div>' +
+      '<div class="fact'+(v.is_liked?' liked':'')+'" onclick="event.stopPropagation();likeVideo(\''+vid+'\',this)"><div class="fact-ic">❤️</div><div class="fact-n" id="lk_'+vid+'">'+num(v.like_count)+'</div></div>' +
       '<div class="fact" onclick="event.stopPropagation();openComments(\''+vid+'\')"><div class="fact-ic">💬</div><div class="fact-n" id="cc_'+vid+'">'+num(v.comment_count)+'</div></div>' +
       '<div class="fact" onclick="event.stopPropagation();shareVideo(\''+vid+'\')"><div class="fact-ic">↗️</div><div class="fact-n">Share</div></div>' +
       '<div class="fact" onclick="event.stopPropagation();toast(\'🎁 Gifts open during LIVE streams — go LIVE from the ＋ button\')"><div class="fact-ic">🎁</div><div class="fact-n">Gift</div></div>' +
@@ -820,11 +821,23 @@ function toggleGlobalMute(){
     }
   }, {passive:true});
 })();
-function dblLike(e, vid){ likeVideo(vid, null); const h=document.createElement('div'); h.className='heart-pop'; h.textContent='❤️'; h.style.left=(e.clientX-44)+'px'; h.style.top=(e.clientY-44)+'px'; document.body.appendChild(h); setTimeout(()=>h.remove(),900); }
+function dblLike(e, vid){ const n=$('lk_'+vid), f=n&&n.closest('.fact'); if(!(f&&f.classList.contains('liked'))) likeVideo(vid, null); const h=document.createElement('div'); h.className='heart-pop'; h.textContent='❤️'; h.style.left=(e.clientX-44)+'px'; h.style.top=(e.clientY-44)+'px'; document.body.appendChild(h); setTimeout(()=>h.remove(),900); }
+const likeInflight = {};
+function setLikedUi(vid, liked, count){
+  const n = $('lk_'+vid); if(n && count!=null) n.textContent = num(count);
+  const f = n && n.closest('.fact'); if(f) f.classList.toggle('liked', !!liked);
+  const cv = feedCache.find(x=>String(x.id)===String(vid)); if(cv){ cv.is_liked = !!liked; if(count!=null) cv.like_count = count; }
+}
 async function likeVideo(vid, el){
-  const n = $('lk_'+vid); if(n) n.textContent = num(parseInt(n.textContent.replace(/,/g,''))+1);
-  if(el) el.classList.add('liked');
-  try{ await fetch(API+'/api/videos/'+vid+'/like',{method:'POST',headers:authHeaders()}); }catch(e){}
+  if(!currentUser){ showAuth(); return; }
+  if(likeInflight[vid]) return;
+  likeInflight[vid] = true;
+  try{
+    const r = await fetch(API+'/api/videos/'+vid+'/like',{method:'POST',headers:authHeaders()});
+    const d = await r.json().catch(()=>null);
+    if(r.ok && d) setLikedUi(vid, d.liked, d.like_count);
+  }catch(e){}
+  likeInflight[vid] = false;
 }
 function shareVideo(vid){
   const url = location.origin + '/app#v='+vid;

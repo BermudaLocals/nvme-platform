@@ -3835,7 +3835,7 @@ async function getRankedFeed({
 
   // Per-viewer flags joined onto every
   // feed item (anonymous viewers get
-  // false for both).
+  // false for all three).
 
   const viewerFlags =
     viewerParam
@@ -3856,11 +3856,21 @@ async function getRankedFeed({
             $${viewerParam}
             AND vs.video_id =
               v.id
-        ) AS is_saved
+        ) AS is_saved,
+
+        EXISTS (
+          SELECT 1
+          FROM likes vl
+          WHERE vl.user_id =
+            $${viewerParam}
+            AND vl.video_id =
+              v.id
+        ) AS is_liked
         `
       : `
         false AS is_following,
-        false AS is_saved
+        false AS is_saved,
+        false AS is_liked
         `;
 
   if (cursor) {

@@ -4112,7 +4112,7 @@ async function getRankedFeed({
     }
   }
 
-  return selected.map(
+  const feed = selected.map(
     video => {
       const {
         _ranking_score,
@@ -4130,6 +4130,236 @@ async function getRankedFeed({
       };
     }
   );
+
+  // ------------------------------------
+  // Sponsored (in-feed ads)
+  // ------------------------------------
+  // Blend active ads into the ranked
+  // page. Ad items carry is_ad so the
+  // client can badge + track them; they
+  // have no created_at cursor and are
+  // excluded from nextCursor math in the
+  // route. Zero extra work when no ads
+  // are active.
+
+  const ads =
+    await getFeedAds({
+      userId,
+
+      organicCount:
+        feed.length
+    });
+
+  return injectFeedAds(feed, ads);
+}
+
+// ----------------------------------------
+// Fetch active ads for feed injection.
+// Priority-ordered with a random
+// tiebreak; video_id ads join their
+// video (+ author) so they render like
+// normal feed items. Returns [] without
+// querying when the page is too small
+// for an ad slot.
+// ----------------------------------------
+
+async function getFeedAds({
+  userId,
+  organicCount
+}) {
+  // One ad max per 6 organic items.
+
+  const maxAds =
+    Math.min(
+      Math.floor(
+        organicCount / 6
+      ),
+      5
+    );
+
+  if (maxAds === 0) {
+    return [];
+  }
+
+  const params = [];
+
+  const likedFlag =
+    userId
+      ? `EXISTS (
+          SELECT 1
+          FROM likes al
+          WHERE al.user_id = $1
+            AND al.video_id = v.id
+        ) AS is_liked`
+      : 'false AS is_liked';
+
+  if (userId) {
+    params.push(userId);
+  }
+
+  params.push(maxAds);
+
+  const result =
+    await pool.query(
+      `
+      SELECT
+        a.id AS ad_id,
+        a.title AS ad_title,
+        a.link_url,
+        a.link_text,
+        a.advertiser,
+        a.image_url,
+        a.video_url AS ad_video_url,
+
+        v.id,
+        v.video_url AS url,
+        v.thumbnail_url AS thumbnail,
+        v.title,
+        v.description,
+
+        v.view_count AS views,
+        v.like_count,
+        v.comment_count,
+
+        COALESCE(
+          v.share_count,
+          0
+        ) AS share_count,
+
+        COALESCE(
+          v.save_count,
+          0
+        ) AS save_count,
+
+        u.id AS author_id,
+        u.username,
+        u.display_name,
+        u.avatar_url,
+        u.is_verified,
+
+        ${likedFlag}
+
+      FROM ads a
+
+      LEFT JOIN videos v
+        ON v.id = a.video_id
+        AND v.is_published = true
+
+      LEFT JOIN users u
+        ON u.id = v.user_id
+
+      WHERE a.is_active = true
+        AND (
+          a.video_id IS NULL
+          OR v.id IS NOT NULL
+        )
+
+      ORDER BY
+        a.priority DESC,
+        RANDOM()
+
+      LIMIT $${params.length}
+      `,
+      params
+    );
+
+  return result.rows.map(
+    ad => ({
+      is_ad: true,
+      ad_id: ad.ad_id,
+
+      // Platform-video ads keep the
+      // real video id so like/comment
+      // wire up unchanged; external
+      // creatives get id: null.
+
+      id: ad.id,
+
+      url:
+        ad.url ||
+        ad.ad_video_url ||
+        null,
+
+      thumbnail:
+        ad.thumbnail ||
+        ad.image_url ||
+        null,
+
+      image_url: ad.image_url,
+
+      title:
+        ad.ad_title ||
+        ad.title ||
+        null,
+
+      description: ad.description,
+
+      advertiser: ad.advertiser,
+      link_url: ad.link_url,
+
+      link_text:
+        ad.link_text ||
+        'Learn more',
+
+      views: ad.views,
+      like_count: ad.like_count,
+      comment_count:
+        ad.comment_count,
+      share_count: ad.share_count,
+      save_count: ad.save_count,
+
+      author_id: ad.author_id,
+      username: ad.username,
+      display_name: ad.display_name,
+      avatar_url: ad.avatar_url,
+      is_verified: ad.is_verified,
+
+      is_liked: !!ad.is_liked
+    })
+  );
+}
+
+// ----------------------------------------
+// Blend ads into a ranked feed page:
+// first ad at 0-indexed position 2-3,
+// then at most one ad per 6 organic
+// items. Ads never displace organic
+// items and don't affect the cursor.
+// ----------------------------------------
+
+function injectFeedAds(feed, ads) {
+  if (!ads.length) {
+    return feed;
+  }
+
+  const out = [];
+
+  let adIndex = 0;
+  let organicSinceAd = 0;
+
+  const firstAdAt =
+    2 + Math.floor(Math.random() * 2);
+
+  for (const video of feed) {
+    const slotForAd =
+      adIndex < ads.length &&
+      (
+        adIndex === 0
+          ? out.length >= firstAdAt
+          : organicSinceAd >= 6
+      );
+
+    if (slotForAd) {
+      out.push(ads[adIndex]);
+      adIndex += 1;
+      organicSinceAd = 0;
+    }
+
+    out.push(video);
+    organicSinceAd += 1;
+  }
+
+  return out;
 }
 
 app.get(
@@ -4185,10 +4415,20 @@ app.get(
             type === 'following'
         });
 
+      // Ads are blended into the page
+      // but carry no created_at cursor —
+      // compute nextCursor from organic
+      // items only.
+
+      const organic =
+        feed.filter(
+          item => !item.is_ad
+        );
+
       const nextCursor =
-        feed.length === limit
-          ? feed[
-              feed.length - 1
+        organic.length === limit
+          ? organic[
+              organic.length - 1
             ].created_at
           : undefined;
 
@@ -5269,6 +5509,109 @@ app.post(
         .json({
           error:
             'Failed to record view'
+        });
+    }
+  }
+);
+
+// ========================================
+// 📣 AD TRACKING
+// ========================================
+// Fire-and-forget counters — no auth,
+// no body, cheap single-row UPDATEs.
+// The client fires an impression when
+// an ad scrolls into view and a click
+// when its CTA is tapped.
+
+app.post(
+  '/api/ads/:id/impression',
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE ads
+          SET
+            impressions =
+              COALESCE(
+                impressions,
+                0
+              ) + 1
+          WHERE id = $1
+          RETURNING id
+          `,
+          [req.params.id]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({
+            error: 'Ad not found'
+          });
+      }
+
+      res.json({
+        success: true
+      });
+    } catch (error) {
+      console.error(
+        'Ad impression error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to track impression'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/ads/:id/click',
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE ads
+          SET
+            clicks =
+              COALESCE(
+                clicks,
+                0
+              ) + 1
+          WHERE id = $1
+          RETURNING id
+          `,
+          [req.params.id]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({
+            error: 'Ad not found'
+          });
+      }
+
+      res.json({
+        success: true
+      });
+    } catch (error) {
+      console.error(
+        'Ad click error:',
+        error.message
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to track click'
         });
     }
   }
@@ -13394,6 +13737,259 @@ app.post(
         });
     } finally {
       client.release();
+    }
+  }
+);
+
+// ----------------------------------------
+// 📣 Admin: in-feed ads
+// ----------------------------------------
+// Sponsored placements blended into
+// /api/feed by getRankedFeed. An ad
+// either promotes an existing video
+// (video_id) or carries an external
+// creative (video_url / image_url).
+
+app.get(
+  '/api/admin/ads',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          SELECT
+            a.*,
+            v.title AS video_title
+          FROM ads a
+          LEFT JOIN videos v
+            ON v.id = a.video_id
+          ORDER BY a.created_at DESC
+          `
+        );
+
+      res.json({
+        ads: result.rows
+      });
+    } catch (error) {
+      console.error(
+        'Admin ads list error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to fetch ads'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/admin/ads',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const {
+        video_id,
+        image_url,
+        video_url,
+        title,
+        link_url,
+        link_text,
+        advertiser,
+        priority,
+        is_active
+      } = req.body;
+
+      if (
+        !video_id &&
+        !video_url &&
+        !image_url
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Provide video_id, video_url, or image_url'
+          });
+      }
+
+      if (video_id) {
+        const video =
+          await pool.query(
+            `
+            SELECT id
+            FROM videos
+            WHERE id = $1
+            `,
+            [video_id]
+          );
+
+        if (video.rows.length === 0) {
+          return res
+            .status(404)
+            .json({
+              error:
+                'Video not found'
+            });
+        }
+      }
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO ads
+          (
+            video_id,
+            image_url,
+            video_url,
+            title,
+            link_url,
+            link_text,
+            advertiser,
+            priority,
+            is_active
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9
+          )
+          RETURNING *
+          `,
+          [
+            video_id || null,
+            image_url || null,
+            video_url || null,
+            title || null,
+            link_url || null,
+            link_text || 'Learn more',
+            advertiser || null,
+            Number(priority) || 1,
+            is_active !== false
+          ]
+        );
+
+      res.json({
+        ad: result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'Admin create ad error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to create ad'
+        });
+    }
+  }
+);
+
+app.post(
+  '/api/admin/ads/:id/toggle',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          UPDATE ads
+          SET
+            is_active =
+              NOT is_active
+          WHERE id = $1
+          RETURNING
+            id,
+            is_active
+          `,
+          [req.params.id]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({
+            error: 'Ad not found'
+          });
+      }
+
+      res.json({
+        success: true,
+        is_active:
+          result.rows[0].is_active
+      });
+    } catch (error) {
+      console.error(
+        'Admin toggle ad error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to toggle ad'
+        });
+    }
+  }
+);
+
+app.delete(
+  '/api/admin/ads/:id',
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+          DELETE FROM ads
+          WHERE id = $1
+          RETURNING id
+          `,
+          [req.params.id]
+        );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({
+            error: 'Ad not found'
+          });
+      }
+
+      res.json({
+        success: true
+      });
+    } catch (error) {
+      console.error(
+        'Admin delete ad error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to delete ad'
+        });
     }
   }
 );

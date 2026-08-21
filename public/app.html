@@ -110,6 +110,10 @@ input,textarea{font-family:inherit}
 .rail-name{font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rail-sub{font-size:.68rem;color:var(--muted);margin:2px 0 8px}
 .rail-btn{background:linear-gradient(135deg,var(--purple),var(--pink));border:none;color:#fff;border-radius:20px;padding:5px 16px;font-size:.72rem;font-weight:800;cursor:pointer}
+/* sponsored (in-feed ads) */
+.ad-badge{font-size:.62rem;font-weight:700;color:rgba(255,255,255,.75);background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:1px 6px}
+.ad-cta{display:inline-block;width:fit-content;margin-top:8px;background:linear-gradient(135deg,var(--purple),var(--pink));color:#fff;border-radius:20px;padding:7px 18px;font-size:.8rem;font-weight:800;cursor:pointer;box-shadow:0 4px 18px rgba(124,58,237,.45)}
+.ad-cta:active{transform:scale(.96)}
 .mute-pill{position:fixed;bottom:calc(88px + env(safe-area-inset-bottom));left:12px;z-index:95;background:rgba(0,0,0,.55);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:.75rem;cursor:pointer;backdrop-filter:blur(8px)}
 
 /* ===== CREATE SHEET ===== */
@@ -762,6 +766,7 @@ async function renderFeedWithFilter(){
   wireFeedObserver();
 }
 function feedItemHtml(v){
+  if(v.is_ad) return adItemHtml(v);
   const vid = esc(v.id), uname = esc(v.username||'creator');
   return '<div class="feed-item" data-vid="'+vid+'">' +
     (v.url
@@ -782,6 +787,29 @@ function feedItemHtml(v){
       '<div class="fact" onclick="event.stopPropagation();toast(\'🎁 Gifts open during LIVE streams — go LIVE from the ＋ button\')"><div class="fact-ic">🎁</div><div class="fact-n">Gift</div></div>' +
     '</div><div class="fprog"><div class="fprog-in"></div></div></div>';
 }
+function adItemHtml(v){
+  const adid = esc(v.ad_id), platform = !!v.id, vid = platform ? esc(v.id) : '';
+  const uname = esc(v.username||v.advertiser||'sponsored');
+  const cta = v.link_url ? '<div class="ad-cta" onclick="event.stopPropagation();adClick(\''+adid+'\',\''+esc(v.link_url).replace(/'/g,'')+'\')">'+esc(v.link_text||'Learn more')+'</div>' : '';
+  return '<div class="feed-item" data-vid="'+vid+'" data-adid="'+adid+'">' +
+    (v.url
+      ? '<video class="feed-video" src="'+esc(v.url)+'" '+(v.thumbnail?'poster="'+esc(v.thumbnail)+'"':'')+' muted loop playsinline preload="metadata" onclick="tapVideo(this,'+"'"+vid+"'"+')"'+(platform?' ondblclick="dblLike(event,'+"'"+vid+"'"+')"':'')+'></video>'
+      : (v.image_url ? '<img class="feed-video" src="'+esc(v.image_url)+'" alt="sponsored">' : '<div class="feed-empty-bg">📣</div>')) +
+    '<div class="feed-grad"></div>' +
+    '<div class="feed-info">' +
+      '<div class="feed-user"><span class="feed-uname">@'+uname+'</span><span class="ad-badge">Sponsored</span></div>' +
+      (v.title?'<div class="feed-cap">'+esc(v.title)+'</div>':'') +
+      (v.description?'<div class="feed-desc clamped" onclick="event.stopPropagation();this.classList.remove(\'clamped\')">'+esc(String(v.description).slice(0,180))+' <span class="more">more</span></div>':'') +
+      (platform&&v.advertiser?'<div class="feed-desc">🏷️ '+esc(v.advertiser)+'</div>':'') +
+      cta +
+    '</div>' +
+    '<div class="feed-actions">' +
+      (platform
+        ? '<div class="fact'+(v.is_liked?' liked':'')+'" onclick="event.stopPropagation();likeVideo(\''+vid+'\',this)"><div class="fact-ic">❤️</div><div class="fact-n" id="lk_'+vid+'">'+num(v.like_count)+'</div></div>' +
+          '<div class="fact" onclick="event.stopPropagation();openComments(\''+vid+'\')"><div class="fact-ic">💬</div><div class="fact-n" id="cc_'+vid+'">'+num(v.comment_count)+'</div></div>'
+        : '') +
+    '</div><div class="fprog"><div class="fprog-in"></div></div></div>';
+}
 function emptyFeedHtml(){
   return '<div class="feed-state"><div class="big">🎬</div><div style="font-weight:800;font-size:1.05rem;color:#fff">No videos yet — be the first!</div><div>Tap ＋ to record your first clip</div><div style="width:100%;max-width:420px"><div class="sect" style="padding-left:0">✨ Creators to follow</div><div class="rail" id="feedRailSlot"></div></div></div>';
 }
@@ -791,17 +819,16 @@ function wireFeedObserver(){
     entries.forEach(en=>{
       const v = en.target;
       if(en.intersectionRatio>=0.6){
-        document.querySelectorAll('.feed-video').forEach(o=>{ if(o!==v) o.pause(); });
-        v.muted = !soundOn;
-        v.play().catch(()=>{});
+        document.querySelectorAll('.feed-video').forEach(o=>{ if(o!==v && o.pause) o.pause(); });
+        if(v.play){ v.muted = !soundOn; v.play().catch(()=>{}); }
         const item = v.closest('.feed-item');
-        if(item && !item._viewed){ item._viewed = true; fetch(API+'/api/videos/'+item.dataset.vid+'/view',{method:'POST'}).catch(()=>{}); }
+        if(item && !item._viewed){ item._viewed = true; if(item.dataset.adid){ fetch(API+'/api/ads/'+item.dataset.adid+'/impression',{method:'POST'}).catch(()=>{}); } else { fetch(API+'/api/videos/'+item.dataset.vid+'/view',{method:'POST'}).catch(()=>{}); } }
         if(item && !item._prog){
           item._prog = true;
           const bar = item.querySelector('.fprog-in');
-          v.addEventListener('timeupdate', ()=>{ if(bar && v.duration){ bar.style.width = ((v.currentTime/v.duration)*100).toFixed(1)+'%'; bar.classList.add('playing'); } });
+          if(v.play) v.addEventListener('timeupdate', ()=>{ if(bar && v.duration){ bar.style.width = ((v.currentTime/v.duration)*100).toFixed(1)+'%'; bar.classList.add('playing'); } });
         }
-      } else v.pause();
+      } else if(v.pause) v.pause();
     });
   },{threshold:[0,0.6,1]});
   document.querySelectorAll('.feed-video').forEach(v=>feedObs.observe(v));
@@ -859,6 +886,10 @@ function shareVideo(vid){
   const url = location.origin + '/app#v='+vid;
   if(navigator.share){ navigator.share({title:'NVME',url}).catch(()=>{}); }
   else { navigator.clipboard && navigator.clipboard.writeText(url); toast('🔗 Link copied'); }
+}
+function adClick(adid, url){
+  if(adid) fetch(API+'/api/ads/'+adid+'/click',{method:'POST'}).catch(()=>{});
+  window.open(url,'_blank','noopener');
 }
 
 /* ================= FOLLOW ================= */

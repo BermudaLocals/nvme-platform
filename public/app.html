@@ -207,6 +207,9 @@ input,textarea{font-family:inherit}
 .chip{display:flex;align-items:center;gap:8px;margin:8px 16px 0;background:#0a0a14;border:1px solid var(--border);border-radius:10px;padding:6px 10px;font-size:.74rem;color:#a78bfa}
 .chip img{width:34px;height:34px;border-radius:8px;object-fit:cover}
 .chip .x{margin-left:auto;color:#ff4b4b;cursor:pointer;font-size:1rem}
+.c-reply{display:inline-block;margin-top:4px;font-size:.72rem;font-weight:700;color:var(--muted);cursor:pointer}
+.c-reply:hover{color:#a78bfa}
+.c-reply-item{margin-left:44px}
 
 /* ===== EDIT PROFILE ===== */
 .edit-in{padding:20px 18px calc(24px + env(safe-area-inset-bottom));overflow-y:auto}
@@ -466,6 +469,7 @@ input,textarea{font-family:inherit}
   <div class="sheet-in">
     <div class="sheet-top"><span id="commentCountTitle">Comments</span><button class="sheet-x" onclick="closeComments()">✕</button></div>
     <div class="c-list" id="commentList"></div>
+    <div id="replyChipWrap"></div>
     <div id="commentChipWrap"></div>
     <div class="c-composer">
       <button class="c-cam" onclick="document.getElementById('commentPhotoInput').click()">📷</button>
@@ -704,6 +708,7 @@ async function bootUser(){
   currentUser = d.user || d;
   try{ localStorage.setItem('nvme_user', JSON.stringify(currentUser)); }catch(e){}
   renderProfile();
+  initPush();
 }
 
 /* ================= FEED ================= */
@@ -963,9 +968,9 @@ async function followUser(userId, username, btn){
 }
 
 /* ================= COMMENTS (text + photo, verified contract) ================= */
-let commentVid = null, commentPhoto = null;
+let commentVid = null, commentPhoto = null, replyTo = null;
 function openComments(vid){
-  commentVid = vid; commentPhoto = null; $('commentChipWrap').innerHTML='';
+  commentVid = vid; commentPhoto = null; replyTo = null; $('commentChipWrap').innerHTML=''; $('replyChipWrap').innerHTML='';
   $('commentSheet').classList.add('open');
   $('commentList').innerHTML = '<div style="text-align:center;padding:22px"><div class="spinner" style="margin:0 auto"></div></div>';
   loadComments();
@@ -982,25 +987,43 @@ async function loadComments(){
   }catch(e){ $('commentList').innerHTML='<div style="text-align:center;padding:24px;color:var(--muted)">Could not load. <b style="color:var(--purple);cursor:pointer" onclick="loadComments()">Retry</b></div>'; }
 }
 function commentHtml(cm){
-  return '<div class="c-item">'+avatarHtml(cm,'c-ava')+'<div class="c-body">' +
+  let h = '<div class="c-item">'+avatarHtml(cm,'c-ava')+'<div class="c-body">' +
     '<div class="c-name">'+esc(cm.display_name||('@'+(cm.username||'user')))+' <span style="color:var(--muted);font-weight:400">@'+esc(cm.username||'')+'</span></div>' +
     (cm.text?'<div class="c-text">'+esc(cm.text)+'</div>':'') +
     (cm.image_url?'<img class="c-img" src="'+esc(cm.image_url)+'" onclick="window.open(this.src)">':'') +
+    '<div class="c-reply" data-u="'+esc(cm.username||'')+'" onclick="startReply(\''+cm.id+'\',this.dataset.u)">Reply</div>' +
   '</div></div>';
+  if(cm.replies && cm.replies.length){
+    h += cm.replies.map(r =>
+      '<div class="c-item c-reply-item">'+avatarHtml(r,'c-ava')+'<div class="c-body">' +
+        '<div class="c-name">'+esc(r.display_name||('@'+(r.username||'user')))+' <span style="color:var(--muted);font-weight:400">@'+esc(r.username||'')+'</span></div>' +
+        (r.text?'<div class="c-text">'+esc(r.text)+'</div>':'') +
+        (r.image_url?'<img class="c-img" src="'+esc(r.image_url)+'" onclick="window.open(this.src)">':'') +
+      '</div></div>'
+    ).join('');
+  }
+  return h;
 }
+function startReply(id, username){
+  replyTo = {id:id, username:username};
+  $('replyChipWrap').innerHTML = '<div class="chip">Replying to @'+esc(username)+' <span class="x" onclick="cancelReply()">✕</span></div>';
+  $('commentInput').focus();
+}
+function cancelReply(){ replyTo = null; $('replyChipWrap').innerHTML=''; }
 async function postComment(){
   if(!currentUser){ showAuth(); return; }
   const text = $('commentInput').value.trim();
   if(!text && !commentPhoto) return;
   $('commentInput').value='';
   try{
-    const r = await fetch(API+'/api/videos/'+commentVid+'/comments',{method:'POST',headers:authHeaders(),body:JSON.stringify({text,image:commentPhoto})});
+    const r = await fetch(API+'/api/videos/'+commentVid+'/comments',{method:'POST',headers:authHeaders(),body:JSON.stringify({text,image:commentPhoto,parent_id:replyTo?replyTo.id:null})});
     if(r.status===401){ toast('Session expired — sign in again'); return; }
     const d = await r.json();
     if(!r.ok){ toast(d.error||'Post failed'); return; }
-    commentPhoto=null; $('commentChipWrap').innerHTML='';
+    const wasReply = !!replyTo;
+    commentPhoto=null; replyTo=null; $('commentChipWrap').innerHTML=''; $('replyChipWrap').innerHTML='';
     const cc = $('cc_'+commentVid); if(cc) cc.textContent = num(parseInt(cc.textContent.replace(/,/g,''))+1);
-    loadComments(); toast('Comment posted 💬');
+    loadComments(); toast(wasReply?'Reply posted 💬':'Comment posted 💬');
   }catch(e){ toast('Network error — try again'); }
 }
 function attachCommentPhoto(e){
@@ -1307,6 +1330,41 @@ async function pwInstall(){
 }
 function pwDismiss(){ $('pwBanner').style.display='none'; localStorage.setItem('nvme_pw_dismiss_v33','1'); }
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
+
+/* -------- web push -------- */
+function urlB64ToUint8(b64){
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g,'+').replace(/_/g,'/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+async function subscribePush(){
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      const r = await fetch(API+'/api/push/vapid-public-key');
+      if(!r.ok) return;
+      const d = await r.json();
+      sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:urlB64ToUint8(d.publicKey)});
+    }
+    await fetch(API+'/api/push/subscribe', {method:'POST', headers:authHeaders(), body:JSON.stringify({subscription:sub.toJSON()})});
+  }catch(e){ /* push is best-effort — never bother the user */ }
+}
+/* Logged-in users only: subscribe silently when permission was already
+   granted; otherwise ask once, on the next user gesture (browser rule). */
+function initPush(){
+  try{
+    if(!currentUser || !('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') return;
+    if(Notification.permission === 'granted'){ subscribePush(); return; }
+    if(Notification.permission === 'default'){
+      const ask = async () => {
+        document.removeEventListener('click', ask);
+        try{ if(await Notification.requestPermission() === 'granted') subscribePush(); }catch(e){}
+      };
+      document.addEventListener('click', ask);
+    }
+  }catch(e){}
+}
 
 /* ================= BOOT ================= */
 (async function boot(){

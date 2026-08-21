@@ -28,6 +28,20 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const paypal = require('@paypal/checkout-server-sdk');
 
+// Optional — push routes no-op (with a log
+// line) when the package or VAPID keys are
+// missing, so the server still boots.
+
+let webpush = null;
+
+try {
+  webpush = require('web-push');
+} catch (e) {
+  console.warn(
+    '⚠️ web-push not installed — push notifications disabled (run npm install)'
+  );
+}
+
 // ========================================
 // 📦 Initialize
 // ========================================
@@ -5996,6 +6010,7 @@ app.get(
             ON c.user_id = u.id
 
           WHERE c.video_id = $1
+            AND c.parent_id IS NULL
 
           ORDER BY
             c.created_at DESC
@@ -6005,9 +6020,70 @@ app.get(
           [req.params.id]
         );
 
+      const comments =
+        result.rows;
+
+      // One extra query nests replies
+      // (same DESC ordering convention)
+      // under their parents.
+
+      if (comments.length > 0) {
+        const replies =
+          await pool.query(
+            `
+            SELECT
+              c.id,
+              c.parent_id,
+              c.text,
+              c.image_url,
+              c.created_at,
+
+              u.username,
+              u.display_name,
+              u.avatar_url
+
+            FROM comments c
+
+            JOIN users u
+              ON c.user_id = u.id
+
+            WHERE c.parent_id =
+              ANY($1::uuid[])
+
+            ORDER BY
+              c.created_at DESC
+            `,
+            [
+              comments.map(
+                c => c.id
+              )
+            ]
+          );
+
+        const byParent = {};
+
+        for (const reply of
+          replies.rows
+        ) {
+          (
+            byParent[
+              reply.parent_id
+            ] =
+              byParent[
+                reply.parent_id
+              ] || []
+          ).push(reply);
+        }
+
+        for (const comment of comments) {
+          comment.replies =
+            byParent[comment.id] ||
+            [];
+        }
+      }
+
       res.json({
-        comments:
-          result.rows
+        comments
       });
     } catch (error) {
       res
@@ -6030,7 +6106,8 @@ app.post(
 
       const {
         text,
-        image
+        image,
+        parent_id
       } = req.body;
 
       if (
@@ -6081,6 +6158,58 @@ app.post(
           });
       }
 
+      // Reply? The parent must exist, belong
+      // to the same video, and be top-level
+      // (one level deep, TikTok-style).
+
+      let parentComment = null;
+
+      if (parent_id) {
+        const parentResult =
+          await pool.query(
+            `
+            SELECT
+              id,
+              user_id,
+              video_id,
+              parent_id
+            FROM comments
+            WHERE id = $1
+            `,
+            [parent_id]
+          );
+
+        if (
+          parentResult.rows
+            .length === 0 ||
+
+          parentResult.rows[0]
+            .video_id !== videoId
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                'Parent comment not found'
+            });
+        }
+
+        if (
+          parentResult.rows[0]
+            .parent_id
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                'Replies can only go one level deep'
+            });
+        }
+
+        parentComment =
+          parentResult.rows[0];
+      }
+
       const result =
         await pool.query(
           `
@@ -6089,14 +6218,16 @@ app.post(
             video_id,
             user_id,
             text,
-            image_url
+            image_url,
+            parent_id
           )
           VALUES
           (
             $1,
             $2,
             $3,
-            $4
+            $4,
+            $5
           )
           RETURNING *
           `,
@@ -6104,7 +6235,10 @@ app.post(
             videoId,
             req.user.id,
             text.trim(),
-            image || null
+            image || null,
+            parentComment
+              ? parentComment.id
+              : null
           ]
         );
 
@@ -6165,14 +6299,17 @@ app.post(
         comment
       );
 
-      // Notify the video owner
-      // (self-comments are skipped by
+      // A reply notifies the parent
+      // comment's author; a top-level
+      // comment notifies the video owner
+      // (self-notifications are skipped by
       // the helper).
 
       createNotification({
-        userId:
-          videoResult.rows[0]
-            .user_id,
+        userId: parentComment
+          ? parentComment.user_id
+          : videoResult.rows[0]
+              .user_id,
 
         actorId:
           req.user.id,
@@ -6180,8 +6317,9 @@ app.post(
         actorUsername:
           req.user.username,
 
-        type:
-          'comment',
+        type: parentComment
+          ? 'reply'
+          : 'comment',
 
         videoId,
 
@@ -7052,6 +7190,9 @@ function notificationMessage(
     case 'comment':
       return `${actor} commented on your video`;
 
+    case 'reply':
+      return `${actor} replied to your comment`;
+
     case 'follow':
       return `${actor} started following you`;
 
@@ -7175,6 +7316,21 @@ async function createNotification({
       'notify',
       payload
     );
+
+    // Web push alongside the in-app emit —
+    // fire-and-forget, never blocks the
+    // request path.
+
+    sendPushToUser(userId, {
+      title: 'NVME',
+
+      body:
+        payload.message,
+
+      url: videoId
+        ? '/watch?v=' + videoId
+        : '/app'
+    }).catch(() => {});
   } catch (error) {
     console.error(
       'Notification error:',
@@ -14096,6 +14252,331 @@ app.delete(
         .json({
           error:
             'Failed to delete ad'
+        });
+    }
+  }
+);
+
+// ========================================
+// 🔔 Web Push — VAPID setup, subscription
+// routes, and the sendPushToUser helper
+// createNotification fires alongside its
+// in-app socket emit. Schema lives in
+// db/migration_014_push_replies.sql.
+// Everything no-ops gracefully when the
+// web-push package or VAPID keys are
+// missing. MUST stay above the catch-all.
+// ========================================
+
+const VAPID_PUBLIC_KEY =
+  process.env.VAPID_PUBLIC_KEY || '';
+
+const VAPID_PRIVATE_KEY =
+  process.env.VAPID_PRIVATE_KEY || '';
+
+const VAPID_SUBJECT =
+  process.env.VAPID_SUBJECT ||
+  'mailto:admin@nvme.live';
+
+let pushEnabled = false;
+
+if (
+  webpush &&
+  VAPID_PUBLIC_KEY &&
+  VAPID_PRIVATE_KEY
+) {
+  webpush.setVapidDetails(
+    VAPID_SUBJECT,
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY
+  );
+
+  pushEnabled = true;
+
+  console.log(
+    '🔔 Web push enabled (VAPID configured)'
+  );
+} else {
+  console.warn(
+    '⚠️ Web push disabled — set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY to enable'
+  );
+}
+
+// Fire-and-forget: sends {title, body, url}
+// to every subscription the user has, and
+// prunes endpoints the push service reports
+// as gone (404/410). Never throws — push
+// must not break the action that triggered
+// it.
+
+async function sendPushToUser(
+  userId,
+  payload
+) {
+  if (!pushEnabled || !userId) return;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT endpoint, keys
+      FROM push_subscriptions
+      WHERE user_id = $1
+      `,
+      [userId]
+    );
+
+    const data =
+      JSON.stringify(payload);
+
+    await Promise.all(
+      result.rows.map(async sub => {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint:
+                sub.endpoint,
+
+              keys:
+                sub.keys
+            },
+            data
+          );
+        } catch (error) {
+          if (
+            error.statusCode ===
+              404 ||
+            error.statusCode ===
+              410
+          ) {
+            await pool.query(
+              `
+              DELETE FROM push_subscriptions
+              WHERE endpoint = $1
+              `,
+              [sub.endpoint]
+            );
+          } else {
+            console.error(
+              'Push send error:',
+              error.statusCode ||
+                error.message
+            );
+          }
+        }
+      })
+    );
+  } catch (error) {
+    console.error(
+      'Push send error:',
+      error
+    );
+  }
+}
+
+app.get(
+  '/api/push/vapid-public-key',
+  (req, res) => {
+    if (!pushEnabled) {
+      return res
+        .status(503)
+        .json({
+          error:
+            'Push notifications not configured'
+        });
+    }
+
+    res.json({
+      publicKey: VAPID_PUBLIC_KEY
+    });
+  }
+);
+
+// Upsert by endpoint — the endpoint is the
+// stable identity of a browser
+// subscription; re-subscribing refreshes
+// keys/ownership.
+
+app.post(
+  '/api/push/subscribe',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const subscription =
+        req.body?.subscription ||
+        {};
+
+      const endpoint =
+        subscription.endpoint;
+
+      const keys =
+        subscription.keys;
+
+      if (
+        !endpoint ||
+        !keys ||
+        !keys.p256dh ||
+        !keys.auth
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Invalid push subscription'
+          });
+      }
+
+      await pool.query(
+        `
+        INSERT INTO push_subscriptions
+        (
+          user_id,
+          endpoint,
+          keys,
+          user_agent
+        )
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          $4
+        )
+        ON CONFLICT (endpoint)
+        DO UPDATE SET
+          user_id =
+            EXCLUDED.user_id,
+          keys =
+            EXCLUDED.keys,
+          user_agent =
+            EXCLUDED.user_agent
+        `,
+        [
+          req.user.id,
+          endpoint,
+          JSON.stringify(keys),
+          req.headers[
+            'user-agent'
+          ] || null
+        ]
+      );
+
+      res.json({
+        success: true
+      });
+    } catch (error) {
+      console.error(
+        'Push subscribe error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to save subscription'
+        });
+    }
+  }
+);
+
+// Delete by endpoint; creator.html's
+// toggle sends no body, so fall back to
+// clearing every subscription the caller
+// owns.
+
+app.post(
+  '/api/push/unsubscribe',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const endpoint =
+        req.body?.endpoint;
+
+      if (endpoint) {
+        await pool.query(
+          `
+          DELETE FROM push_subscriptions
+          WHERE endpoint = $1
+            AND user_id = $2
+          `,
+          [
+            endpoint,
+            req.user.id
+          ]
+        );
+      } else {
+        await pool.query(
+          `
+          DELETE FROM push_subscriptions
+          WHERE user_id = $1
+          `,
+          [req.user.id]
+        );
+      }
+
+      res.json({
+        success: true
+      });
+    } catch (error) {
+      console.error(
+        'Push unsubscribe error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to remove subscription'
+        });
+    }
+  }
+);
+
+// Self/test notification — creator.html's
+// "notify followers" button posts
+// {title, body, url}. Scoped to the
+// caller's own subscriptions.
+
+app.post(
+  '/api/push/notify',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        title,
+        body,
+        url
+      } = req.body || {};
+
+      await sendPushToUser(
+        req.user.id,
+        {
+          title:
+            title || 'NVME',
+
+          body:
+            body || '',
+
+          url:
+            url || '/app'
+        }
+      );
+
+      res.json({
+        success: true
+      });
+    } catch (error) {
+      console.error(
+        'Push notify error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to send notification'
         });
     }
   }

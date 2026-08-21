@@ -1,10 +1,12 @@
-/* NVME service worker — STABLE (nvme-v48)
+/* NVME service worker — STABLE (nvme-v49)
    v35 kill-switch caused an infinite reload loop: it unregistered
    itself + navigated clients, while app.html re-registered it on
    every load. v36 clears stale caches once, claims clients, and
    NEVER navigates or unregisters. Network-first for HTML/JS so
-   deploys propagate; cache-first for static assets. */
-const VER = 'nvme-v48-stable';
+   deploys propagate; cache-first for static assets.
+   v49 adds web push: 'push' shows the notification,
+   'notificationclick' focuses/opens the target url. */
+const VER = 'nvme-v49-stable';
 const STATIC_CACHE = VER + '-static';
 
 self.addEventListener('install', (e) => {
@@ -47,5 +49,32 @@ self.addEventListener('fetch', (e) => {
       }
       return res;
     }).catch(() => hit))
+  );
+});
+
+// Web push — payload is {title, body, url} JSON from sendPushToUser.
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch (_) {}
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'NVME', {
+      body: data.body || '',
+      icon: '/img/icon-192.png',
+      badge: '/img/icon-192.png',
+      data: { url: data.url || '/app' }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/app';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url.indexOf(url) !== -1 && 'focus' in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
   );
 });

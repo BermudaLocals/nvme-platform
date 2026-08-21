@@ -33,6 +33,15 @@ input,textarea{font-family:inherit}
 .fbar{position:fixed;top:calc(58px + env(safe-area-inset-top));left:0;right:0;z-index:85;display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;padding:6px 14px 8px;scrollbar-width:none;-ms-overflow-style:none;background:linear-gradient(rgba(0,0,0,.55),transparent);touch-action:pan-x pan-y}
 .fbar::-webkit-scrollbar{display:none}
 .fbar::after{content:'';flex:0 0 2px}
+.ttabs{position:fixed;top:calc(58px + env(safe-area-inset-top));left:0;right:0;z-index:85;display:flex;align-items:center;justify-content:center;gap:20px;padding:6px 14px;pointer-events:none}
+.ttabs>*{pointer-events:auto}
+.ttab{color:rgba(255,255,255,.62);font-size:1.02rem;font-weight:700;text-shadow:0 1px 8px rgba(0,0,0,.7);cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;padding:6px 2px;position:relative;transition:color .18s}
+.ttab.on{color:#fff}
+.ttab.on::after{content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:-3px;width:26px;height:3px;border-radius:2px;background:#fff}
+.ttab-side{color:#fff;font-size:1.05rem;font-weight:700;cursor:pointer;text-shadow:0 1px 8px rgba(0,0,0,.7);display:inline-flex;align-items:center;gap:5px;position:absolute;top:6px}
+.ttab-side.l{left:14px}
+.ttab-side.r{right:14px}
+.ttab-side .dot{width:7px;height:7px;border-radius:50%;background:#ff2e5b;box-shadow:0 0 8px #ff2e5b;animation:liveBlink 1.6s ease-in-out infinite}
 .fchip{flex:0 0 auto;scroll-snap-align:start;min-height:44px;display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:22px;border:1px solid var(--border);background:rgba(10,10,20,.72);backdrop-filter:blur(10px);color:#e9e9f2;font-size:.82rem;font-weight:800;letter-spacing:.02em;white-space:nowrap;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;transition:background .18s,border-color .18s,transform .12s}
 .fchip:active{transform:scale(.95)}
 .fchip.on{background:linear-gradient(135deg,var(--purple),var(--pink));border-color:transparent;color:#fff;box-shadow:0 4px 18px rgba(124,58,237,.45)}
@@ -130,6 +139,8 @@ input,textarea{font-family:inherit}
 
 /* ===== EXPLORE ===== */
 .explore-head{padding:64px 14px 10px}
+.fchip-row{display:flex;gap:8px;overflow-x:auto;padding:2px 14px 8px;scrollbar-width:none;-ms-overflow-style:none}
+.fchip-row::-webkit-scrollbar{display:none}
 .searchbar{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px}
 .searchbar input{flex:1;background:none;border:none;outline:none;color:#fff;font-size:.92rem}
 .xgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px}
@@ -305,17 +316,11 @@ input,textarea{font-family:inherit}
 
 <!-- ================= FEED ================= -->
 <div class="screen active" id="feed-screen">
-  <div class="fbar" id="filterBar">
-    <div class="fchip on" data-f="all" onclick="setFeedFilter('all',this)">✨ For You</div>
-    <div class="fchip" data-f="following" onclick="setFeedFilter('following',this)">👥 Following</div>
-    <div class="fchip" data-f="live" onclick="setFeedFilter('live',this)"><span class="dot"></span>LIVE</div>
-    <div class="fchip" data-f="battles" onclick="setFeedFilter('battles',this)">⚔️ Battles</div>
-    <div class="fchip" data-f="new" onclick="setFeedFilter('new',this)">🆕 New</div>
-    <div class="fchip" data-f="trending" onclick="setFeedFilter('trending',this)">🔥 Trending</div>
-    <div class="fchip" data-f="music" onclick="setFeedFilter('music',this)">🎵 Music</div>
-    <div class="fchip" data-f="comedy" onclick="setFeedFilter('comedy',this)">😂 Comedy</div>
-    <div class="fchip" data-f="gaming" onclick="setFeedFilter('gaming',this)">🎮 Gaming</div>
-    <div class="fchip" data-f="fitness" onclick="setFeedFilter('fitness',this)">💪 Fitness</div>
+  <div class="ttabs" id="filterBar">
+    <span class="ttab-side l" data-f="live" onclick="setFeedFilter('live',this)"><span class="dot"></span>LIVE</span>
+    <span class="ttab" data-f="following" onclick="setFeedFilter('following',this)">Following</span>
+    <span class="ttab on" data-f="all" onclick="setFeedFilter('all',this)">For You</span>
+    <span class="ttab-side r" onclick="showScreen('explore')">🔍</span>
   </div>
   <div id="feedContainer"></div>
 </div>
@@ -326,6 +331,15 @@ input,textarea{font-family:inherit}
 <div class="screen" id="explore-screen">
   <div class="explore-head">
     <div class="searchbar">🔍 <input id="searchInput" placeholder="Search creators, videos, #tags" oninput="doSearch(this.value)"></div>
+  </div>
+  <div class="fchip-row">
+    <div class="fchip" data-f="battles" onclick="setFeedFilter('battles',this);showScreen('feed')">⚔️ Battles</div>
+    <div class="fchip" data-f="new" onclick="setFeedFilter('new',this);showScreen('feed')">🆕 New</div>
+    <div class="fchip" data-f="trending" onclick="setFeedFilter('trending',this);showScreen('feed')">🔥 Trending</div>
+    <div class="fchip" data-f="music" onclick="setFeedFilter('music',this);showScreen('feed')">🎵 Music</div>
+    <div class="fchip" data-f="comedy" onclick="setFeedFilter('comedy',this);showScreen('feed')">😂 Comedy</div>
+    <div class="fchip" data-f="gaming" onclick="setFeedFilter('gaming',this);showScreen('feed')">🎮 Gaming</div>
+    <div class="fchip" data-f="fitness" onclick="setFeedFilter('fitness',this);showScreen('feed')">💪 Fitness</div>
   </div>
   <div id="discoverBlock">
     <div class="sect">✨ Creators to follow</div>
@@ -681,8 +695,8 @@ async function loadFeed(){
 }
 function setFeedFilter(f, el){
   feedFilter = f;
-  document.querySelectorAll('.fchip').forEach(ch=>ch.classList.toggle('on', ch.dataset.f===f));
-  if(el) el.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
+  document.querySelectorAll('.fchip, .ttab').forEach(ch=>ch.classList.toggle('on', ch.dataset.f===f));
+  if(el && el.classList.contains('fchip')) el.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
   renderFeedWithFilter();
 }
 async function renderFeedWithFilter(){

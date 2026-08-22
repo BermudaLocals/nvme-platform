@@ -176,6 +176,53 @@
     }
     .swipe-container::-webkit-scrollbar, .swipe-carousel::-webkit-scrollbar, .filter-carousel::-webkit-scrollbar { display:none; }
 
+    /* ── Battle bar (TikTok-style PK) ─────────────────────── */
+    #battle-bar { position:absolute; top:0; left:0; right:0; z-index:150; display:none; padding:10px 12px 14px; background:linear-gradient(180deg,rgba(7,7,13,.92),transparent); }
+    #battle-bar.show { display:block; }
+    .battle-top-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    .battle-side { flex:1; min-width:0; display:flex; align-items:center; gap:6px; }
+    .battle-side.right { flex-direction:row-reverse; text-align:right; }
+    .battle-avatar { width:26px; height:26px; border-radius:50%; background:#2a2a3e; object-fit:cover; flex-shrink:0; border:1px solid rgba(255,255,255,.2); }
+    .battle-name { font-size:.72rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .battle-timer { flex-shrink:0; background:rgba(0,0,0,.6); border:1px solid #e91e8c; color:#fff; font-weight:800; font-size:.75rem; padding:3px 9px; border-radius:12px; min-width:38px; text-align:center; }
+    .battle-bars { display:flex; height:10px; border-radius:6px; overflow:hidden; background:#1a1a2e; }
+    .battle-bar-fill { height:100%; transition:width .4s ease; }
+    .battle-bar-fill.left { background:linear-gradient(90deg,#00d4ff,#0090ff); margin-left:auto; }
+    .battle-bar-fill.right { background:linear-gradient(90deg,#ff0050,#e91e8c); }
+    .battle-attack-row { display:flex; gap:8px; margin-top:8px; }
+    .battle-attack-btn { flex:1; padding:8px; border-radius:8px; border:2px solid; font-size:.72rem; font-weight:800; background:rgba(0,0,0,.5); cursor:pointer; transition:transform .1s; }
+    .battle-attack-btn.left { border-color:#00d4ff; color:#00d4ff; }
+    .battle-attack-btn.right { border-color:#ff0050; color:#ff0050; }
+    .battle-attack-btn.armed { background:currentColor; color:#000!important; transform:scale(1.03); }
+    .battle-attack-btn:active { transform:scale(.96); }
+    #battle-winner-banner { position:absolute; inset:0; z-index:250; display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px; background:rgba(0,0,0,.85); text-align:center; }
+    #battle-winner-banner.show { display:flex; }
+    #battle-winner-banner .bw-title { font-size:1.8rem; font-weight:900; background:linear-gradient(90deg,gold,#fff8dc,gold); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+
+    /* ── Leaderboard panel ────────────────────────────────── */
+    #rank-btn { background:rgba(255,215,0,.15); border:1px solid rgba(255,215,0,.4); color:gold; border-radius:20px; padding:3px 10px; font-size:.78rem; font-weight:700; cursor:pointer; margin-left:6px; }
+    #leaderboard-panel { position:fixed; top:0; right:0; bottom:0; width:280px; max-width:82vw; background:#0d0d1a; border-left:1px solid #1a1a2e; z-index:400; transform:translateX(100%); transition:transform .25s ease; display:flex; flex-direction:column; }
+    #leaderboard-panel.open { transform:translateX(0); }
+    #lb-header { padding:14px 16px; font-weight:800; font-size:.9rem; border-bottom:1px solid #1a1a2e; display:flex; justify-content:space-between; align-items:center; }
+    #lb-close { cursor:pointer; color:#7a8499; font-size:1.1rem; }
+    #lb-list { flex:1; overflow-y:auto; padding:8px 10px; }
+    .lb-row { display:flex; align-items:center; gap:8px; padding:8px 6px; border-radius:8px; }
+    .lb-row .lb-rank { width:22px; font-weight:900; font-size:.85rem; text-align:center; color:#7a8499; flex-shrink:0; }
+    .lb-row:nth-child(1) .lb-rank { color:gold; }
+    .lb-row:nth-child(2) .lb-rank { color:#c0c0c0; }
+    .lb-row:nth-child(3) .lb-rank { color:#cd7f32; }
+    .lb-row .lb-avatar { width:32px; height:32px; border-radius:50%; background:#2a2a3e; object-fit:cover; flex-shrink:0; }
+    .lb-row .lb-name { flex:1; font-size:.82rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lb-row .lb-total { font-size:.78rem; color:gold; font-weight:700; flex-shrink:0; }
+    .lb-empty { text-align:center; color:#555; font-size:.82rem; padding:30px 10px; }
+    #leaderboard-backdrop { position:fixed; inset:0; z-index:399; background:rgba(0,0,0,.5); display:none; }
+    #leaderboard-backdrop.open { display:block; }
+
+    /* ── Combo badge ───────────────────────────────────────── */
+    #combo-badge { position:absolute; bottom:100%; left:50%; transform:translateX(-50%) scale(0); margin-bottom:6px; background:linear-gradient(135deg,#ff0050,#e91e8c); color:#fff; font-weight:900; font-size:.85rem; padding:4px 12px; border-radius:14px; white-space:nowrap; transition:transform .15s cubic-bezier(.34,1.56,.64,1); pointer-events:none; }
+    #combo-badge.show { transform:translateX(-50%) scale(1); }
+    #send-gift-wrap { position:relative; }
+
     /* ── Responsive ───────────────────────────────────────── */
     @media(max-width:640px) {
       #sidebar { width:100%; position:fixed; bottom:calc(49px + env(safe-area-inset-bottom,0px)); left:0; right:0; height:auto; max-height:60vh; z-index:50; }
@@ -257,6 +304,36 @@
       <div style="font-size:0.95rem;color:#555">Stream loading…</div>
     </div>
     <video id="stream-video" style="display:none" autoplay muted playsinline></video>
+
+    <!-- ⚔️ Battle bar (hidden until a battle is created for this stream) -->
+    <div id="battle-bar">
+      <div class="battle-top-row">
+        <div class="battle-side left">
+          <img class="battle-avatar" id="battle-left-avatar" src="/img/icon-192.png" alt="">
+          <span class="battle-name" id="battle-left-name">—</span>
+        </div>
+        <div class="battle-timer" id="battle-timer-display">--</div>
+        <div class="battle-side right">
+          <img class="battle-avatar" id="battle-right-avatar" src="/img/icon-192.png" alt="">
+          <span class="battle-name" id="battle-right-name">—</span>
+        </div>
+      </div>
+      <div class="battle-bars">
+        <div class="battle-bar-fill left" id="battle-fill-left" style="width:50%"></div>
+        <div class="battle-bar-fill right" id="battle-fill-right" style="width:50%"></div>
+      </div>
+      <div class="battle-attack-row">
+        <button class="battle-attack-btn left" id="battle-attack-left" onclick="armAttack('left')">⚔️ Boost Left</button>
+        <button class="battle-attack-btn right" id="battle-attack-right" onclick="armAttack('right')">⚔️ Boost Right</button>
+      </div>
+    </div>
+
+    <div id="battle-winner-banner">
+      <div style="font-size:3rem">🏆</div>
+      <div class="bw-title" id="bw-title">BATTLE OVER</div>
+      <div id="bw-sub" style="color:#aaa;font-size:.9rem"></div>
+    </div>
+
     <div id="gift-overlay"></div>
   </div>
 
@@ -264,7 +341,10 @@
   <div id="sidebar">
     <div id="chat-header">
       <span>🔴 LIVE CHAT</span>
-      <span id="viewer-count">👁 0</span>
+      <div>
+        <span id="viewer-count">👁 0</span>
+        <button id="rank-btn" onclick="openLeaderboard()">🏆 Rank</button>
+      </div>
     </div>
     <div id="chat-messages"></div>
 
@@ -275,7 +355,10 @@
         <span id="balance-display">🪙 —</span>
       </div>
       <div id="gift-grid"></div>
-      <button id="send-gift-btn">Send Gift 🎁</button>
+      <div id="send-gift-wrap">
+        <div id="combo-badge">x1</div>
+        <button id="send-gift-btn">Send Gift 🎁</button>
+      </div>
       <div id="gift-err"></div>
     </div>
 
@@ -305,6 +388,22 @@ async function loadStreamInfo() {
   } catch(e) { console.warn('loadStreamInfo', e); }
 }
 loadStreamInfo();
+
+/* ── Wallet balance ────────────────────────────────────────────
+   Populates #balance-display and keeps it in sync after every
+   gift send (the panel showed "🪙 —" forever before this). ── */
+async function refreshBalance() {
+  if (!TOKEN) return;
+  try {
+    const r = await fetch(window.location.origin + '/api/wallet/balance', {
+      headers: { Authorization: 'Bearer ' + TOKEN }
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('balance-display').textContent = `🪙 ${Math.floor(d.balance).toLocaleString()}`;
+  } catch(e) { console.warn('refreshBalance', e); }
+}
+refreshBalance();
 
 /* ── ORBAT Gift Tier Definitions ──────────────────────────────── */
 const GIFTS = [
@@ -336,18 +435,76 @@ GIFTS.forEach(g => {
   grid.appendChild(btn);
 });
 
-/* ── Send gift ───────────────────────────────────────────────── */
-document.getElementById('send-gift-btn').onclick = () => {
-  if (!selectedGift) { showGiftErr('Select a gift first'); return; }
-  if (!STREAM_ID)    { showGiftErr('No stream ID in URL'); return; }
-  if (!TOKEN)        { showGiftErr('You must be logged in'); return; }
-  socket.emit('send_gift_by_name', { streamId: STREAM_ID, giftName: selectedGift.name });
-};
+/* ── Send gift (real credits) ─────────────────────────────────
+   Hits POST /api/gifts/send — the endpoint that actually deducts
+   balance_credits and writes a gift_transactions row (what the
+   leaderboard and battle attacks both read from). The old
+   socket-only 'send_gift_by_name' path never charged anyone and
+   never showed up in the leaderboard, so it's dropped here. ── */
+async function sendGiftReal(gift, quantity) {
+  if (!STREAM_ID) { showGiftErr('No stream ID in URL'); return; }
+  if (!TOKEN)     { showGiftErr('You must be logged in'); return; }
+  try {
+    const r = await fetch(window.location.origin + '/api/gifts/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
+      body: JSON.stringify({ streamId: STREAM_ID, giftName: gift.name, quantity })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) { showGiftErr(d.error || 'Gift failed'); return; }
+    refreshBalance();
+    if (leaderboardOpen) loadLeaderboard();
+  } catch(e) { showGiftErr('Network error'); }
+}
 function showGiftErr(msg) {
   const el = document.getElementById('gift-err');
   el.textContent = msg; el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 3000);
 }
+
+/* ── Combo/streak tap ──────────────────────────────────────────
+   Tapping Send repeatedly (within COMBO_WINDOW_MS of the last
+   tap) stacks a x2/x3/x4… multiplier instead of firing a
+   separate charge per tap. The batched send fires once the
+   taps stop, same feel as TikTok's hold-to-combo gifting. ── */
+const COMBO_WINDOW_MS = 1400;
+let comboGift = null, comboCount = 0, comboTimer = null;
+const comboBadge = document.getElementById('combo-badge');
+
+function tapSendGift() {
+  if (!selectedGift) { showGiftErr('Select a gift first'); return; }
+
+  // A different gift than the one currently combo-ing: flush the old one first.
+  if (comboGift && comboGift.name !== selectedGift.name) flushCombo();
+
+  comboGift = selectedGift;
+  comboCount += 1;
+  comboBadge.textContent = 'x' + comboCount;
+  comboBadge.classList.add('show');
+  // Re-trigger the pop animation on every tap
+  comboBadge.style.animation = 'none';
+  void comboBadge.offsetWidth;
+  comboBadge.style.animation = '';
+
+  clearTimeout(comboTimer);
+  comboTimer = setTimeout(flushCombo, COMBO_WINDOW_MS);
+}
+function flushCombo() {
+  clearTimeout(comboTimer);
+  if (!comboGift || comboCount === 0) return;
+  const gift = comboGift, qty = comboCount;
+  comboGift = null; comboCount = 0;
+  comboBadge.classList.remove('show');
+  sendGiftReal(gift, qty);
+}
+// Flush immediately if the tab is hidden/closed mid-combo so a tap isn't lost.
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushCombo(); });
+
+document.getElementById('send-gift-btn').onclick = () => {
+  // Mid-battle with a side armed: this tap is an attack, not a normal gift.
+  if (activeBattle && armedSide) { tapAttack(); return; }
+  tapSendGift();
+};
 
 /* ── Join stream ─────────────────────────────────────────────── */
 if (STREAM_ID) socket.emit('join_stream', { streamId: STREAM_ID });
@@ -538,15 +695,182 @@ function confettiEffect(n){
     setTimeout(()=>el.remove(),3500);
   }
 }
-socket.on('gift_received', (data) => {
+function handleIncomingGift(data) {
   confettiEffect(60);
-  const giftDef = GIFTS.find(g => g.name === data.gift?.name) || GIFTS[0];
+  const giftName = data.gift?.name || data.giftName;
+  const giftDef  = GIFTS.find(g => g.name === giftName) || GIFTS[0];
   spawnGift({
-    senderName: data.senderName || 'Anonymous',
-    gift: { ...data.gift, level: giftDef ? giftDef.level : 1, emoji: giftDef ? giftDef.emoji : '🎁' }
+    senderName: data.senderName || data.fromUser || 'Anonymous',
+    gift: { name: giftName, level: giftDef.level, emoji: data.emoji || giftDef.emoji }
   });
-});
+  if (leaderboardOpen) loadLeaderboard();
+}
+// 'new-gift' = real paid gifts (POST /api/gifts/send). 'gift_received' kept
+// for any other source still emitting the legacy free-broadcast shape.
+socket.on('new-gift', handleIncomingGift);
+socket.on('gift_received', handleIncomingGift);
+
+/* ════════════════════════════════════════════════════════════════
+   🏆 TOP GIFTERS LEADERBOARD
+════════════════════════════════════════════════════════════════ */
+let leaderboardOpen = false;
+async function loadLeaderboard() {
+  if (!STREAM_ID) return;
+  const list = document.getElementById('lb-list');
+  try {
+    const headers = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+    const r = await fetch(window.location.origin + '/api/streams/' + STREAM_ID + '/gift-leaderboard', { headers });
+    const d = await r.json();
+    const rows = d.leaderboard || [];
+    if (!rows.length) { list.innerHTML = '<div class="lb-empty">No gifts yet — be the first! 🎁</div>'; return; }
+    list.innerHTML = rows.map((row, i) => `
+      <div class="lb-row">
+        <div class="lb-rank">${i === 0 ? '👑' : (i + 1)}</div>
+        <img class="lb-avatar" src="${row.avatar_url || '/img/icon-192.png'}" alt="" onerror="this.src='/img/icon-192.png'">
+        <div class="lb-name">${escHtml(row.username || 'Anonymous')}</div>
+        <div class="lb-total">🪙 ${Math.floor(row.total).toLocaleString()}</div>
+      </div>
+    `).join('');
+  } catch(e) { list.innerHTML = '<div class="lb-empty">Couldn\'t load leaderboard</div>'; }
+}
+function openLeaderboard() {
+  leaderboardOpen = true;
+  document.getElementById('leaderboard-panel').classList.add('open');
+  document.getElementById('leaderboard-backdrop').classList.add('open');
+  loadLeaderboard();
+}
+function closeLeaderboard() {
+  leaderboardOpen = false;
+  document.getElementById('leaderboard-panel').classList.remove('open');
+  document.getElementById('leaderboard-backdrop').classList.remove('open');
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ⚔️ BATTLE (PK) BAR
+   The backend already creates/starts/ends battles and logs gift-
+   based attacks (see /api/streams/:id/battle, /api/battles/:id/*).
+   It broadcasts those events to this stream's room, which this
+   page already joins via 'join_stream' — this section is just the
+   viewer-facing UI that was missing. ── */
+let activeBattle = null;      // { id, left:{...}, right:{...} }
+let armedSide = null;         // 'left' | 'right' | null
+let battleTickInterval = null;
+
+async function loadBattle(battleId) {
+  try {
+    const headers = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+    const r = await fetch(window.location.origin + '/api/battles/' + battleId, { headers });
+    const d = await r.json();
+    if (!d.ok && !d.battle) return;
+    const battle = d.battle || d;
+    const parts  = d.participants || [];
+    const left  = parts.find(p => p.team === 'a') || parts[0] || null;
+    const right = parts.find(p => p.team === 'b') || parts[1] || null;
+    activeBattle = { id: battleId, battle, left, right };
+    renderBattle();
+  } catch(e) { console.warn('loadBattle', e); }
+}
+
+function renderBattle() {
+  if (!activeBattle) return;
+  const { battle, left, right } = activeBattle;
+  document.getElementById('battle-bar').classList.add('show');
+
+  document.getElementById('battle-left-name').textContent  = left?.username  || 'Waiting…';
+  document.getElementById('battle-right-name').textContent = right?.username || 'Waiting…';
+  if (left?.avatar_url)  document.getElementById('battle-left-avatar').src  = left.avatar_url;
+  if (right?.avatar_url) document.getElementById('battle-right-avatar').src = right.avatar_url;
+
+  const l = parseFloat(left?.gifts_received || 0);
+  const r = parseFloat(right?.gifts_received || 0);
+  const total = l + r;
+  const leftPct = total > 0 ? (l / total) * 100 : 50;
+  document.getElementById('battle-fill-left').style.width  = leftPct + '%';
+  document.getElementById('battle-fill-right').style.width = (100 - leftPct) + '%';
+
+  clearInterval(battleTickInterval);
+  if (battle.status === 'active' && battle.started_at) {
+    const durationMs = (battle.elimination_interval_seconds || 60) * 1000;
+    const endsAt = new Date(battle.started_at).getTime() + durationMs;
+    const tick = () => {
+      const remaining = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+      document.getElementById('battle-timer-display').textContent = remaining + 's';
+      if (remaining <= 0) clearInterval(battleTickInterval);
+    };
+    tick();
+    battleTickInterval = setInterval(tick, 1000);
+  } else {
+    document.getElementById('battle-timer-display').textContent = battle.status === 'waiting' ? '⏳' : '--';
+  }
+}
+
+function armAttack(side) {
+  if (!activeBattle) return;
+  armedSide = (armedSide === side) ? null : side;
+  document.getElementById('battle-attack-left').classList.toggle('armed', armedSide === 'left');
+  document.getElementById('battle-attack-right').classList.toggle('armed', armedSide === 'right');
+  if (armedSide && !selectedGift) showGiftErr('Pick a gift below to attack with');
+}
+
+async function tapAttack() {
+  if (!activeBattle || !armedSide) return;
+  if (!selectedGift) { showGiftErr('Pick a gift below to attack with'); return; }
+  if (!TOKEN) { showGiftErr('You must be logged in'); return; }
+  const target = armedSide === 'left' ? activeBattle.left : activeBattle.right;
+  if (!target) { showGiftErr('That side has no fighter yet'); return; }
+  try {
+    const r = await fetch(window.location.origin + '/api/battles/' + activeBattle.id + '/attack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
+      body: JSON.stringify({
+        gift_type: selectedGift.name,
+        cost: selectedGift.cost,
+        damage: selectedGift.cost,
+        stream_id: STREAM_ID,
+        target_participant_id: target.id
+      })
+    });
+    const d = await r.json();
+    if (!d.ok) { showGiftErr(d.error || 'Attack failed'); return; }
+    refreshBalance();
+  } catch(e) { showGiftErr('Network error'); }
+}
+
+socket.on('battle_created', ({ battle }) => { if (battle) loadBattle(battle.id); });
+socket.on('battle-started', ({ battleId }) => loadBattle(battleId));
+socket.on('battle_started', ({ battleId }) => loadBattle(battleId));
+socket.on('battle-attack', ({ battleId }) => { if (activeBattle && activeBattle.id === battleId) loadBattle(battleId); });
+socket.on('battle-ended', (data) => showBattleWinner(data));
+socket.on('battle_ended', (data) => showBattleWinner(data));
+
+function showBattleWinner({ winnerId }) {
+  if (!activeBattle) return;
+  const winnerName = winnerId === activeBattle.left?.user_id ? activeBattle.left?.username
+                    : winnerId === activeBattle.right?.user_id ? activeBattle.right?.username
+                    : null;
+  document.getElementById('bw-title').textContent = winnerName ? `${winnerName} WINS!` : 'BATTLE OVER';
+  document.getElementById('bw-sub').textContent = 'Thanks for battling! 🎉';
+  document.getElementById('battle-winner-banner').classList.add('show');
+  confettiEffect(100);
+  clearInterval(battleTickInterval);
+  setTimeout(() => {
+    document.getElementById('battle-winner-banner').classList.remove('show');
+    document.getElementById('battle-bar').classList.remove('show');
+    activeBattle = null; armedSide = null;
+    document.querySelectorAll('.battle-attack-btn').forEach(b => b.classList.remove('armed'));
+  }, 4500);
+}
 </script>
+
+<!-- 🏆 Top Gifters leaderboard -->
+<div id="leaderboard-backdrop" onclick="closeLeaderboard()"></div>
+<div id="leaderboard-panel">
+  <div id="lb-header">
+    <span>🏆 Top Gifters</span>
+    <span id="lb-close" onclick="closeLeaderboard()">✕</span>
+  </div>
+  <div id="lb-list"><div class="lb-empty">Loading…</div></div>
+</div>
 
 <!-- MOBILE BOTTOM NAVIGATION -->
 

@@ -5,7 +5,9 @@
 // (videos.video_url / thumbnail_url / view_count / tags /
 // caption / hashtags, users.avatar_url, likes) — see
 // db/schema.sql + migrations 002/004. Schema for this module
-// lives in db/migration_013_discovery.sql (npm run migrate);
+// lives in db/migration_013_discovery.sql, extended for real
+// song uploads by db/migration_015_sounds_upload.sql
+// (npm run migrate);
 // mounting this file does zero DB work at require-time.
 // NOT salvaged (wrong money/gift model in the old module):
 // /api/search (collided with server.js), tips, creator fund,
@@ -237,6 +239,51 @@ module.exports = function(app, db, authMiddleware, optionalAuth, requireAdmin) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
+  // PUT /api/videos/:id/sound — attach/change/clear the sound on your own
+  // video. Accepts { sound_id } (null clears). The sound must exist and be
+  // public; usage counters (013 use_count + 015 usage_count) follow the
+  // change: old sound -1, new sound +1.
+  app.put('/api/videos/:id/sound', authMiddleware, async (req, res) => {
+    try {
+      const { sound_id } = req.body;
+      if (sound_id) {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sound_id)) {
+          return res.status(400).json({ error: 'invalid sound_id' });
+        }
+        const { rows: sound } = await db.query(
+          'SELECT id FROM sounds WHERE id=$1 AND is_public = true',
+          [sound_id]
+        );
+        if (!sound.length) return res.status(404).json({ error: 'sound not found' });
+      }
+      const { rows: cur } = await db.query(
+        'SELECT sound_id FROM videos WHERE id=$1 AND user_id=$2',
+        [req.params.id, req.user.id]
+      );
+      if (!cur.length) return res.status(404).json({ error: 'video not found or not yours' });
+      const prev = cur[0].sound_id;
+      const next = sound_id || null;
+      if (prev === next) return res.json({ ok: true, sound_id: next });
+      await db.query(
+        'UPDATE videos SET sound_id=$1 WHERE id=$2',
+        [next, req.params.id]
+      );
+      if (prev) {
+        await db.query(
+          'UPDATE sounds SET usage_count = GREATEST(COALESCE(usage_count,0)-1,0), use_count = GREATEST(COALESCE(use_count,0)-1,0) WHERE id=$1',
+          [prev]
+        );
+      }
+      if (next) {
+        await db.query(
+          'UPDATE sounds SET usage_count = COALESCE(usage_count,0)+1, use_count = COALESCE(use_count,0)+1 WHERE id=$1',
+          [next]
+        );
+      }
+      res.json({ ok: true, sound_id: next });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // ── HASHTAG CHALLENGES ───────────────────────────────────────
 
   // GET /api/challenges — active hashtag challenges
@@ -277,5 +324,5 @@ module.exports = function(app, db, authMiddleware, optionalAuth, requireAdmin) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  console.log('[nvme-discovery] ✅ routes mounted: hashtags (trending/all/search/:tag/videos), sounds, duets, challenges');
+  console.log('[nvme-discovery] ✅ routes mounted: hashtags (trending/all/search/:tag/videos), sounds, duets, video sound attach, challenges');
 };

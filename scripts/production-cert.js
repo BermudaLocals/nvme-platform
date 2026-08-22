@@ -299,6 +299,29 @@ async function readOnlyChecks() {
     }
   );
 
+  // ---------- Sounds ----------
+
+  await check(
+    'Sounds',
+    'GET /api/sounds returns a sound list',
+    async () => {
+      const r = await api('GET', '/api/sounds');
+      assertStatus(r, 200, 'sounds');
+      assert(
+        r.json && Array.isArray(r.json.sounds),
+        'response has no sounds[] array'
+      );
+      return `${r.json.sounds.length} sounds`;
+    }
+  );
+
+  await expectUnauthorized(
+    'Sounds',
+    'POST /api/sounds/upload without token -> 401',
+    'POST',
+    '/api/sounds/upload'
+  );
+
   // ---------- Security ----------
 
   await check(

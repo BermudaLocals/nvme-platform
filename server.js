@@ -3419,7 +3419,8 @@ app.post(
         topic,
         category,
         trending_topic_id,
-        atomic_claim_id
+        atomic_claim_id,
+        sound_id
       } = req.body;
 
       if (
@@ -3432,6 +3433,43 @@ app.post(
             error:
               'Video file and title are required'
           });
+      }
+
+      // Optional attached sound — must
+      // resolve to a real public library
+      // entry (migration 015).
+      let soundId = null;
+
+      if (sound_id) {
+        if (
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            sound_id
+          )
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                'Invalid sound_id'
+            });
+        }
+
+        const sound =
+          await pool.query(
+            'SELECT id FROM sounds WHERE id = $1 AND is_public = true',
+            [sound_id]
+          );
+
+        if (!sound.rows.length) {
+          return res
+            .status(400)
+            .json({
+              error:
+                'Sound not found'
+            });
+        }
+
+        soundId = sound_id;
       }
 
       const videoId =
@@ -3585,6 +3623,7 @@ app.post(
             category,
             trending_topic_id,
             atomic_claim_id,
+            sound_id,
             is_published
           )
           VALUES
@@ -3601,6 +3640,7 @@ app.post(
             $10,
             $11,
             $12,
+            $13,
             true
           )
           RETURNING *
@@ -3628,9 +3668,30 @@ app.post(
             trending_topic_id ||
               null,
             atomic_claim_id ||
-              null
+              null,
+            soundId
           ]
         );
+
+      if (soundId) {
+        // Keep the library counters in
+        // sync — use_count is the 013
+        // column the library routes
+        // order by; usage_count is the
+        // 015 one.
+        await pool.query(
+          `
+          UPDATE sounds
+          SET
+            usage_count =
+              COALESCE(usage_count, 0) + 1,
+            use_count =
+              COALESCE(use_count, 0) + 1
+          WHERE id = $1
+          `,
+          [soundId]
+        );
+      }
 
       if (atomic_claim_id) {
         await pool.query(
@@ -3672,6 +3733,258 @@ app.post(
       // success, Cloudinary failure,
       // and the early 400 above all
       // land here. ENOENT is fine.
+      if (
+        req.file &&
+        req.file.path
+      ) {
+        fs.unlink(
+          req.file.path,
+          () => {}
+        );
+      }
+    }
+  }
+);
+
+// ========================================
+// 🎵 Sound Upload (artist songs)
+// ========================================
+// Audio counterpart of /api/upload:
+// same disk-then-Cloudinary flow with
+// an audio-only filter and a 25MB cap.
+// Cloudinary serves audio under the
+// 'video' resource type. Rows land in
+// the sounds library table (see
+// db/migration_015_sounds_upload.sql).
+
+const SOUND_MAX_BYTES =
+  25 * 1024 * 1024;
+
+const SOUND_EXTS = [
+  '.mp3',
+  '.wav',
+  '.m4a',
+  '.ogg',
+  '.aac'
+];
+
+const soundUpload =
+  multer({
+    storage:
+      multer.diskStorage({
+        destination:
+          uploadTempDir
+      }),
+
+    limits: {
+      fileSize:
+        SOUND_MAX_BYTES
+    },
+
+    fileFilter: (
+      req,
+      file,
+      cb
+    ) => {
+      const ext =
+        path
+          .extname(
+            file.originalname ||
+              ''
+          )
+          .toLowerCase();
+
+      const okExt =
+        SOUND_EXTS.includes(
+          ext
+        );
+
+      const okMime =
+        (
+          file.mimetype || ''
+        ).startsWith(
+          'audio/'
+        ) ||
+        file.mimetype ===
+          'application/octet-stream';
+
+      okExt && okMime
+        ? cb(null, true)
+        : cb(
+            new Error(
+              'Invalid file type. Audio only (mp3/wav/m4a/ogg/aac).'
+            )
+          );
+    }
+  });
+
+app.post(
+  '/api/sounds/upload',
+  authenticateToken,
+  soundUpload.single('audio'),
+  async (req, res) => {
+    try {
+      const user =
+        req.user;
+
+      const {
+        title,
+        artist,
+        duration_seconds
+      } = req.body;
+
+      if (
+        !req.file ||
+        !title
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Audio file and title are required'
+          });
+      }
+
+      const soundId =
+        uuidv4();
+
+      let audioUrl = '';
+
+      try {
+        const result =
+          await new Promise(
+            (
+              resolve,
+              reject
+            ) => {
+              const uploadStream =
+                cloudinary
+                  .uploader
+                  .upload_stream(
+                    {
+                      resource_type:
+                        'video',
+
+                      public_id:
+                        `sounds/${soundId}`,
+
+                      folder:
+                        'nvme-sounds'
+                    },
+
+                    (
+                      error,
+                      result
+                    ) =>
+                      error
+                        ? reject(
+                            error
+                          )
+                        : resolve(
+                            result
+                          )
+                  );
+
+              const fileStream =
+                fs.createReadStream(
+                  req.file.path
+                );
+
+              fileStream.on(
+                'error',
+                reject
+              );
+
+              fileStream.pipe(
+                uploadStream
+              );
+            }
+          );
+
+        audioUrl =
+          result.secure_url;
+      } catch (
+        uploadError
+      ) {
+        console.error(
+          'Cloudinary sound error:',
+          uploadError
+        );
+
+        return res
+          .status(500)
+          .json({
+            error:
+              'Failed to upload sound to Cloudinary'
+          });
+      }
+
+      const durationSecs =
+        parseInt(
+          duration_seconds
+        ) || null;
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO sounds
+          (
+            id,
+            name,
+            artist,
+            url,
+            audio_url,
+            duration_sec,
+            duration_seconds,
+            user_id
+          )
+          VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4,
+            $4,
+            $5,
+            $6,
+            $7
+          )
+          RETURNING *
+          `,
+          [
+            soundId,
+            title,
+            artist ||
+              user.display_name ||
+              user.username ||
+              'Unknown',
+            audioUrl,
+            durationSecs || 30,
+            durationSecs,
+            user.id
+          ]
+        );
+
+      res.json({
+        ok: true,
+        sound:
+          result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        'Sound upload error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Failed to upload sound'
+        });
+    } finally {
+      // Same temp-file contract as
+      // /api/upload above.
       if (
         req.file &&
         req.file.path
@@ -4074,6 +4387,10 @@ async function getRankedFeed({
         v.trending_topic_id,
         v.atomic_claim_id,
 
+        v.sound_id,
+        s.name AS sound_title,
+        s.artist AS sound_artist,
+
         v.created_at,
 
         u.id AS author_id,
@@ -4088,6 +4405,9 @@ async function getRankedFeed({
 
       JOIN users u
         ON v.user_id = u.id
+
+      LEFT JOIN sounds s
+        ON s.id = v.sound_id
 
       ${where}
 
@@ -4434,6 +4754,14 @@ async function getFeedAds({
       display_name: ad.display_name,
       avatar_url: ad.avatar_url,
       is_verified: ad.is_verified,
+
+      // Ads carry no sound — NULLs
+      // keep the feed-item shape
+      // uniform so the ticker
+      // fallback logic applies.
+      sound_id: null,
+      sound_title: null,
+      sound_artist: null,
 
       is_liked: !!ad.is_liked
     })
@@ -14586,7 +14914,8 @@ app.post(
 // 🏷️ Discovery — hashtags / sounds /
 // duets / challenges. Salvaged from the
 // old TikTok-parity module; schema lives
-// in db/migration_013_discovery.sql.
+// in db/migration_013_discovery.sql,
+// extended by 015_sounds_upload.sql.
 // MUST stay above the catch-all.
 // ========================================
 

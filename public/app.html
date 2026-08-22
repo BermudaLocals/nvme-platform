@@ -428,6 +428,11 @@ input,textarea{font-family:inherit}
         <div class="cs-lb">Templates</div>
         <div class="cs-sub">Quick edits</div>
       </div>
+      <div class="cs-tile" onclick="closeCreateSheet();openSoundUpload()">
+        <div class="cs-ic" style="background:linear-gradient(135deg,#c9a227,#00f2ea)">🎵</div>
+        <div class="cs-lb">Song</div>
+        <div class="cs-sub">Upload your track</div>
+      </div>
     </div>
     <button class="cs-cancel" onclick="closeCreateSheet()">Cancel</button>
   </div>
@@ -538,10 +543,26 @@ input,textarea{font-family:inherit}
       <div class="up-prev" id="uploadPrev">🎬</div>
       <div class="fgroup"><label>Title</label><input id="upTitle" maxlength="100" placeholder="Give it a title"></div>
       <div class="fgroup"><label>Description / #tags</label><textarea id="upDesc" maxlength="300" placeholder="Describe your video… #nvme"></textarea></div>
+      <div class="fgroup"><label>Sound (optional)</label><input id="upSound" list="upSoundList" maxlength="80" placeholder="Pick a sound…" autocomplete="off"><datalist id="upSoundList"></datalist></div>
       <div id="upProg" style="display:none;height:5px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:2px 0 10px"><div id="upProgIn" style="height:100%;width:0%;background:linear-gradient(135deg,var(--purple),var(--pink));transition:width .15s"></div></div>
       <button class="save-btn" id="upPostBtn" onclick="submitUpload()">🚀 Post video</button>
     </div>
   </div>
+</div>
+
+<!-- ================= SONG UPLOAD SHEET ================= -->
+<div class="sheet" id="soundSheet" onclick="if(event.target===this)closeSoundUpload()">
+  <div class="sheet-in">
+    <div class="sheet-top">Upload a song<button class="sheet-x" onclick="closeSoundUpload()">✕</button></div>
+    <div class="up-in">
+      <button class="save-btn" onclick="document.getElementById('soundFileInput').click()">🎵 Choose audio file</button>
+      <div id="soundFileName" style="font-size:.82rem;color:rgba(255,255,255,.6);margin:6px 0 10px"></div>
+      <div class="fgroup"><label>Title</label><input id="soundTitle" maxlength="100" placeholder="Song title"></div>
+      <div class="fgroup"><label>Artist</label><input id="soundArtist" maxlength="100" placeholder="Defaults to your name"></div>
+      <button class="save-btn" id="soundUpBtn" onclick="submitSoundUpload()">🚀 Upload song</button>
+    </div>
+  </div>
+  <input type="file" id="soundFileInput" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac" style="display:none" onchange="pickSoundFile(event)">
 </div>
 
 <!-- ================= AUTH ================= -->
@@ -778,6 +799,9 @@ async function renderFeedWithFilter(){
 function feedItemHtml(v){
   if(v.is_ad) return adItemHtml(v);
   const vid = esc(v.id), uname = esc(v.username||'creator');
+  const tickLabel = v.sound_title
+    ? esc(v.sound_artist||'Unknown')+' — '+esc(v.sound_title)
+    : esc(v.title||('original sound · @'+uname))+' · @'+uname;
   return '<div class="feed-item" data-vid="'+vid+'">' +
     (v.url
       ? '<video class="feed-video" '+(v.hls_url?'data-hls="'+esc(v.hls_url)+'" data-mp4="'+esc(v.url)+'"':'src="'+esc(v.url)+'"')+' '+(v.thumbnail?'poster="'+esc(v.thumbnail)+'"':'')+' muted loop playsinline preload="metadata" onclick="tapVideo(this,'+"'"+vid+"'"+')" ondblclick="dblLike(event,'+"'"+vid+"'"+')"></video>'
@@ -787,7 +811,7 @@ function feedItemHtml(v){
       '<div class="feed-user"><span class="feed-uname">@'+uname+'</span></div>' +
       (v.title?'<div class="feed-cap">'+linkTags(v.title)+'</div>':'') +
       (v.description?'<div class="feed-desc clamped" onclick="event.stopPropagation();this.classList.remove(\'clamped\')">'+linkTags(String(v.description).slice(0,180))+' <span class="more">more</span></div>':'') +
-      '<div class="fticker"><span class="note">♪</span><div class="track"><span>'+esc(v.title||('original sound · @'+uname))+' · @'+uname+' · '+esc(v.title||'original sound')+' · @'+uname+'</span></div><div class="fdisc">🎵</div></div>' +
+      '<div class="fticker"><span class="note">♪</span><div class="track"><span>'+tickLabel+' · '+tickLabel+'</span></div><div class="fdisc">🎵</div></div>' +
     '</div>' +
     '<div class="feed-actions">' +
       '<div class="fact-ava" style="margin-bottom:10px">'+(v.avatar_url?'<img src="'+esc(v.avatar_url)+'">':((v.username||'U')[0].toUpperCase()))+(currentUser && currentUser.username===v.username ? '' : '<div class="fbadge" id="fb_'+vid+'" onclick="event.stopPropagation();this.classList.add(\'done\');this.textContent=\'✓\';followUser(\''+esc(v.author_id||'')+'\',\''+uname.replace(/'/g,'')+'\',this)">+</div>')+'</div>' +
@@ -1277,6 +1301,8 @@ function openUploadWithFile(f){
   if(!f){ toast('No clip selected'); return; }
   pendingFile = f;
   $('upTitle').value = (f.name||'').replace(/\.[^.]+$/,'').replace(/[_\-]+/g,' ').trim().slice(0,60) || '';
+  $('upSound').value = '';
+  loadSoundPicker();
   const url = URL.createObjectURL(f);
   $('uploadPrev').innerHTML = '<video src="'+url+'" muted loop autoplay playsinline></video>';
   $('uploadSheet').classList.add('open');
@@ -1291,6 +1317,8 @@ function submitUpload(){
   fd.append('video', pendingFile);
   fd.append('title', $('upTitle').value.trim() || 'NVME clip');
   fd.append('description', $('upDesc').value.trim());
+  const sid = pickedSoundId();
+  if(sid) fd.append('sound_id', sid);
   const t = localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token');
   const xhr = new XMLHttpRequest();
   xhr.open('POST', API+'/api/upload');
@@ -1316,6 +1344,62 @@ function submitUpload(){
     prog.style.display='none'; progIn.style.width='0%';
   };
   xhr.send(fd);
+}
+
+/* ================= SOUNDS ================= */
+// Trending-library picker for the upload sheet: datalist labels map back
+// to sound ids; only a picked (matched) entry attaches a sound_id.
+let soundPickMap = {};
+async function loadSoundPicker(){
+  const dl = $('upSoundList'); if(!dl) return;
+  try{
+    const r = await fetch(API+'/api/sounds/trending');
+    const d = await r.json();
+    const sounds = d.sounds || [];
+    soundPickMap = {};
+    dl.innerHTML = sounds.map(s=>{
+      const label = (s.artist||'Unknown')+' — '+(s.name||'');
+      soundPickMap[label] = s.id;
+      return '<option value="'+esc(label)+'"></option>';
+    }).join('');
+  }catch(e){}
+}
+function pickedSoundId(){ const v=($('upSound') && $('upSound').value||'').trim(); return soundPickMap[v] || ''; }
+
+/* Song upload (artist tracks -> /api/sounds/upload) */
+let pendingSound = null;
+function openSoundUpload(){ if(!currentUser){ showAuth(); return; } $('soundSheet').classList.add('open'); }
+function closeSoundUpload(){ $('soundSheet').classList.remove('open'); }
+function pickSoundFile(e){
+  const f = e.target.files[0]; e.target.value='';
+  if(!f) return;
+  if(f.size > 25*1024*1024){ toast('Audio too large — 25MB max'); return; }
+  pendingSound = f;
+  $('soundFileName').textContent = '🎵 '+f.name;
+  if(!$('soundTitle').value) $('soundTitle').value = (f.name||'').replace(/\.[^.]+$/,'').replace(/[_\-]+/g,' ').trim().slice(0,60);
+}
+async function submitSoundUpload(){
+  if(!pendingSound){ toast('Pick an audio file first 👆'); return; }
+  const title = $('soundTitle').value.trim();
+  if(!title){ toast('Song title required'); return; }
+  const btn = $('soundUpBtn'); btn.textContent='⏫ Uploading…'; btn.disabled=true;
+  const fd = new FormData();
+  fd.append('audio', pendingSound);
+  fd.append('title', title);
+  fd.append('artist', $('soundArtist').value.trim());
+  const t = localStorage.getItem('nvme_token') || sessionStorage.getItem('nvme_token');
+  try{
+    const r = await fetch(API+'/api/sounds/upload', {method:'POST', headers:t?{'Authorization':'Bearer '+t}:{}, body:fd});
+    const d = await r.json();
+    if(!r.ok){ toast(d.error||'Upload failed'); }
+    else{
+      confettiEffect(); toast('🎵 Song is live on NVME!');
+      closeSoundUpload(); pendingSound=null;
+      $('soundTitle').value=''; $('soundArtist').value=''; $('soundFileName').textContent='';
+      loadSoundPicker();
+    }
+  }catch(e){ toast('Network error — check connection'); }
+  btn.textContent='🚀 Upload song'; btn.disabled=false;
 }
 
 /* ================= PWA ================= */

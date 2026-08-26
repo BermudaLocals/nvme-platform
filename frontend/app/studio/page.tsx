@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -93,6 +93,62 @@ function LiveHubTab({ username }: { username: string }) {
   const [activeFilter, setActiveFilter] = useState('none');
   const [greenScreen, setGreenScreen] = useState<string | null>(null);
   const [filterIntensity, setFilterIntensity] = useState(100);
+
+  // PERSISTENT - Load saved ring state on mount
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('livehub_ring_state') || '{}');
+      if (saved.activeFilter) setActiveFilter(saved.activeFilter);
+      if (saved.greenScreen) setGreenScreen(saved.greenScreen);
+      if (saved.filterIntensity) setFilterIntensity(saved.filterIntensity);
+      if (saved.liveMode) setLiveMode(saved.liveMode);
+    } catch {}
+    // Also load from backend
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const r = await fetch('/api/live/effects', { headers: { 'Authorization': 'Bearer ' + token } });
+        if (r.ok) {
+          const data = await r.json();
+          if (data.effects?.active_filter && data.effects.active_filter !== 'none') setActiveFilter(data.effects.active_filter);
+          if (data.effects?.green_screen_url) setGreenScreen(data.effects.green_screen_url);
+          if (data.effects?.filter_intensity) setFilterIntensity(data.effects.filter_intensity);
+          if (data.effects?.live_mode) setLiveMode(data.effects.live_mode as any);
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const saveRingState = async (updates: any) => {
+    const current = { activeFilter, greenScreen, filterIntensity, liveMode, ...updates };
+    try { localStorage.setItem('livehub_ring_state', JSON.stringify(current)); } catch {}
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        await fetch('/api/live/effects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({
+            active_filter: current.activeFilter,
+            filter_intensity: current.filterIntensity,
+            green_screen_url: current.greenScreen,
+            live_mode: current.liveMode,
+            filter_state: current
+          })
+        });
+      }
+    } catch {}
+    try {
+      // Pass through center selector ring to everyone watching
+      const w = window as any;
+      if (w.socket) {
+        w.socket.emit('selector_ring_change', current);
+        w.socket.emit('live_filter_change', { filter: current.activeFilter, intensity: current.filterIntensity, greenScreen: current.greenScreen });
+        w.socket.emit('green_screen_change', { url: current.greenScreen });
+      }
+    } catch {}
+  };
   const [showFilters, setShowFilters] = useState(false);
   const [showGreen, setShowGreen] = useState(false);
   const [showEffects, setShowEffects] = useState(false);
@@ -119,7 +175,7 @@ function LiveHubTab({ username }: { username: string }) {
     <div className="relative">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-2xl">LIVE HUB</h2>
-        <span className="rounded-full bg-red-500/15 px-3 py-1 text- font-bold uppercase tracking-widest text-red-400 animate-pulse">● Live Engine</span>
+        <span className="rounded-full bg-red-500/15 px-3 py-1 text- font-bold uppercase tracking-widest text-red-400 animate-pulse">â— Live Engine</span>
       </div>
 
       {/* CENTER SELECTOR RING - Everything passes through here */}
@@ -127,7 +183,7 @@ function LiveHubTab({ username }: { username: string }) {
         {/* Ring Labels */}
         <div className="flex justify-between px-2 pb-3">
           {MODES.map(m => (
-            <button key={m.id} onClick={()=>setLiveMode(m.id)}
+            <button key={m.id} onClick={() => { setLiveMode(m.id as any); saveRingState({ liveMode: m.id }); }}
               className={cn('flex flex-col items-center gap-1 rounded-full px-3 py-1.5 text- font-bold uppercase tracking-wider transition-all',
                 liveMode===m.id? 'bg-nvme-gold text-black scale-110' : 'bg-white/5 text-nvme-muted hover:bg-white/10')}>
               <m.icon size={14} /> {m.label}
@@ -186,7 +242,7 @@ function LiveHubTab({ username }: { username: string }) {
             </div>
             <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
               {FILTERS.map(f => (
-                <button key={f.id} onClick={()=>setActiveFilter(f.id)}
+                <button key={f.id} onClick={() => { setActiveFilter(f.id); saveRingState({ activeFilter: f.id }); }}
                   className={cn('shrink-0 rounded-2xl border px-5 py-3 text-xs font-bold transition-all',
                     activeFilter===f.id? 'border-nvme-gold bg-nvme-gold text-black' : 'border-white/10 bg-white/5 text-white hover:bg-white/10')}>
                   {f.label}
@@ -195,7 +251,7 @@ function LiveHubTab({ username }: { username: string }) {
             </div>
             <div className="mt-4">
               <label className="text- uppercase tracking-widest text-nvme-muted">Intensity {filterIntensity}%</label>
-              <input type="range" min="0" max="100" value={filterIntensity} onChange={e=>setFilterIntensity(parseInt(e.target.value))} className="mt-2 w-full accent-nvme-gold" />
+              <input type="range" min="0" max="100" value={filterIntensity} onChange={e=>{ const v=parseInt(e.target.value); setFilterIntensity(v); saveRingState({ filterIntensity: v }); }} className="mt-2 w-full accent-nvme-gold" />
             </div>
           </motion.div>
         )}
@@ -208,7 +264,7 @@ function LiveHubTab({ username }: { username: string }) {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {GREEN_SCREEN_ASSETS.map(g => (
-                <button key={g.id} onClick={()=>setGreenScreen(g.url)}
+                <button key={g.id} onClick={() => { setGreenScreen(g.url); saveRingState({ greenScreen: g.url }); }}
                   className={cn('overflow-hidden rounded-2xl border-2 text-left transition-all',
                     greenScreen===g.url? 'border-nvme-gold' : 'border-white/10 hover:border-white/20')}>
                   {g.url? <img src={g.url} alt={g.label} className="h-24 w-full object-cover" /> : <div className="flex h-24 items-center justify-center bg-white/5 text-xs">No BG</div>}
@@ -228,12 +284,12 @@ function LiveHubTab({ username }: { username: string }) {
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2">
               {[
-                { label: 'Beauty', icon: '✨' },
-                { label: 'Blur', icon: '💫' },
-                { label: 'AI Background', icon: '🤖' },
-                { label: 'Captions', icon: '💬' },
-                { label: 'Timer', icon: '⏱️' },
-                { label: 'Duet', icon: '👥' },
+                { label: 'Beauty', icon: 'âœ¨' },
+                { label: 'Blur', icon: 'ðŸ’«' },
+                { label: 'AI Background', icon: 'ðŸ¤–' },
+                { label: 'Captions', icon: 'ðŸ’¬' },
+                { label: 'Timer', icon: 'â±ï¸' },
+                { label: 'Duet', icon: 'ðŸ‘¥' },
               ].map(e => (
                 <button key={e.label} className="rounded-xl bg-white/5 py-4 text-xs font-bold hover:bg-white/10">
                   <span className="block text-lg">{e.icon}</span>{e.label}
@@ -298,12 +354,12 @@ function UploadTab({ username }: { username: string }) {
       >
         <UploadCloud size={40} className="text-nvme-gold" />
         <p className="mt-3 text-sm font-semibold">Drag & drop your video</p>
-        <p className="mt-1 text-xs text-nvme-muted">MP4 / WebM / MOV — portrait works best</p>
+        <p className="mt-1 text-xs text-nvme-muted">MP4 / WebM / MOV â€” portrait works best</p>
         <label className="btn-outline mt-5 cursor-pointer!py-2 text-xs">
           Browse files
           <input type="file" accept="video/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
         </label>
-        {file && <p className="mt-4 max-w-full truncate text-xs text-nvme-gold">🎬 {file.name} ({(file.size / 1048576).toFixed(1)} MB)</p>}
+        {file && <p className="mt-4 max-w-full truncate text-xs text-nvme-gold">ðŸŽ¬ {file.name} ({(file.size / 1048576).toFixed(1)} MB)</p>}
       </div>
 
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title"
@@ -317,7 +373,7 @@ function UploadTab({ username }: { username: string }) {
         </div>
       )}
       <button onClick={go} disabled={!file || state === 'uploading'} className="btn-gold mt-5 w-full disabled:opacity-50">
-        {state === 'uploading'? <><Loader2 size={16} className="animate-spin" /> Uploading…</> : 'Publish to NVME'}
+        {state === 'uploading'? <><Loader2 size={16} className="animate-spin" /> Uploadingâ€¦</> : 'Publish to NVME'}
       </button>
       <p className={cn('mt-3 text-center text-xs', state === 'error'? 'text-nvme-coral' : 'text-nvme-gold')}>{msg}</p>
     </div>
@@ -331,7 +387,7 @@ function VideosTab({ username }: { username: string }) {
     <div>
       <h2 className="font-display text-2xl">MY VIDEOS</h2>
       {q.isLoading && <div className="py-14 text-center"><Loader2 className="mx-auto animate-spin text-nvme-gold" /></div>}
-      {q.data?.length === 0 && <p className="mt-6 rounded-2xl border border-dashed border-white/10 py-14 text-center text-sm text-nvme-muted">No videos yet — upload your first one.</p>}
+      {q.data?.length === 0 && <p className="mt-6 rounded-2xl border border-dashed border-white/10 py-14 text-center text-sm text-nvme-muted">No videos yet â€” upload your first one.</p>}
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {(q.data || []).map((v: NvmeVideo) => (
           <a key={v.id} href={`/feed?v=${v.id}`} className="card-hover overflow-hidden rounded-xl border border-nvme-border bg-nvme-surface">
@@ -388,7 +444,7 @@ function AITab() {
       const text = d.captions? d.captions.join('\n\n') : d.hashtags? (Array.isArray(d.hashtags)? d.hashtags.join(' ') : d.hashtags) : d.script || d.resultUrl || d.result || JSON.stringify(d);
       setResults((r) => [{ kind, text: String(text) },...r].slice(0, 10));
     } catch (e: any) {
-      setResults((r) => [{ kind, text: `⚠ ${e.message || 'AI request failed'}` },...r]);
+      setResults((r) => [{ kind, text: `âš  ${e.message || 'AI request failed'}` },...r]);
     } finally { setBusy(''); }
   }
 
@@ -398,11 +454,11 @@ function AITab() {
         <h2 className="font-display text-2xl">AI STUDIO</h2>
         <span className={cn('rounded-full px-3 py-1 text- font-bold uppercase tracking-wider',
           status.data? 'bg-nvme-gold/15 text-nvme-gold' : 'bg-white/5 text-nvme-muted')}>
-          {status.data? `Online · ${status.data.model || 'kimi-k3'}` : 'Checking…'}
+          {status.data? `Online Â· ${status.data.model || 'kimi-k3'}` : 'Checkingâ€¦'}
         </span>
       </div>
       <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
-        placeholder="Describe your video, topic, or product…"
+        placeholder="Describe your video, topic, or productâ€¦"
         className="mt-5 w-full rounded-xl border border-white/10 bg-nvme-surface px-4 py-3 text-sm outline-none focus:border-nvme-gold" />
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {(['captions', 'hashtags', 'script', 'generate'] as const).map((k) => (
@@ -441,12 +497,12 @@ function WalletTab() {
       <div className="mt-5 rounded-2xl border border-nvme-gold/30 bg-gradient-to-br from-nvme-surface to-black p-8 text-center">
         <p className="text- uppercase tracking-[0.3em] text-nvme-muted">NVME Balance</p>
         <p className="mt-2 font-display text-5xl text-nvme-gold">
-          {bal.isLoading? '…' : formatCount(bal.data?.balance?? bal.data?.coins?? 0)}
+          {bal.isLoading? 'â€¦' : formatCount(bal.data?.balance?? bal.data?.coins?? 0)}
         </p>
         <p className="mt-1 text-xs text-nvme-muted">coins</p>
       </div>
       <div className="mt-5 flex gap-2">
-        <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="0x… wallet address"
+        <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="0xâ€¦ wallet address"
           className="flex-1 rounded-xl border border-white/10 bg-nvme-surface px-4 py-3 text-sm outline-none focus:border-nvme-gold" />
         <button onClick={async () => { try { await walletApi.connect(addr); setLinked(true); } catch { /* offline */ } }} disabled={!addr.startsWith('0x')}
           className="btn-gold!px-5 disabled:opacity-40">
@@ -456,3 +512,4 @@ function WalletTab() {
     </div>
   );
 }
+

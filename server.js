@@ -1,5 +1,5 @@
-// ========================================
-// 🚀 NVME.live — Full Server
+﻿// ========================================
+// ðŸš€ NVME.live â€” Full Server
 // ========================================
 
 require('dotenv').config();
@@ -28,7 +28,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const paypal = require('@paypal/checkout-server-sdk');
 
-// Optional — push routes no-op (with a log
+// Optional â€” push routes no-op (with a log
 // line) when the package or VAPID keys are
 // missing, so the server still boots.
 
@@ -38,12 +38,12 @@ try {
   webpush = require('web-push');
 } catch (e) {
   console.warn(
-    '⚠️ web-push not installed — push notifications disabled (run npm install)'
+    'âš ï¸ web-push not installed â€” push notifications disabled (run npm install)'
   );
 }
 
 // ========================================
-// 📦 Initialize
+// ðŸ“¦ Initialize
 // ========================================
 
 const app = express();
@@ -72,7 +72,7 @@ const FRONTEND_URL =
     : 'http://localhost:3000';
 
 // ========================================
-// 🗄️ Database
+// ðŸ—„ï¸ Database
 // ========================================
 
 const pool = new Pool({
@@ -85,24 +85,24 @@ const pool = new Pool({
 
 pool.connect((err, client, release) => {
   if (err) {
-    console.error('❌ DB connection error:', err.stack);
+    console.error('âŒ DB connection error:', err.stack);
     return;
   }
 
-  console.log('✅ NeonDB connected');
+  console.log('âœ… NeonDB connected');
 
   if (release) release();
 });
 
 pool.on('error', (err) => {
   console.error(
-    '⚠️ Idle Postgres client error (pool will recover):',
+    'âš ï¸ Idle Postgres client error (pool will recover):',
     err.message
   );
 });
 
 // ========================================
-// 🧠 NVME INTELLIGENCE DATABASE
+// ðŸ§  NVME INTELLIGENCE DATABASE
 // ========================================
 
 async function initializeIntelligenceDatabase() {
@@ -166,7 +166,7 @@ async function initializeIntelligenceDatabase() {
       ['updated_at', 'TIMESTAMPTZ DEFAULT NOW()'],
 
       // Scraper-side columns (create-tables.js /
-      // src/backend/lib/scraper.js) — both writers
+      // src/backend/lib/scraper.js) â€” both writers
       // share this one table.
       ['title', 'TEXT'],
       ['summary', 'TEXT'],
@@ -184,7 +184,7 @@ async function initializeIntelligenceDatabase() {
     }
 
     // Server INSERTs omit `title`, scraper INSERTs omit
-    // `topic` — whichever path created the table first left
+    // `topic` â€” whichever path created the table first left
     // one of them NOT NULL, which would break the other
     // writer. DROP NOT NULL is a no-op when already nullable.
     await client.query(`
@@ -436,12 +436,12 @@ async function initializeIntelligenceDatabase() {
 
     await client.query('COMMIT');
 
-    console.log('🧠 NVME Intelligence database ready');
+    console.log('ðŸ§  NVME Intelligence database ready');
   } catch (error) {
     await client.query('ROLLBACK');
 
     console.error(
-      '❌ Intelligence database initialization failed:',
+      'âŒ Intelligence database initialization failed:',
       error.message
     );
   } finally {
@@ -450,7 +450,7 @@ async function initializeIntelligenceDatabase() {
 }
 
 // ========================================
-// 👤 Public User
+// ðŸ‘¤ Public User
 // ========================================
 
 function publicUser(u) {
@@ -476,7 +476,7 @@ function publicUser(u) {
 }
 
 // ========================================
-// ✉️ Email (optional SMTP)
+// âœ‰ï¸ Email (optional SMTP)
 // ========================================
 
 // No mail provider is configured by
@@ -548,21 +548,21 @@ async function sendEmail({
       return true;
     } catch (error) {
       console.error(
-        '✉️ SMTP send failed, logging instead:',
+        'âœ‰ï¸ SMTP send failed, logging instead:',
         error.message
       );
     }
   }
 
   console.log(
-    `✉️ [email:not-sent] To: ${to} | Subject: ${subject}\n${text}`
+    `âœ‰ï¸ [email:not-sent] To: ${to} | Subject: ${subject}\n${text}`
   );
 
   return false;
 }
 
 // ========================================
-// 🤖 AI Clients
+// ðŸ¤– AI Clients
 // ========================================
 
 const nvidiaClient = new OpenAI({
@@ -647,7 +647,7 @@ async function generateWithFallback(
 }
 
 // ========================================
-// 💳 PayPal
+// ðŸ’³ PayPal
 // ========================================
 
 function paypalClient() {
@@ -666,7 +666,7 @@ function paypalClient() {
 }
 
 // ----------------------------------------
-// PayPal Payouts (creator withdrawals) —
+// PayPal Payouts (creator withdrawals) â€”
 // the checkout SDK has no Payouts support,
 // so these call the REST API directly with
 // the same env credentials and the same
@@ -801,7 +801,7 @@ async function paypalSendPayout({
 }
 
 // ========================================
-// 🔒 Middleware
+// ðŸ”’ Middleware
 // ========================================
 
 app.use(
@@ -893,7 +893,7 @@ app.use(
 );
 
 // ========================================
-// ❤️ Health
+// â¤ï¸ Health
 // ========================================
 
 app.get('/health', (req, res) => {
@@ -930,7 +930,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // ========================================
-// 🔐 Auth Middleware
+// ðŸ” Auth Middleware
 // ========================================
 
 const authenticateToken =
@@ -1058,7 +1058,7 @@ function generateSecureToken() {
   };
 }
 
-// 30d refresh token — only the SHA-256
+// 30d refresh token â€” only the SHA-256
 // hash is stored, never the raw token.
 
 async function issueRefreshToken(
@@ -1104,7 +1104,7 @@ async function revokeUserRefreshTokens(
 }
 
 // 24h single-use email verification
-// token — returns the raw token so the
+// token â€” returns the raw token so the
 // caller can build the verify URL.
 
 async function createEmailVerification(
@@ -1135,7 +1135,7 @@ async function createEmailVerification(
 }
 
 // ----------------------------------------
-// Admin gate — is_admin is re-read from
+// Admin gate â€” is_admin is re-read from
 // the DB on every request (the JWT claim
 // alone is never trusted), so demotion
 // takes effect immediately.
@@ -1174,7 +1174,7 @@ const requireAdmin =
   };
 
 // ========================================
-// 🔑 Auth Routes
+// ðŸ”‘ Auth Routes
 // ========================================
 
 app.post(
@@ -1279,7 +1279,7 @@ app.post(
         refreshToken,
         user: publicUser(user),
 
-        // No mail provider in dev —
+        // No mail provider in dev â€”
         // the URL is logged by sendEmail
         // and echoed here outside prod.
 
@@ -1370,7 +1370,7 @@ app.post(
 
       // Unverified email does not block
       // login (product decision: warn
-      // only — emailVerified is exposed
+      // only â€” emailVerified is exposed
       // via /api/auth/me).
 
       const refreshToken =
@@ -1413,7 +1413,7 @@ app.get(
 );
 
 // ========================================
-// 🔑 Google OAuth
+// ðŸ”‘ Google OAuth
 // ========================================
 
 if (
@@ -1588,7 +1588,7 @@ if (
       try {
         // Never put the JWT in the
         // redirect URL (leaks into logs
-        // and browser history) — hand
+        // and browser history) â€” hand
         // out a 5-minute single-use
         // code instead; the client
         // swaps it via
@@ -1659,7 +1659,7 @@ if (
 }
 
 // ========================================
-// 🔄 Refresh / Logout
+// ðŸ”„ Refresh / Logout
 // ========================================
 
 app.post(
@@ -1794,7 +1794,7 @@ app.post(
         );
       }
 
-      // Idempotent — unknown tokens get
+      // Idempotent â€” unknown tokens get
       // the same success response.
 
       res.json({ success: true });
@@ -1815,7 +1815,7 @@ app.post(
 );
 
 // ========================================
-// ✉️ Email Verification
+// âœ‰ï¸ Email Verification
 // ========================================
 
 app.get(
@@ -1947,7 +1947,7 @@ app.post(
 );
 
 // ========================================
-// 🔑 Password Reset
+// ðŸ”‘ Password Reset
 // ========================================
 
 app.post(
@@ -1957,7 +1957,7 @@ app.post(
       const { email } =
         req.body;
 
-      // Always succeed — the response
+      // Always succeed â€” the response
       // must not reveal whether the
       // email is registered.
 
@@ -2014,7 +2014,7 @@ app.post(
             'production'
           ) {
             console.log(
-              `🔑 Dev reset URL for ${user.email}: ${resetUrl}`
+              `ðŸ”‘ Dev reset URL for ${user.email}: ${resetUrl}`
             );
           }
         }
@@ -2144,7 +2144,7 @@ app.post(
 );
 
 // ========================================
-// 🔁 OAuth Code Exchange
+// ðŸ” OAuth Code Exchange
 // ========================================
 
 app.post(
@@ -2266,7 +2266,7 @@ app.post(
 );
 
 // ========================================
-// 🤖 AI Studio
+// ðŸ¤– AI Studio
 // ========================================
 
 const AI_PROMPTS = {
@@ -2448,7 +2448,7 @@ for (
 }
 
 // ========================================
-// 🧠 INTELLIGENCE HELPERS
+// ðŸ§  INTELLIGENCE HELPERS
 // ========================================
 
 function normalizeText(value) {
@@ -2513,7 +2513,7 @@ function parseJsonResponse(text) {
 }
 
 // ========================================
-// 🔥 TREND ENGINE
+// ðŸ”¥ TREND ENGINE
 // ========================================
 
 async function calculateTrendScore(
@@ -2978,7 +2978,7 @@ async function createOrGetAtomicClaim(
 }
 
 // ========================================
-// 📈 TRENDING API
+// ðŸ“ˆ TRENDING API
 // ========================================
 
 // Submit a trend from any source.
@@ -3312,7 +3312,7 @@ app.get(
 );
 
 // ========================================
-// 📹 Video Upload
+// ðŸ“¹ Video Upload
 // ========================================
 
 cloudinary.config({
@@ -3327,7 +3327,7 @@ cloudinary.config({
 });
 
 // Uploads land on disk first, not in
-// memory — a 2GB upload held in a RAM
+// memory â€” a 2GB upload held in a RAM
 // buffer can OOM the process. The
 // route streams the temp file to
 // Cloudinary, then unlinks it.
@@ -3349,7 +3349,7 @@ fs.mkdirSync(
 
 // Adaptive HLS: requested as an async
 // eager transformation at upload time
-// (Cloudinary transcodes — no local
+// (Cloudinary transcodes â€” no local
 // ffmpeg). The derived master playlist
 // URL is deterministic, so the row
 // stores it immediately; playback
@@ -3435,7 +3435,7 @@ app.post(
           });
       }
 
-      // Optional attached sound — must
+      // Optional attached sound â€” must
       // resolve to a real public library
       // entry (migration 015).
       let soundId = null;
@@ -3502,7 +3502,7 @@ app.post(
 
                       eager: [
                         // eager[0] stays
-                        // the 720x480 pad —
+                        // the 720x480 pad â€”
                         // the thumbnail
                         // below reads it.
                         {
@@ -3571,7 +3571,7 @@ app.post(
               '.jpg'
             );
 
-        // Deterministic eager URL —
+        // Deterministic eager URL â€”
         // same rewrite trick as the
         // thumbnail: sp_<profile> after
         // /upload/, trailing extension
@@ -3675,7 +3675,7 @@ app.post(
 
       if (soundId) {
         // Keep the library counters in
-        // sync — use_count is the 013
+        // sync â€” use_count is the 013
         // column the library routes
         // order by; usage_count is the
         // 015 one.
@@ -3729,7 +3729,7 @@ app.post(
         });
     } finally {
       // Disk-backed upload: drop the
-      // temp file on every exit path —
+      // temp file on every exit path â€”
       // success, Cloudinary failure,
       // and the early 400 above all
       // land here. ENOENT is fine.
@@ -3747,7 +3747,7 @@ app.post(
 );
 
 // ========================================
-// 🎵 Sound Upload (artist songs)
+// ðŸŽµ Sound Upload (artist songs)
 // ========================================
 // Audio counterpart of /api/upload:
 // same disk-then-Cloudinary flow with
@@ -3999,7 +3999,7 @@ app.post(
 );
 
 // ========================================
-// 🧠 VIDEO CANDIDATE RANKING
+// ðŸ§  VIDEO CANDIDATE RANKING
 // ========================================
 
 async function calculateVideoScore(
@@ -4194,7 +4194,7 @@ async function calculateVideoScore(
 }
 
 // ========================================
-// 🎬 FEED / VIDEOS
+// ðŸŽ¬ FEED / VIDEOS
 // ========================================
 
 async function getRankedFeed({
@@ -4211,7 +4211,7 @@ async function getRankedFeed({
     `;
 
   // $index of the viewer's id when
-  // authenticated — reused by the
+  // authenticated â€” reused by the
   // is_following / is_saved select
   // flags and the Following feed
   // filter below.
@@ -4755,7 +4755,7 @@ async function getFeedAds({
       avatar_url: ad.avatar_url,
       is_verified: ad.is_verified,
 
-      // Ads carry no sound — NULLs
+      // Ads carry no sound â€” NULLs
       // keep the feed-item shape
       // uniform so the ticker
       // fallback logic applies.
@@ -4835,7 +4835,7 @@ app.get(
         null;
 
       // The Following feed is
-      // per-user — anonymous viewers
+      // per-user â€” anonymous viewers
       // get a clear 401 instead of an
       // unfiltered feed.
 
@@ -4865,7 +4865,7 @@ app.get(
         });
 
       // Ads are blended into the page
-      // but carry no created_at cursor —
+      // but carry no created_at cursor â€”
       // compute nextCursor from organic
       // items only.
 
@@ -4965,7 +4965,7 @@ app.get(
 );
 
 // ========================================
-// 🎯 Video Details
+// ðŸŽ¯ Video Details
 // ========================================
 
 app.get(
@@ -5041,7 +5041,7 @@ app.get(
 );
 
 // ========================================
-// 📊 VIDEO EVENTS
+// ðŸ“Š VIDEO EVENTS
 // ========================================
 
 const ALLOWED_VIDEO_EVENTS = new Set([
@@ -5736,7 +5736,7 @@ app.post(
 );
 
 // ========================================
-// 🚫 VIDEO FEEDBACK
+// ðŸš« VIDEO FEEDBACK
 // ========================================
 
 app.post(
@@ -5855,7 +5855,7 @@ app.post(
 );
 
 // ========================================
-// 👁️ VIEW
+// ðŸ‘ï¸ VIEW
 // ========================================
 
 app.post(
@@ -5964,9 +5964,9 @@ app.post(
 );
 
 // ========================================
-// 📣 AD TRACKING
+// ðŸ“£ AD TRACKING
 // ========================================
-// Fire-and-forget counters — no auth,
+// Fire-and-forget counters â€” no auth,
 // no body, cheap single-row UPDATEs.
 // The client fires an impression when
 // an ad scrolls into view and a click
@@ -6067,7 +6067,7 @@ app.post(
 );
 
 // ========================================
-// ❤️ Likes
+// â¤ï¸ Likes
 // ========================================
 
 app.post(
@@ -6259,7 +6259,7 @@ app.post(
         }
       );
 
-      // Notify the video owner — only
+      // Notify the video owner â€” only
       // when a like is added, never on
       // unlike or self-like (the helper
       // skips self-notifications too).
@@ -6312,7 +6312,7 @@ app.post(
 );
 
 // ========================================
-// 💬 Comments
+// ðŸ’¬ Comments
 // ========================================
 
 app.get(
@@ -6675,7 +6675,7 @@ app.post(
   }
 );
 
-// Delete a comment — allowed for the
+// Delete a comment â€” allowed for the
 // comment author or the video owner.
 
 app.delete(
@@ -6820,7 +6820,7 @@ app.delete(
 );
 
 // ========================================
-// 👥 Users / Social
+// ðŸ‘¥ Users / Social
 // ========================================
 
 app.get(
@@ -7496,7 +7496,7 @@ app.post(
 );
 
 // ========================================
-// 🔔 Notifications
+// ðŸ”” Notifications
 // ========================================
 
 // Human-readable line the Navbar bell
@@ -7548,7 +7548,7 @@ function notificationMessage(
 // to the recipient's `user-<id>` room on
 // both event names the frontend listens
 // for ('notification' and 'notify').
-// Never throws — a notification failure
+// Never throws â€” a notification failure
 // must not break the action that
 // triggered it. Self-notifications are
 // skipped.
@@ -7645,7 +7645,7 @@ async function createNotification({
       payload
     );
 
-    // Web push alongside the in-app emit —
+    // Web push alongside the in-app emit â€”
     // fire-and-forget, never blocks the
     // request path.
 
@@ -7767,7 +7767,7 @@ app.get(
   }
 );
 
-// Mark notifications read — every one of
+// Mark notifications read â€” every one of
 // the recipient's, or just the ids in
 // `{ ids: [...] }`.
 
@@ -7836,10 +7836,10 @@ app.post(
 );
 
 // ========================================
-// 🔖 Saves
+// ðŸ”– Saves
 // ========================================
 
-// Toggle a save — same shape as the
+// Toggle a save â€” same shape as the
 // like route. On save the save_count /
 // score bump goes through
 // updateVideoSignal('save'), exactly
@@ -8019,7 +8019,7 @@ app.post(
 );
 
 // The viewer's saved videos, newest save
-// first — same item shape as /api/feed.
+// first â€” same item shape as /api/feed.
 
 app.get(
   '/api/users/me/saves',
@@ -8108,7 +8108,7 @@ app.get(
 );
 
 // ========================================
-// 💬 Direct Messages
+// ðŸ’¬ Direct Messages
 // ========================================
 
 // Shape a dm_messages row the way
@@ -8631,7 +8631,7 @@ app.get(
 );
 
 // ========================================
-// 🚫 Blocks & Mutes
+// ðŸš« Blocks & Mutes
 // ========================================
 
 app.post(
@@ -9136,7 +9136,7 @@ app.put(
 );
 
 // ========================================
-// 🔎 Search
+// ðŸ”Ž Search
 // ========================================
 
 app.get(
@@ -9221,7 +9221,7 @@ app.get(
 );
 
 // ========================================
-// 🎬 User Videos
+// ðŸŽ¬ User Videos
 // ========================================
 
 app.get(
@@ -9277,7 +9277,7 @@ app.get(
 );
 
 // ========================================
-// 📊 User Interest Profile
+// ðŸ“Š User Interest Profile
 // ========================================
 
 app.get(
@@ -9334,7 +9334,7 @@ app.get(
 );
 
 // ========================================
-// 🧠 Intelligence Admin/Debug
+// ðŸ§  Intelligence Admin/Debug
 // ========================================
 
 app.get(
@@ -9433,7 +9433,7 @@ app.get(
 );
 
 // ========================================
-// 🎯 Trend → Claim Pipeline
+// ðŸŽ¯ Trend â†’ Claim Pipeline
 // ========================================
 
 app.post(
@@ -9518,7 +9518,7 @@ app.post(
 );
 
 // ========================================
-// ⚔️ LIVE STREAMING
+// âš”ï¸ LIVE STREAMING
 // ========================================
 
 app.get(
@@ -10137,7 +10137,7 @@ app.get(
 );
 
 // ========================================
-// ⚔️ LIVE Battles
+// âš”ï¸ LIVE Battles
 // ========================================
 
 app.post(
@@ -10319,7 +10319,7 @@ app.post(
 );
 
 // ========================================
-// 🎁 Gifts
+// ðŸŽ Gifts
 // ========================================
 
 app.post(
@@ -10661,7 +10661,7 @@ app.post(
 );
 
 // ========================================
-// ⚔️ Battles
+// âš”ï¸ Battles
 // ========================================
 
 app.post(
@@ -11518,7 +11518,7 @@ app.post(
 );
 
 // ========================================
-// 💰 Wallet
+// ðŸ’° Wallet
 // ========================================
 
 app.get(
@@ -11812,7 +11812,7 @@ app.post(
 );
 
 // ========================================
-// 💳 PayPal
+// ðŸ’³ PayPal
 // ========================================
 
 app.post(
@@ -12021,10 +12021,10 @@ app.post(
 );
 
 // ========================================
-// 🪙 Credits (shop checkout)
+// ðŸª™ Credits (shop checkout)
 // ========================================
 
-// Mirrors the packs in public/shop.html — `value` is the
+// Mirrors the packs in public/shop.html â€” `value` is the
 // PayPal charge in USD, `credits` is what the buyer gets.
 const CREDIT_PACKAGES = {
   starter: { credits: 100, value: '0.99' },
@@ -12313,7 +12313,7 @@ app.post(
 );
 
 // ========================================
-// 📡 WebSocket
+// ðŸ“¡ WebSocket
 // ========================================
 
 // userId -> open socket count, for DM
@@ -12728,7 +12728,7 @@ io.on(
 
           emoji:
             p.emoji ||
-            '🎁',
+            'ðŸŽ',
 
           fromUser:
             p.username ||
@@ -12895,7 +12895,7 @@ io.on(
               return;
             }
           } else {
-            // No conversation yet —
+            // No conversation yet â€”
             // reuse or create the 1:1
             // with the recipient.
 
@@ -13272,60 +13272,31 @@ io.on(
       }
     );
 
-    socket.on(
+       socket.on(
       'vc_hangup',
       (p = {}) => {
         const fromUserId =
           socket.data.userId;
-
-        if (
-          !fromUserId ||
-          !p.toUserId
-        ) {
-          return;
-        }
-
-        io.to(
-          'user-' + p.toUserId
-        ).emit(
-          'vc_hangup',
-          { fromUserId }
-        );
+        if (!fromUserId ||!p.toUserId) return;
+        io.to('user-' + p.toUserId).emit('vc_hangup', { fromUserId });
       }
     );
-  }
-);
 
-// ========================================
-// 🏠 Serve Frontend
-// ========================================
-
-app.get(
-  '/u/:username',
-  (req, res) => {
-    res.sendFile(
-      'profile-view.html',
-      {
-        root:
-          path.join(
-            __dirname,
-            'frontend'
-          )
-      }
-    );
-  }
-);
-
-app.get(
-  '/battles',
-  (req, res) =>
-    res.sendFile(
-      'creator.html',
-      {
-        root: 'public'
-      }
-    )
-);
+    // LIVE HUB Ring Pass-Through
+    socket.on('live_filter_change', (p = {}) => {
+      const userId = socket.data.userId; if (!userId) return;
+      if (p.streamId) io.to('stream-' + p.streamId).emit('live_filter_change', { userId, filter: p.filter, intensity: p.intensity, greenScreen: p.greenScreen });
+      io.emit('live_filter_update', { userId,...p });
+    });
+    socket.on('green_screen_change', (p = {}) => {
+      const userId = socket.data.userId; if (!userId) return;
+      if (p.streamId) io.to('stream-' + p.streamId).emit('green_screen_change', { userId, url: p.url, mode: p.mode });
+    });
+    socket.on('selector_ring_change', (p = {}) => {
+      const userId = socket.data.userId; if (!userId) return;
+      io.to('user-' + userId).emit('selector_ring_update', p);
+      if (p.streamId) io.to('stream-' + p.streamId).emit('selector_ring_update', p);
+    });
 
 app.get(
   '/profile',
@@ -13361,7 +13332,7 @@ app.get(
 );
 
 // ========================================
-// 🧠 Background Intelligence Worker
+// ðŸ§  Background Intelligence Worker
 // ========================================
 
 let intelligenceWorkerRunning =
@@ -13534,7 +13505,7 @@ async function runIntelligenceCycle() {
     );
   } catch (error) {
     console.error(
-      '🧠 Intelligence worker error:',
+      'ðŸ§  Intelligence worker error:',
       error.message
     );
   } finally {
@@ -13544,7 +13515,7 @@ async function runIntelligenceCycle() {
 }
 
 // ========================================
-// 🛡️ Admin / Moderation
+// ðŸ›¡ï¸ Admin / Moderation
 // ========================================
 // All routes require a valid token AND a
 // DB-verified is_admin row (requireAdmin
@@ -13595,7 +13566,7 @@ app.get(
 
       params.push(limit, offset);
 
-      // Explicit column list — never
+      // Explicit column list â€” never
       // SELECT * (password_hash must not
       // leave the database).
 
@@ -13664,7 +13635,7 @@ app.post(
           });
       }
 
-      // Kill every active session —
+      // Kill every active session â€”
       // access JWTs expire on their own,
       // refresh tokens do not get to.
 
@@ -13738,7 +13709,7 @@ app.post(
   }
 );
 
-// Moderation queue — video_feedback rows
+// Moderation queue â€” video_feedback rows
 // with feedback_type = 'report', joined
 // with the video, its author, and the
 // reporter. (video_feedback stores no
@@ -13837,7 +13808,7 @@ app.get(
   }
 );
 
-// Soft-remove — is_published = false
+// Soft-remove â€” is_published = false
 // drops the video from every feed query
 // (they all filter is_published = true)
 // without deleting data.
@@ -13890,7 +13861,7 @@ app.post(
 );
 
 // ----------------------------------------
-// Withdrawal queue — creators request
+// Withdrawal queue â€” creators request
 // payouts via POST /api/wallet/withdraw
 // (balance debited up front, transaction
 // row 'pending'). An admin then approves
@@ -13959,7 +13930,7 @@ app.get(
 
       params.push(limit, offset);
 
-      // Explicit column list — user rows
+      // Explicit column list â€” user rows
       // are joined for context, but only
       // payout-relevant fields leave the
       // database.
@@ -14043,7 +14014,7 @@ app.post(
           .status(503)
           .json({
             error:
-              'PayPal is not configured — set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET'
+              'PayPal is not configured â€” set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET'
           });
       }
 
@@ -14130,7 +14101,7 @@ app.post(
             amountUsd: amount_usd
           });
       } catch (payoutError) {
-        // Payout failed — mark the
+        // Payout failed â€” mark the
         // transaction failed and refund
         // the debited balance atomically.
 
@@ -14333,7 +14304,7 @@ app.post(
 );
 
 // ----------------------------------------
-// 📣 Admin: in-feed ads
+// ðŸ“£ Admin: in-feed ads
 // ----------------------------------------
 // Sponsored placements blended into
 // /api/feed by getRankedFeed. An ad
@@ -14586,7 +14557,7 @@ app.delete(
 );
 
 // ========================================
-// 🔔 Web Push — VAPID setup, subscription
+// ðŸ”” Web Push â€” VAPID setup, subscription
 // routes, and the sendPushToUser helper
 // createNotification fires alongside its
 // in-app socket emit. Schema lives in
@@ -14622,18 +14593,18 @@ if (
   pushEnabled = true;
 
   console.log(
-    '🔔 Web push enabled (VAPID configured)'
+    'ðŸ”” Web push enabled (VAPID configured)'
   );
 } else {
   console.warn(
-    '⚠️ Web push disabled — set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY to enable'
+    'âš ï¸ Web push disabled â€” set VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY to enable'
   );
 }
 
 // Fire-and-forget: sends {title, body, url}
 // to every subscription the user has, and
 // prunes endpoints the push service reports
-// as gone (404/410). Never throws — push
+// as gone (404/410). Never throws â€” push
 // must not break the action that triggered
 // it.
 
@@ -14719,7 +14690,7 @@ app.get(
   }
 );
 
-// Upsert by endpoint — the endpoint is the
+// Upsert by endpoint â€” the endpoint is the
 // stable identity of a browser
 // subscription; re-subscribing refreshes
 // keys/ownership.
@@ -14861,7 +14832,7 @@ app.post(
   }
 );
 
-// Self/test notification — creator.html's
+// Self/test notification â€” creator.html's
 // "notify followers" button posts
 // {title, body, url}. Scoped to the
 // caller's own subscriptions.
@@ -14911,7 +14882,7 @@ app.post(
 );
 
 // ========================================
-// 🏷️ Discovery — hashtags / sounds /
+// ðŸ·ï¸ Discovery â€” hashtags / sounds /
 // duets / challenges. Salvaged from the
 // old TikTok-parity module; schema lives
 // in db/migration_013_discovery.sql,
@@ -14928,7 +14899,7 @@ require('./nvme-tiktok-features')(
 );
 
 // ========================================
-// Catch-all — MUST stay after every route
+// Catch-all â€” MUST stay after every route
 // registration; anything below this line
 // is unreachable for GET requests.
 // ========================================
@@ -14967,7 +14938,7 @@ app.get(
 );
 
 // ========================================
-// 🚀 Start Server
+// ðŸš€ Start Server
 // ========================================
 
 async function startServer() {
@@ -14983,7 +14954,7 @@ async function startServer() {
         );
 
         console.log(
-          `🚀 NVME.live running on port ${PORT}`
+          `ðŸš€ NVME.live running on port ${PORT}`
         );
 
         console.log(
@@ -14991,51 +14962,51 @@ async function startServer() {
         );
 
         console.log(
-          '🔐 Auth: register/login/me/google — enabled'
+          'ðŸ” Auth: register/login/me/google â€” enabled'
         );
 
         console.log(
-          '❤️ Likes / 💬 Comments / 👥 Follows / 🔒 Privacy / 🔎 Search — enabled'
+          'â¤ï¸ Likes / ðŸ’¬ Comments / ðŸ‘¥ Follows / ðŸ”’ Privacy / ðŸ”Ž Search â€” enabled'
         );
 
         console.log(
-          '💰 Gifts / Wallet / PayPal — enabled'
+          'ðŸ’° Gifts / Wallet / PayPal â€” enabled'
         );
 
         console.log(
-          '⚔️ Battles — enabled'
+          'âš”ï¸ Battles â€” enabled'
         );
 
         console.log(
-          '📹 Video upload / Cloudinary — enabled'
+          'ðŸ“¹ Video upload / Cloudinary â€” enabled'
         );
 
         console.log(
-          '🔥 Trending Engine — enabled'
+          'ðŸ”¥ Trending Engine â€” enabled'
         );
 
         console.log(
-          '🧠 Atomic Claims — enabled'
+          'ðŸ§  Atomic Claims â€” enabled'
         );
 
         console.log(
-          '♻️ Claim Deduplication — enabled'
+          'â™»ï¸ Claim Deduplication â€” enabled'
         );
 
         console.log(
-          '📊 Behavioral Events — enabled'
+          'ðŸ“Š Behavioral Events â€” enabled'
         );
 
         console.log(
-          '🚫 Not Interested — enabled'
+          'ðŸš« Not Interested â€” enabled'
         );
 
         console.log(
-          '🎯 Personalized Ranking — enabled'
+          'ðŸŽ¯ Personalized Ranking â€” enabled'
         );
 
         console.log(
-          '🔁 Recommendation Feedback Loop — enabled'
+          'ðŸ” Recommendation Feedback Loop â€” enabled'
         );
 
         console.log(
@@ -15070,7 +15041,7 @@ async function startServer() {
     );
   } catch (error) {
     console.error(
-      '❌ Failed to start NVME.live:',
+      'âŒ Failed to start NVME.live:',
       error
     );
 
@@ -15081,7 +15052,7 @@ async function startServer() {
 startServer();
 
 // ========================================
-// 🛑 Process Error Handling
+// ðŸ›‘ Process Error Handling
 // ========================================
 
 process.on(
@@ -15101,3 +15072,4 @@ process.on(
       err
     )
 );
+

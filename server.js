@@ -13272,7 +13272,7 @@ io.on(
       }
     );
 
-    socket.on(
+        socket.on(
       'vc_hangup',
       (p = {}) => {
         const fromUserId =
@@ -13293,6 +13293,22 @@ io.on(
         );
       }
     );
+
+    // LIVE HUB Ring Pass-Through - persists selector + filters to viewers
+    socket.on('live_filter_change', (p = {}) => {
+      const userId = socket.data.userId; if (!userId) return;
+      if (p.streamId) io.to('stream-' + p.streamId).emit('live_filter_change', { userId, filter: p.filter, intensity: p.intensity, greenScreen: p.greenScreen });
+      io.emit('live_filter_update', { userId, ...p });
+    });
+    socket.on('green_screen_change', (p = {}) => {
+      const userId = socket.data.userId; if (!userId) return;
+      if (p.streamId) io.to('stream-' + p.streamId).emit('green_screen_change', { userId, url: p.url, mode: p.mode });
+    });
+    socket.on('selector_ring_change', (p = {}) => {
+      const userId = socket.data.userId; if (!userId) return;
+      io.to('user-' + userId).emit('selector_ring_update', p);
+      if (p.streamId) io.to('stream-' + p.streamId).emit('selector_ring_update', p);
+    });
   }
 );
 

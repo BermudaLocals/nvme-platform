@@ -12,15 +12,13 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 #cam{display:none}
 #out{position:fixed;inset:0;width:100vw;height:100dvh;background:#000;z-index:0;transform:scaleX(-1)}
 #out.env{transform:scaleX(1)}
-#noCam{position:fixed;inset:0;z-index:1;display:none;align-items:center;justify-content:center;flex-direction:column;background:#111;text-align:center;padding:20px}
-#noCam.show{display:flex}
 .overlay{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;pointer-events:none}
 .overlay *{pointer-events:auto}
 .top{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
-.icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer;text-decoration:none;font-size:14px}
+.icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer;font-size:14px;text-decoration:none}
 .pill{padding:6px 12px;border-radius:20px;background:rgba(0,0,0,.55);font-size:.75rem;cursor:pointer}
 .reward{margin:6px 10px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.15);font-size:.7rem;display:flex;justify-content:space-between;gap:8px}
-.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:12px;align-items:center;overflow-y:auto;z-index:6}
+.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:10px;align-items:center;overflow-y:auto}
 .t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
 .t .i{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid rgba(255,255,255,.15)}
 .t.active .i{background:#fe2c55}
@@ -30,7 +28,7 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 .go.live{background:#10ff70;color:#000}
 #toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.9);padding:14px 22px;border-radius:12px;z-index:100;display:none;font-size:.9rem;max-width:85%;text-align:center}
 #toast.show{display:block}
-#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:20;background:#151515;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:85dvh;overflow-y:auto}
+#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:20;background:#151515;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:88dvh;overflow-y:auto}
 #fxPanel.show{transform:translateY(0)}
 .fxHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .fxGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -38,16 +36,17 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 .fxItem.active{border-color:#fe2c55}
 .fxItem img{width:100%;height:70%;object-fit:cover}
 .fxItem span{font-size:.52rem;padding:2px;text-align:center;line-height:1.1}
-.fxItem .anim{position:absolute;top:2px;right:2px;font-size:.45rem;background:#fe2c55;border-radius:4px;padding:1px 3px}
 .fxItem .mov{position:absolute;top:2px;left:2px;font-size:.45rem;background:#10ff70;color:#000;border-radius:4px;padding:1px 3px}
+.fxItem .fix{position:absolute;top:2px;right:2px;font-size:.4rem;background:#fe2c55;border-radius:4px;padding:1px 3px}
 .tabs2{display:flex;gap:8px;margin:10px 0}
 .tabs2 button{flex:1;padding:8px;border-radius:10px;border:none;background:#222;color:#fff;font-size:.7rem;cursor:pointer}
 .tabs2 button.active{background:#fe2c55;font-weight:700}
 .row{display:flex;align-items:center;gap:8px;margin:8px 0}
-.row label{font-size:.65rem;width:80px;opacity:.8}
-.row input{flex:1}
+.row label{font-size:.65rem;width:85px;opacity:.8}
+.row input,.row select{flex:1}
 #liveBadge{position:fixed;top:70px;left:12px;z-index:10;background:#fe2c55;padding:6px 12px;border-radius:20px;font-size:.7rem;font-weight:700;display:none}
 #liveBadge.on{display:block}
+#debug{position:fixed;top:50px;left:12px;z-index:10;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:8px;font-size:.6rem}
 </style>
 </head>
 <body>
@@ -55,307 +54,255 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 <canvas id="out"></canvas>
 <img id="bgImg" crossorigin="anonymous" style="display:none">
 <video id="bgVid" loop muted playsinline crossorigin="anonymous" style="display:none"></video>
-<canvas id="bgAnim" style="display:none"></canvas>
+<canvas id="work" style="display:none"></canvas>
 <img id="filterImg" style="display:none">
 
-<div id="noCam"><div style="font-size:48px">📷</div><h3>Camera Blocked</h3><button onclick="start()" style="margin-top:12px;padding:10px 20px;border-radius:20px;border:none;background:#fff;color:#000;font-weight:700">Try Again</button></div>
 <div id="toast"></div>
 <div id="liveBadge">🔴 LIVE</div>
+<div id="debug">AI loading...</div>
 
 <div class="overlay">
-  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">🎭 Filters • Fixed BG</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
-  <div class="reward" id="rw"><span id="rwText">Fixed: solid BG stays + moving BGs</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
+  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">🎨 BG REMOVES ROOM</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
+  <div class="reward" id="rw"><span id="rwText">Now removes background - solid behind you</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
   <div class="tools">
     <div class="t" onclick="flip()"><div class="i">⇄</div><span>Flip</span></div>
-    <div class="t active" id="btnFx" onclick="toggleFx()"><div class="i">🎭</div><span>Face FX</span></div>
+    <div class="t active" id="btnFx" onclick="toggleFx()"><div class="i">🎨</div><span>BG Remove</span></div>
     <div class="t" onclick="share()"><div class="i">↗</div><span>Share</span></div>
   </div>
   <div class="bottom"><button class="go" id="goBtn">Go LIVE</button></div>
 </div>
 
 <div id="fxPanel">
-  <div class="fxHead"><b>🎭 Face + Solid + Moving BG</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
+  <div class="fxHead"><b>✅ BG REMOVER - FIXED</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
   <div class="tabs2">
-    <button id="tab-face" class="active" onclick="switchTab('face')">🎭 Face Tracking</button>
-    <button id="tab-bg" onclick="switchTab('bg')">🖼️ Solid & Moving BG</button>
+    <button id="tab-bg" class="active" onclick="switchTab('bg')">🖼️ Solid & Moving BG (Removes Room)</button>
+    <button id="tab-face" onclick="switchTab('face')">🎭 Face Anim</button>
   </div>
 
-  <div id="panel-face">
+  <div id="panel-bg">
+    <div style="font-size:.7rem;opacity:.8;margin-bottom:6px">✅ CLICK - REMOVES YOUR ROOM, PUTS IMAGE SOLID BEHIND</div>
+    <div class="fxGrid">
+      <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:22px">🚫</div><span>None (Cam)</span></div>
+      <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img src="https://picsum.photos/seed/officefix/300/200"><span>Office</span><div class="fix">FIXED</div></div>
+      <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img src="https://picsum.photos/seed/beachfix/300/200"><span>Beach</span><div class="fix">FIXED</div></div>
+      <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img src="https://picsum.photos/seed/cityfix/300/200"><span>City</span><div class="fix">FIXED</div></div>
+      <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img src="https://picsum.photos/seed/spacefix/300/200"><span>Space</span><div class="fix">FIXED</div></div>
+      <div class="fxItem" data-bg="forest" onclick="setBg('forest',this)"><img src="https://picsum.photos/seed/forestfix/300/200"><span>Forest</span><div class="fix">FIXED</div></div>
+      <div class="fxItem" data-bg="studio" onclick="setBg('studio',this)"><img src="https://picsum.photos/seed/studiofix/300/200"><span>Studio</span><div class="fix">FIXED</div></div>
+      <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:20px">⬆️</div><span>Upload (Stays)</span></div>
+    </div>
+    <div style="font-size:.65rem;opacity:.7;margin-top:10px">MOVING BACKGROUNDS - REMOVES ROOM</div>
+    <div class="fxGrid">
+      <div class="fxItem" data-bg="neon" onclick="setBg('neon',this)"><div style="width:100%;height:70%;background:linear-gradient(45deg,#ff00ff,#00ffff)"></div><span>Neon Move</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="stars" onclick="setBg('stars',this)"><div style="width:100%;height:70%;background:#000"></div><span>Stars Move</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="waves" onclick="setBg('waves',this)"><div style="width:100%;height:70%;background:linear-gradient(#001122,#00aaff)"></div><span>Waves Move</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="matrix" onclick="setBg('matrix',this)"><div style="width:100%;height:70%;background:#001100;color:#0f0;display:flex;align-items:center;justify-content:center">0101</div><span>Matrix Move</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="firebg" onclick="setBg('firebg',this)"><div style="width:100%;height:70%;background:linear-gradient(#ff3300,#ffaa00)"></div><span>Fire Move</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="gradient" onclick="setBg('gradient',this)"><div style="width:100%;height:70%;background:linear-gradient(90deg,red,blue)"></div><span>Gradient Move</span><div class="mov">MOV</div></div>
+    </div>
+    <div class="row"><label>BG Scale</label><input type="range" id="bgScale" min="30" max="200" value="100"><span id="bgScaleV">100%</span></div>
+    <div class="row"><label>Edge Smooth</label><input type="range" id="edge" min="0" max="20" value="8"><span id="edgeV">8</span></div>
+    <div class="row"><label>Fit</label><select id="fitMode" style="background:#222;color:#fff;border:none;padding:6px;border-radius:8px"><option value="cover">Cover - fills screen solid</option><option value="contain">Shrink to Frame</option><option value="center">Small center</option></select></div>
+    <div style="font-size:.6rem;opacity:.5;margin-top:4px">If BG not removing room, make sure you picked a BG (not None). None shows real room.</div>
+  </div>
+
+  <div id="panel-face" style="display:none">
     <div class="fxGrid">
       <div class="fxItem active" data-filter="none" onclick="setFaceFilter('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
-      <div class="fxItem" data-filter="dog" onclick="setFaceFilter('dog',this)"><div style="font-size:22px">🐶</div><span>Dog</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="glasses" onclick="setFaceFilter('glasses',this)"><div style="font-size:22px">😎</div><span>Glasses</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="heart" onclick="setFaceFilter('heart',this)"><div style="font-size:22px">😍</div><span>Heart</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="clown" onclick="setFaceFilter('clown',this)"><div style="font-size:22px">🤡</div><span>Clown</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="fire" onclick="setFaceFilter('fire',this)"><div style="font-size:22px">🔥</div><span>Fire Crown</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="angel" onclick="setFaceFilter('angel',this)"><div style="font-size:22px">😇</div><span>Angel</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="alien" onclick="setFaceFilter('alien',this)"><div style="font-size:22px">👽</div><span>Alien</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="dog" onclick="setFaceFilter('dog',this)"><div style="font-size:22px">🐶</div><span>Dog</span></div>
+      <div class="fxItem" data-filter="glasses" onclick="setFaceFilter('glasses',this)"><div style="font-size:22px">😎</div><span>Glasses</span></div>
+      <div class="fxItem" data-filter="heart" onclick="setFaceFilter('heart',this)"><div style="font-size:22px">😍</div><span>Heart</span></div>
+      <div class="fxItem" data-filter="clown" onclick="setFaceFilter('clown',this)"><div style="font-size:22px">🤡</div><span>Clown</span></div>
+      <div class="fxItem" data-filter="fire" onclick="setFaceFilter('fire',this)"><div style="font-size:22px">🔥</div><span>Fire Crown</span></div>
       <div class="fxItem" onclick="document.getElementById('uploadFilter').click()"><div style="font-size:20px">⬆️</div><span>Upload PNG</span></div>
     </div>
   </div>
 
-  <div id="panel-bg" style="display:none">
-    <div style="font-size:.65rem;opacity:.7">SOLID IMAGES (FIXED - CORS)</div>
-    <div class="fxGrid">
-      <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
-      <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img id="thumb-office" src=""><span>Office Fixed</span></div>
-      <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img id="thumb-beach" src=""><span>Beach</span></div>
-      <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img id="thumb-city" src=""><span>City Night</span></div>
-      <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img id="thumb-space" src=""><span>Space</span></div>
-      <div class="fxItem" data-bg="forest" onclick="setBg('forest',this)"><img id="thumb-forest" src=""><span>Forest</span></div>
-      <div class="fxItem" data-bg="studio" onclick="setBg('studio',this)"><img id="thumb-studio" src=""><span>Studio</span></div>
-      <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:20px">⬆️</div><span>Upload (Stays)</span></div>
-    </div>
-    <div style="font-size:.65rem;opacity:.7;margin-top:10px">MOVING BACKGROUNDS ✨</div>
-    <div class="fxGrid">
-      <div class="fxItem" data-bg="neon" onclick="setBg('neon',this)"><div style="width:100%;height:70%;background:linear-gradient(45deg,#ff00ff,#00ffff)"></div><span>Neon Gradient</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="stars" onclick="setBg('stars',this)"><div style="width:100%;height:70%;background:#000;position:relative;overflow:hidden"><div style="position:absolute;inset:0;background:radial-gradient(white 1px,transparent 1px);background-size:10px 10px"></div></div><span>Stars Moving</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="waves" onclick="setBg('waves',this)"><div style="width:100%;height:70%;background:linear-gradient(to bottom,#001122,#00aaff)"></div><span>Ocean Waves</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="matrix" onclick="setBg('matrix',this)"><div style="width:100%;height:70%;background:#001100;color:#0f0;display:flex;align-items:center;justify-content:center;font-size:.6rem">0101</div><span>Matrix Rain</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="firebg" onclick="setBg('firebg',this)"><div style="width:100%;height:70%;background:linear-gradient(to top,#ff3300,#ffaa00)"></div><span>Fire Moving</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="video1" onclick="setBg('video1',this)"><div style="width:100%;height:70%;background:#222;display:flex;align-items:center;justify-content:center">▶️</div><span>Video BG 1</span><div class="mov">MOV</div></div>
-    </div>
-    <div class="row"><label>BG Scale</label><input type="range" id="bgScale" min="30" max="200" value="100"><span id="bgScaleV">100%</span></div>
-    <div class="row"><label>Fit</label><select id="fitMode" style="flex:1;background:#222;color:#fff;border:none;padding:6px;border-radius:8px"><option value="cover">Cover - fills screen</option><option value="contain">Shrink to Frame - fits</option><option value="center">Small center</option></select></div>
-  </div>
-
   <input type="file" id="uploadBg" accept="image/*,video/*" style="display:none">
   <input type="file" id="uploadFilter" accept="image/*" style="display:none">
-  <div style="display:flex;gap:8px;margin-top:8px"><button onclick="clearAll()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Clear All</button><button onclick="toggleFx()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#fe2c55;color:#fff;font-weight:700">Done</button></div>
+  <div style="display:flex;gap:8px;margin-top:8px"><button onclick="clearAll()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Clear</button><button onclick="toggleFx()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#fe2c55;color:#fff;font-weight:700">Done - BG Removes Room</button></div>
 </div>
 
 <script>
 const cam=document.getElementById('cam'), out=document.getElementById('out'), ctx=out.getContext('2d',{alpha:false});
-const bgImg=document.getElementById('bgImg'), bgVid=document.getElementById('bgVid'), bgAnim=document.getElementById('bgAnim'), bgAnimCtx=bgAnim.getContext('2d');
-let facing='user',stream=null,fxOpen=false,bgMode='none',faceFilter='none',bgScale=100,fitMode='cover',faceLandmarks=null;
+const bgImg=document.getElementById('bgImg'), bgVid=document.getElementById('bgVid');
+const work=document.getElementById('work'), wctx=work.getContext('2d');
+const debug=document.getElementById('debug');
+let facing='user',stream=null,fxOpen=false,bgMode='none',faceFilter='none',bgScale=100,fitMode='cover',edge=8,faceLandmarks=null;
 let seg=null,faceMesh=null,segResult=null,animT=0;
-let uploadedBgDataUrl=null; // stays
+let uploadedBgDataUrl=localStorage.getItem('nvme_uploaded_bg')||null;
 
-// Use CORS-safe images via picsum and solid colors as fallback - FIX office
 const bgUrls={
-  office:'https://picsum.photos/seed/office/1280/720',
-  beach:'https://picsum.photos/seed/beach/1280/720',
-  city:'https://picsum.photos/seed/citynight/1280/720',
-  space:'https://picsum.photos/seed/space/1280/720',
-  forest:'https://picsum.photos/seed/forest/1280/720',
-  studio:'https://picsum.photos/seed/studio/1280/720'
+  office:'https://picsum.photos/seed/officefix/1280/720',
+  beach:'https://picsum.photos/seed/beachfix/1280/720',
+  city:'https://picsum.photos/seed/cityfix/1280/720',
+  space:'https://picsum.photos/seed/spacefix/1280/720',
+  forest:'https://picsum.photos/seed/forestfix/1280/720',
+  studio:'https://picsum.photos/seed/studiofix/1280/720'
 };
-
-// set thumbs
-Object.keys(bgUrls).forEach(k=>{
-  const el=document.getElementById('thumb-'+k);
-  if(el) el.src=bgUrls[k];
-});
 
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 function toggleFx(){ fxOpen=!fxOpen; document.getElementById('fxPanel').classList.toggle('show',fxOpen); }
-function switchTab(t){ document.getElementById('panel-face').style.display=t==='face'?'block':'none'; document.getElementById('panel-bg').style.display=t==='bg'?'block':'none'; document.getElementById('tab-face').classList.toggle('active',t==='face'); document.getElementById('tab-bg').classList.toggle('active',t==='bg'); }
-function clearAll(){ setFaceFilter('none',document.querySelector('[data-filter=none]')); setBg('none',document.querySelector('[data-bg=none]')); toast('Cleared'); }
+function switchTab(t){ document.getElementById('panel-bg').style.display=t==='bg'?'block':'none'; document.getElementById('panel-face').style.display=t==='face'?'block':'none'; document.getElementById('tab-bg').classList.toggle('active',t==='bg'); document.getElementById('tab-face').classList.toggle('active',t==='face'); }
+function clearAll(){ setBg('none',document.querySelector('[data-bg=none]')); setFaceFilter('none',document.querySelector('[data-filter=none]')); }
 
 document.getElementById('bgScale').oninput=e=>{ bgScale=+e.target.value; document.getElementById('bgScaleV').textContent=bgScale+'%'; };
-document.getElementById('fitMode').onchange=e=>{ fitMode=e.target.value; toast('Fit: '+fitMode); };
+document.getElementById('edge').oninput=e=>{ edge=+e.target.value; document.getElementById('edgeV').textContent=edge; };
+document.getElementById('fitMode').onchange=e=>{ fitMode=e.target.value; };
 
 async function initModels(){
+  debug.textContent='AI loading...';
   seg=new SelfieSegmentation({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`});
   seg.setOptions({modelSelection:1});
-  seg.onResults(r=>{ segResult=r; });
+  seg.onResults(r=>{ segResult=r; debug.textContent='AI ready - BG removes room'; });
   faceMesh=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
   faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
   faceMesh.onResults(r=>{ faceLandmarks=r.multiFaceLandmarks&&r.multiFaceLandmarks[0]?r.multiFaceLandmarks[0]:null; });
-}
-
-function drawStaticBgFitted(W,H){
-  const bg=bgMode==='video'?bgVid:bgImg;
-  if(bgMode==='uploaded' && uploadedBgDataUrl){
-    // uploaded stays - use bgImg which already has dataUrl
-    const iw=bgImg.naturalWidth||1280, ih=bgImg.naturalHeight||720;
-    const r=fitMode==='cover'?Math.max(W/iw,H/ih):fitMode==='contain'?Math.min(W/iw,H/ih)*0.9:0.5;
-    const rr=r*(bgScale/100);
-    const dw=iw*rr, dh=ih*rr;
-    ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
-    ctx.drawImage(bgImg,(W-dw)/2,(H-dh)/2,dw,dh);
-    return;
-  }
-  if(bgMode==='video'){
-    if(bg.videoWidth>0){ 
-      ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
-      const iw=bg.videoWidth, ih=bg.videoHeight;
-      const r=fitMode==='cover'?Math.max(W/iw,H/ih):Math.min(W/iw,H/ih);
-      const rr=r*(bgScale/100);
-      ctx.drawImage(bg,(W-iw*rr)/2,(H-ih*rr)/2,iw*rr,ih*rr);
-    } else { ctx.fillStyle='#111'; ctx.fillRect(0,0,W,H); }
-    return;
-  }
-  if(bgMode==='image'){
-    if(bgImg.complete && bgImg.naturalWidth>0){
-      const iw=bgImg.naturalWidth, ih=bgImg.naturalHeight;
-      const r=fitMode==='cover'?Math.max(W/iw,H/ih):fitMode==='contain'?Math.min(W/iw,H/ih)*0.9:0.5;
-      const rr=r*(bgScale/100);
-      const dw=iw*rr, dh=ih*rr;
-      ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
-      ctx.drawImage(bgImg,(W-dw)/2,(H-dh)/2,dw,dh);
-    } else {
-      ctx.fillStyle='#111'; ctx.fillRect(0,0,W,H);
-      // retry load
-      if(bgImg.src) { /* waiting */ }
-    }
-    return;
-  }
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  debug.textContent='AI ready';
 }
 
 function drawMovingBg(W,H){
-  bgAnim.width=W; bgAnim.height=H;
-  const t=animT*0.02;
+  animT++;
   if(bgMode==='neon'){
-    const g=bgAnimCtx.createLinearGradient(0,0,W,H);
-    g.addColorStop(0,`hsl(${(t*20)%360},100%,50%)`);
-    g.addColorStop(0.5,`hsl(${(t*20+120)%360},100%,50%)`);
-    g.addColorStop(1,`hsl(${(t*20+240)%360},100%,50%)`);
-    bgAnimCtx.fillStyle=g; bgAnimCtx.fillRect(0,0,W,H);
+    const g=ctx.createLinearGradient(0,0,W,H);
+    const t=animT*0.02;
+    g.addColorStop(0,`hsl(${(t*30)%360},100%,50%)`);
+    g.addColorStop(1,`hsl(${(t*30+180)%360},100%,50%)`);
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
   } else if(bgMode==='stars'){
-    bgAnimCtx.fillStyle='#000'; bgAnimCtx.fillRect(0,0,W,H);
-    bgAnimCtx.fillStyle='#fff';
-    for(let i=0;i<100;i++){
-      const x=(Math.sin(i*1.5+t*0.5+i)*W*0.5+W*0.5)%W;
-      const y=(i*37 + t*20)%H;
-      bgAnimCtx.beginPath(); bgAnimCtx.arc(x,y,Math.random()*2+0.5,0,Math.PI*2); bgAnimCtx.fill();
-    }
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#fff';
+    for(let i=0;i<80;i++){ const x=(Math.sin(i)*W*0.5+W*0.5 + animT*0.5)%W; const y=(i*23+animT)%H; ctx.beginPath(); ctx.arc(x,y,1.5,0,Math.PI*2); ctx.fill(); }
   } else if(bgMode==='waves'){
-    bgAnimCtx.fillStyle='#001122'; bgAnimCtx.fillRect(0,0,W,H);
-    bgAnimCtx.fillStyle='#00aaff';
-    for(let y=0;y<H;y+=20){
-      bgAnimCtx.beginPath(); bgAnimCtx.moveTo(0,y);
-      for(let x=0;x<W;x+=10){ bgAnimCtx.lineTo(x, y+Math.sin(x*0.02+t+y*0.01)*10); }
-      bgAnimCtx.lineTo(W,H); bgAnimCtx.lineTo(0,H); bgAnimCtx.closePath(); bgAnimCtx.fill();
-    }
+    ctx.fillStyle='#001122'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#0099ff';
+    for(let y=0;y<H;y+=30){ ctx.beginPath(); ctx.moveTo(0,y); for(let x=0;x<W;x+=10) ctx.lineTo(x, y+Math.sin(x*0.02+animT*0.05)*12); ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill(); }
   } else if(bgMode==='matrix'){
-    bgAnimCtx.fillStyle='rgba(0,0,0,0.1)'; bgAnimCtx.fillRect(0,0,W,H);
-    bgAnimCtx.fillStyle='#0f0'; bgAnimCtx.font='14px monospace';
-    for(let i=0;i<W;i+=14){ const h=Math.random()*H; bgAnimCtx.fillText(String.fromCharCode(33+Math.random()*94), i, (h+t*50)%H); }
+    ctx.fillStyle='rgba(0,0,0,0.15)'; ctx.fillRect(0,0,W,H); ctx.fillStyle='#0f0'; ctx.font='14px monospace';
+    for(let i=0;i<W;i+=16) ctx.fillText(String.fromCharCode(33+Math.random()*90), i, (Math.random()*H+animT*2)%H);
   } else if(bgMode==='firebg'){
-    const g=bgAnimCtx.createRadialGradient(W/2,H,t*10,W/2,H,W);
-    g.addColorStop(0,'#ffaa00'); g.addColorStop(0.5,'#ff4400'); g.addColorStop(1,'#330000');
-    bgAnimCtx.fillStyle=g; bgAnimCtx.fillRect(0,0,W,H);
-    // flicker
-    bgAnimCtx.fillStyle=`rgba(255,200,0,${0.3+Math.sin(t*5)*0.2})`; bgAnimCtx.fillRect(0,H*0.5+Math.sin(t*3)*20,W,H*0.5);
-  } else if(bgMode==='video1'){
-    // sample moving video - use canvas noise
-    bgAnimCtx.fillStyle='#222'; bgAnimCtx.fillRect(0,0,W,H);
-    bgAnimCtx.fillStyle='#fe2c55'; bgAnimCtx.font='40px sans-serif'; bgAnimCtx.textAlign='center';
-    bgAnimCtx.fillText('▶️ LIVE BG', W/2, H/2 + Math.sin(t)*10);
+    const g=ctx.createRadialGradient(W/2,H,W/2,H,W); g.addColorStop(0,'#ffaa00'); g.addColorStop(1,'#440000'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  } else if(bgMode==='gradient'){
+    const g=ctx.createLinearGradient(0,0,W,0); g.addColorStop(0,`hsl(${(animT)%360},100%,50%)`); g.addColorStop(1,`hsl(${(animT+180)%360},100%,50%)`); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
   }
-  // draw anim canvas to main
-  ctx.drawImage(bgAnim,0,0,W,H);
 }
 
-function onSegAndDraw(){
+function drawImageBgFitted(W,H){
+  const iw=bgImg.naturalWidth||1280, ih=bgImg.naturalHeight||720;
+  if(!bgImg.complete || iw===0){ ctx.fillStyle='#222'; ctx.fillRect(0,0,W,H); return; }
+  let r=fitMode==='cover'?Math.max(W/iw,H/ih):fitMode==='contain'?Math.min(W/iw,H/ih)*0.9:0.5;
+  r*=bgScale/100; const dw=iw*r, dh=ih*r;
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  ctx.drawImage(bgImg,(W-dw)/2,(H-dh)/2,dw,dh);
+}
+
+// MAIN FIXED RENDER - REMOVES BACKGROUND
+function composite(){
   const W=out.width, H=out.height;
-  ctx.save(); ctx.clearRect(0,0,W,H); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-  const hasSeg = segResult && segResult.segmentationMask && bgMode!=='none';
-  if(hasSeg){
-    // solid bg behind
-    ctx.drawImage(segResult.segmentationMask,0,0,W,H);
-    ctx.globalCompositeOperation='source-in';
-    ctx.drawImage(segResult.image,0,0,W,H);
-    ctx.globalCompositeOperation='destination-atop';
-    if(['neon','stars','waves','matrix','firebg','video1'].includes(bgMode)) drawMovingBg(W,H);
-    else drawStaticBgFitted(W,H);
-  } else {
-    // no seg - fallback: just draw bg then cam with center cut? Ensure solid works even without AI
-    if(bgMode!=='none'){
-      if(['neon','stars','waves','matrix','firebg','video1'].includes(bgMode)) drawMovingBg(W,H);
-      else drawStaticBgFitted(W,H);
-      // draw person full if no mask (so bg stays behind but person still visible as fallback - 70% opacity center)
-      if(!hasSeg){
-        ctx.globalAlpha=1;
-        ctx.drawImage(cam,0,0,W,H);
-      }
-    } else {
-      ctx.drawImage(cam,0,0,W,H);
-    }
+  if(bgMode==='none'){
+    ctx.drawImage(cam,0,0,W,H);
+    drawFace();
+    return;
   }
-  ctx.restore();
-  drawFaceFilter(W,H);
+  // 1. Draw background first (solid or moving) - this will be BEHIND
+  if(['neon','stars','waves','matrix','firebg','gradient'].includes(bgMode)){
+    drawMovingBg(W,H);
+  } else {
+    drawImageBgFitted(W,H);
+  }
+  // 2. If we have segmentation mask, cut person out and draw on top
+  if(segResult && segResult.segmentationMask){
+    work.width=W; work.height=H;
+    // draw mask to work canvas with blur for smooth edge
+    wctx.clearRect(0,0,W,H);
+    if(edge>0){ wctx.filter=`blur(${edge}px)`; }
+    wctx.drawImage(segResult.segmentationMask,0,0,W,H);
+    wctx.filter='none';
+    wctx.globalCompositeOperation='source-in';
+    wctx.drawImage(segResult.image,0,0,W,H);
+    // draw person on top of bg
+    ctx.globalCompositeOperation='source-over';
+    ctx.drawImage(work,0,0,W,H);
+  } else {
+    // fallback if AI not ready yet - still show cam so user not black
+    // but once AI ready, room will be removed
+    ctx.globalAlpha=0.85;
+    ctx.drawImage(cam,0,0,W,H);
+    ctx.globalAlpha=1;
+  }
+  drawFace();
 }
 
-function drawFaceFilter(W,H){
+function drawFace(){
   if(!faceLandmarks || faceFilter==='none') return;
+  const W=out.width, H=out.height;
   const get=i=>({x:faceLandmarks[i].x*W, y:faceLandmarks[i].y*H});
   const nose=get(1), leftEye=get(33), rightEye=get(263), top=get(10);
   const eyeDist=Math.hypot(leftEye.x-rightEye.x, leftEye.y-rightEye.y);
-  const s=eyeDist/100; const wob=Math.sin(animT*0.05)*5;
   ctx.save();
-  if(faceFilter==='dog'){ ctx.font=`${eyeDist*1.2*s}px serif`; ctx.textAlign='center'; ctx.fillText('🐶',top.x,top.y-eyeDist*0.5+wob); ctx.font=`${eyeDist*0.6*s}px serif`; ctx.fillText('👅',nose.x,nose.y+eyeDist*0.6); }
-  else if(faceFilter==='glasses'){ const gx=(leftEye.x+rightEye.x)/2, gy=(leftEye.y+rightEye.y)/2+wob; ctx.font=`${eyeDist*2.2*s}px serif`; ctx.textAlign='center'; ctx.fillText('😎',gx,gy+eyeDist*0.4); }
-  else if(faceFilter==='heart'){ ctx.font=`${eyeDist*0.8*s}px serif`; ctx.textAlign='center'; ctx.fillText('❤️',leftEye.x,leftEye.y-10+wob); ctx.fillText('❤️',rightEye.x,rightEye.y-10+wob); }
-  else if(faceFilter==='clown'){ ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(nose.x,nose.y,eyeDist*0.25*s,0,Math.PI*2); ctx.fill(); }
-  else if(faceFilter==='fire'){ ctx.font=`${eyeDist*1.5*s}px serif`; ctx.textAlign='center'; ctx.fillText('🔥',top.x,top.y-eyeDist*0.6+Math.sin(animT*0.2)*5); }
-  else if(faceFilter==='angel'){ ctx.font=`${eyeDist*1.8*s}px serif`; ctx.textAlign='center'; ctx.fillText('😇',top.x,top.y-eyeDist*0.9+wob); }
-  else if(faceFilter==='alien'){ ctx.fillStyle='rgba(0,255,0,0.6)'; ctx.beginPath(); ctx.ellipse(leftEye.x,leftEye.y,eyeDist*0.35*s,eyeDist*0.45*s,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(rightEye.x,rightEye.y,eyeDist*0.35*s,eyeDist*0.45*s,0,0,Math.PI*2); ctx.fill(); }
-  else if(faceFilter==='custom'){ const img=document.getElementById('filterImg'); if(img.src) ctx.drawImage(img,nose.x-eyeDist*1.5*s,nose.y-eyeDist*1.5*s+wob,eyeDist*3*s,eyeDist*3*s); }
+  if(faceFilter==='dog'){ ctx.font=`${eyeDist*1.2}px serif`; ctx.textAlign='center'; ctx.fillText('🐶',top.x,top.y-eyeDist*0.5); }
+  else if(faceFilter==='glasses'){ ctx.font=`${eyeDist*2.2}px serif`; ctx.textAlign='center'; ctx.fillText('😎',(leftEye.x+rightEye.x)/2,(leftEye.y+rightEye.y)/2+eyeDist*0.3); }
+  else if(faceFilter==='heart'){ ctx.font=`${eyeDist}px serif`; ctx.textAlign='center'; ctx.fillText('❤️',leftEye.x,leftEye.y-10); ctx.fillText('❤️',rightEye.x,rightEye.y-10); }
+  else if(faceFilter==='clown'){ ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(nose.x,nose.y,eyeDist*0.25,0,Math.PI*2); ctx.fill(); }
+  else if(faceFilter==='fire'){ ctx.font=`${eyeDist*1.5}px serif`; ctx.textAlign='center'; ctx.fillText('🔥',top.x,top.y-eyeDist*0.6); }
   ctx.restore();
 }
 
 async function start(){
   if(stream) stream.getTracks().forEach(x=>x.stop());
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true});
-    cam.srcObject=stream; await cam.play(); out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720; bgAnim.width=out.width; bgAnim.height=out.height;
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1920},height:{ideal:1080}},audio:true});
+    cam.srcObject=stream; await cam.play(); out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720; work.width=out.width; work.height=out.height;
     if(!seg) await initModels();
-    render();
-  }catch(e){ document.getElementById('noCam').classList.add('show'); }
+    if(uploadedBgDataUrl){ bgImg.src=uploadedBgDataUrl; bgMode='uploaded'; }
+    loop();
+  }catch(e){ debug.textContent='Camera blocked'; }
 }
 function flip(){ facing=facing==='user'?'environment':'user'; out.classList.toggle('env',facing==='environment'); start(); }
-function setFaceFilter(f,el){ document.querySelectorAll('#panel-face .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active'); faceFilter=f; toast(f==='none'?'Filter off':f+' - tracking face'); }
+function setFaceFilter(f,el){ document.querySelectorAll('#panel-face .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active'); faceFilter=f; }
 function setBg(k,el){
   document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active');
-  if(k==='none'){ bgMode='none'; toast('Background off'); return; }
-  if(['neon','stars','waves','matrix','firebg','video1'].includes(k)){ bgMode=k; toast('Moving BG: '+k+' - solid behind you'); return; }
+  if(k==='none'){ bgMode='none'; toast('Real room'); return; }
+  if(['neon','stars','waves','matrix','firebg','gradient'].includes(k)){ bgMode=k; toast('Moving BG - removes room'); return; }
   if(k==='uploaded'){ bgMode='uploaded'; return; }
-  // image
-  bgMode='image'; const url=bgUrls[k];
-  if(url){ bgImg.crossOrigin='anonymous'; bgImg.onload=()=>{ toast('Background loaded: '+k+' - stays behind'); }; bgImg.onerror=()=>{ toast('Image failed, retry'); bgImg.src=bgUrls[k]+'?t='+Date.now(); }; bgImg.src=url; }
+  bgMode='image';
+  const url=bgUrls[k];
+  bgImg.crossOrigin='anonymous';
+  bgImg.onload=()=>toast(k+' - room removed, solid behind');
+  bgImg.onerror=()=>{ toast('Retrying image...'); setTimeout(()=>bgImg.src=url+'?t='+Date.now(),500); };
+  bgImg.src=url;
 }
 document.getElementById('uploadBg').onchange=e=>{
   const f=e.target.files[0]; if(!f) return;
   const reader=new FileReader();
   reader.onload=ev=>{
     uploadedBgDataUrl=ev.target.result;
-    bgImg.onload=()=>{ bgMode='uploaded'; toast('Uploaded BG stays - solid behind you'); };
+    try{ localStorage.setItem('nvme_uploaded_bg',uploadedBgDataUrl); }catch(e){}
+    bgImg.onload=()=>{ bgMode='uploaded'; toast('Uploaded stays - room removed'); };
     bgImg.src=uploadedBgDataUrl;
-    // persist in localStorage for stay
-    try{ localStorage.setItem('nvme_uploaded_bg', uploadedBgDataUrl); }catch(e){}
   };
   reader.readAsDataURL(f);
-  document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active'));
 };
 document.getElementById('uploadFilter').onchange=e=>{
-  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f); const img=document.getElementById('filterImg'); img.src=url; faceFilter='custom'; toast('Custom face tracks');
+  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f); document.getElementById('filterImg').src=url; faceFilter='custom';
 };
 function share(){ if(navigator.share) navigator.share({url:location.href}); else { navigator.clipboard.writeText(location.href); toast('Link copied'); } }
-async function render(){
-  animT++; 
+
+async function loop(){
   if(faceMesh) await faceMesh.send({image:cam});
   if(seg) await seg.send({image:cam});
-  onSegAndDraw();
-  requestAnimationFrame(render);
+  composite();
+  requestAnimationFrame(loop);
 }
 async function goLiveBackend(start){
   const token=localStorage.getItem('token')||localStorage.getItem('nvme_token')||sessionStorage.getItem('token');
   const headers={'Content-Type':'application/json'}; if(token) headers['Authorization']='Bearer '+token;
   try{ if(start){ const res=await fetch('/api/live/start',{method:'POST',headers,body:JSON.stringify({title:'LIVE'})}); if(res.ok) document.getElementById('liveBadge').classList.add('on'); } else { await fetch('/api/live/end',{method:'POST',headers}); document.getElementById('liveBadge').classList.remove('on'); } }catch(e){}
 }
-document.getElementById('goBtn').onclick=function(){
-  const willLive=!this.classList.contains('live'); this.classList.toggle('live',willLive); this.textContent=willLive?'END LIVE':'Go LIVE'; goLiveBackend(willLive);
-};
-window.addEventListener('load',()=>{
-  start(); 
-  // restore uploaded
-  const saved=localStorage.getItem('nvme_uploaded_bg');
-  if(saved){ uploadedBgDataUrl=saved; bgImg.src=saved; bgMode='uploaded'; }
-  setTimeout(()=>{ if(!fxOpen) toggleFx(); },600);
-});
+document.getElementById('goBtn').onclick=function(){ const willLive=!this.classList.contains('live'); this.classList.toggle('live',willLive); this.textContent=willLive?'END LIVE':'Go LIVE'; goLiveBackend(willLive); };
+window.addEventListener('load',()=>{ start(); setTimeout(()=>{ if(!fxOpen) toggleFx(); },700); });
+document.getElementById('bgScale').oninput=e=>{ bgScale=+e.target.value; document.getElementById('bgScaleV').textContent=bgScale+'%'; };
+document.getElementById('edge').oninput=e=>{ edge=+e.target.value; document.getElementById('edgeV').textContent=edge; };
 </script>
 </body>
 </html>

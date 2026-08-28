@@ -21,31 +21,33 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 .tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:12px;align-items:center;overflow-y:auto;z-index:6}
 .t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
 .t .i{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid rgba(255,255,255,.15)}
-.t.active .i{background:#fe2c55;border-color:#fe2c55}
-.t span{font-size:.55rem;text-shadow:0 1px 2px #000}
+.t.active .i{background:#fe2c55}
+.t span{font-size:.55rem}
 .bottom{margin-top:auto;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.2))}
 .go{width:100%;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
-.go.live{background:#10ff70;color:#000}
+.go.live{background:#10ff70;color:#000;box-shadow:0 0 12px #10ff70}
 .mini{display:flex;gap:10px;justify-content:center;font-size:.6rem;opacity:.7;margin-top:8px;flex-wrap:wrap}
 .mini span{cursor:pointer;padding:2px 6px;border-radius:8px}
 .mini span.active{background:rgba(255,255,255,.2);opacity:1}
 .tabs{display:flex;gap:20px;justify-content:center;margin-top:8px;font-size:.75rem;font-weight:700}
-.tabs span{cursor:pointer;opacity:.5;padding-bottom:3px;border-bottom:2px solid transparent}
-.tabs span.active{opacity:1;border-color:#fff}
-#toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);padding:14px 22px;border-radius:12px;z-index:100;display:none;font-size:.9rem;max-width:80%;text-align:center}
+.tabs span{cursor:pointer;opacity:.5}
+.tabs span.active{opacity:1}
+#toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.9);padding:14px 22px;border-radius:12px;z-index:100;display:none;font-size:.9rem;max-width:85%;text-align:center}
 #toast.show{display:block}
-#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:20;background:#111;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:70dvh;overflow-y:auto}
+#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:20;background:#111;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:72dvh;overflow-y:auto}
 #fxPanel.show{transform:translateY(0)}
 .fxHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .fxGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.fxItem{aspect-ratio:1;background:#222;border-radius:12px;overflow:hidden;cursor:pointer;position:relative;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.fxItem{aspect-ratio:1;background:#222;border-radius:12px;overflow:hidden;cursor:pointer;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .fxItem.active{border-color:#fe2c55}
 .fxItem img{width:100%;height:75%;object-fit:cover}
 .fxItem span{font-size:.6rem;padding:3px}
-.sliderRow{display:flex;align-items:center;gap:10px;margin:12px 0}
+.sliderRow{display:flex;align-items:center;gap:10px;margin:10px 0}
 .sliderRow input{flex:1}
-.previewBox{width:100%;height:90px;border-radius:10px;background:#000;overflow:hidden;margin:8px 0;position:relative}
-.previewBox img, .previewBox video{width:100%;height:100%;object-fit:cover}
+.previewBox{width:100%;height:80px;border-radius:10px;background:#000;overflow:hidden;margin:8px 0;display:flex;align-items:center;justify-content:center}
+.previewBox img,.previewBox video{width:100%;height:100%;object-fit:cover}
+#liveBadge{position:fixed;top:70px;left:12px;z-index:10;background:#fe2c55;padding:6px 12px;border-radius:20px;font-size:.7rem;font-weight:700;display:none}
+#liveBadge.on{display:block}
 </style>
 </head>
 <body>
@@ -55,12 +57,13 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 <video id="bgVid" loop muted playsinline style="display:none"></video>
 <canvas id="tmp" style="display:none"></canvas>
 
-<div id="noCam"><div style="font-size:48px">📷</div><h3>Camera Blocked</h3><p style="opacity:.7;font-size:.85rem">Allow camera → Reload</p><button onclick="start()" style="margin-top:12px;padding:10px 20px;border-radius:20px;border:none;background:#fff;color:#000;font-weight:700;cursor:pointer">Try Again</button></div>
+<div id="noCam"><div style="font-size:48px">📷</div><h3>Camera Blocked</h3><button onclick="start()" style="margin-top:12px;padding:10px 20px;border-radius:20px;border:none;background:#fff;color:#000;font-weight:700">Try Again</button></div>
 <div id="toast"></div>
+<div id="liveBadge">🔴 LIVE</div>
 
 <div class="overlay">
-  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toast('Add sound')">♫ Add sound</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
-  <div class="reward" id="rw"><span>Green Screen: pick bg below, use green backdrop</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff;cursor:pointer">✕</button></div>
+  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">🎨 Green Screen</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
+  <div class="reward" id="rw"><span id="rwText">Tap Effects → pick background → uses your green backdrop</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
   <div class="tools">
     <div class="t" onclick="flip()"><div class="i">⇄</div><span>Flip</span></div>
     <div class="t"><div class="i">✨</div><span>Beautify</span></div>
@@ -73,33 +76,27 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
     <div class="t" onclick="toast('Interact')"><div class="i">👁</div><span>Interact</span></div>
     <div class="t" onclick="share()"><div class="i">↗</div><span>Share</span></div>
   </div>
-  <div class="bottom"><button class="go" id="goBtn">Go LIVE</button><div class="mini"><span class="active">📷 Device camera</span></div><div class="tabs"><span class="active">LIVE</span><span>POST</span><span>CREATE</span></div></div>
+  <div class="bottom"><button class="go" id="goBtn">Go LIVE</button><div class="mini"><span class="active">📷 Device camera</span></div><div class="tabs"><span class="active">LIVE</span><span onclick="location='/app.html'">POST</span><span onclick="location='/app.html'">CREATE</span></div></div>
 </div>
 
 <div id="fxPanel">
-  <div class="fxHead"><b>🎨 Green Screen Filter</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
-  
-  <div class="previewBox" id="previewBox"><img id="prevImg" src="" style="display:none"><video id="prevVid" loop muted playsinline style="display:none"></video><div id="prevNone" style="display:flex;align-items:center;justify-content:center;height:100%;opacity:.5">No background (original camera)</div></div>
-
-  <div style="font-size:.7rem;opacity:.7;margin:4px 0">CHOOSE BACKGROUND</div>
+  <div class="fxHead"><b>🎨 Green Screen + Background</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
+  <div class="previewBox" id="previewBox"><img id="prevImg" style="display:none"><video id="prevVid" loop muted playsinline style="display:none"></video><div id="prevNone" style="opacity:.5;font-size:.7rem">No background - original camera</div></div>
+  <div style="font-size:.7rem;opacity:.7">CHOOSE BACKGROUND - COVERS YOUR BACK WALL</div>
   <div class="fxGrid" id="bgGrid">
     <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:24px">🚫</div><span>None</span></div>
     <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img src="https://images.unsplash.com/photo-1497366811353-26be8aa2a7b7?w=300"><span>Office</span></div>
     <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img src="https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=300"><span>Space</span></div>
     <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img src="https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=300"><span>City</span></div>
     <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300"><span>Beach</span></div>
-    <div class="fxItem" data-bg="upload" onclick="document.getElementById('uploadBg').click()"><div style="font-size:24px">⬆️</div><span>Upload Own</span></div>
+    <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:22px">⬆️</div><span>Upload Own</span></div>
   </div>
-
-  <div class="sliderRow"><span style="font-size:.7rem;width:80px">Green Sensitivity</span><input type="range" id="thresh" min="30" max="150" value="80"><span id="thVal">80</span></div>
-  <div class="sliderRow"><span style="font-size:.7rem;width:80px">Edge Smooth</span><input type="range" id="smooth" min="0" max="30" value="10"><span id="smVal">10</span></div>
-  
+  <div class="sliderRow"><span style="font-size:.7rem;width:90px">Sensitivity</span><input type="range" id="thresh" min="10" max="100" value="35"><span id="thVal">35</span></div>
+  <div class="sliderRow"><span style="font-size:.7rem;width:90px">Edge</span><input type="range" id="smooth" min="0" max="30" value="5"><span id="smVal">5</span></div>
+  <div style="display:flex;gap:6px;margin-top:6px"><label style="flex:1;display:flex;align-items:center;gap:6px;font-size:.7rem"><input type="checkbox" id="forceBg" checked> Force background (no green sheet needed)</label></div>
   <input type="file" id="uploadBg" accept="image/*,video/*" style="display:none">
-  <div style="margin-top:10px;display:flex;gap:8px">
-    <button onclick="setBg('none',document.querySelector('[data-bg=none]'))" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Clear BG</button>
-    <button onclick="toggleFx()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#fe2c55;color:#fff;font-weight:700">Apply</button>
-  </div>
-  <div style="font-size:.6rem;opacity:.5;margin-top:8px">Use a solid GREEN sheet behind you. Background replaces green in real time.</div>
+  <div style="margin-top:10px;display:flex;gap:8px"><button onclick="setBg('none',document.querySelector('[data-bg=none]'))" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Clear</button><button onclick="toggleFx()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#fe2c55;color:#fff;font-weight:700">Done</button></div>
+  <div style="font-size:.6rem;opacity:.5;margin-top:6px">Force mode = replaces background even without green screen (center person kept, edges replaced). Uncheck if you HAVE green screen for cleaner edge.</div>
 </div>
 
 <script>
@@ -107,16 +104,10 @@ const cam=document.getElementById('cam'), out=document.getElementById('out'), ct
 const tmp=document.getElementById('tmp'), tctx=tmp.getContext('2d',{willReadFrequently:true});
 const bgImg=document.getElementById('bgImg'), bgVid=document.getElementById('bgVid'), noCam=document.getElementById('noCam');
 const prevImg=document.getElementById('prevImg'), prevVid=document.getElementById('prevVid'), prevNone=document.getElementById('prevNone');
+let facing='user',stream=null,fxOpen=false,bgMode='none',thresh=35,smooth=5,forceBg=true;
+const bgUrls={office:'https://images.unsplash.com/photo-1497366811353-26be8aa2a7b7?w=800',space:'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=800',city:'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800',beach:'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800'};
 
-let facing='user',stream=null,fxOpen=false,bgMode='none',thresh=80,smooth=10;
-const bgUrls={
-  office:'https://images.unsplash.com/photo-1497366811353-26be8aa2a7b7?w=800',
-  space:'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=800',
-  city:'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800',
-  beach:'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800'
-};
-
-function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2000); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 function toggleFx(){ fxOpen=!fxOpen; document.getElementById('fxPanel').classList.toggle('show',fxOpen); document.getElementById('btnFx').classList.toggle('active',fxOpen); }
 
 async function start(){
@@ -124,93 +115,93 @@ async function start(){
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true});
     cam.srcObject=stream; await cam.play(); noCam.classList.remove('show');
-    out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720;
-    tmp.width=out.width; tmp.height=out.height;
+    out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720; tmp.width=out.width; tmp.height=out.height;
     render();
   }catch(e){ noCam.classList.add('show'); }
 }
 function flip(){ facing=facing==='user'?'environment':'user'; out.classList.toggle('env',facing==='environment'); start(); }
 
 function setBg(key,el){
-  document.querySelectorAll('#bgGrid .fxItem').forEach(x=>x.classList.remove('active'));
-  if(el) el.classList.add('active');
-  if(key==='none'){
-    bgMode='none'; prevNone.style.display='flex'; prevImg.style.display='none'; prevVid.style.display='none'; toast('Background off - original camera');
-    return;
-  }
+  document.querySelectorAll('#bgGrid .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active');
+  if(key==='none'){ bgMode='none'; prevNone.style.display='flex'; prevImg.style.display='none'; prevVid.style.display='none'; document.getElementById('rwText').textContent='Original camera'; return; }
   if(key==='upload') return;
-  bgMode='image';
-  const url=bgUrls[key]||key;
-  bgImg.crossOrigin='anonymous';
-  bgImg.src=url;
-  prevImg.src=url; prevImg.style.display='block'; prevVid.style.display='none'; prevNone.style.display='none';
-  toast('Background set: '+key);
+  bgMode='image'; const url=bgUrls[key]||key; bgImg.crossOrigin='anonymous'; bgImg.src=url; prevImg.src=url; prevImg.style.display='block'; prevVid.style.display='none'; prevNone.style.display='none'; document.getElementById('rwText').textContent='Background: '+key+' - covers your wall'; toast('Background covers your background now');
 }
 
 document.getElementById('uploadBg').onchange=e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const url=URL.createObjectURL(f);
-  if(f.type.startsWith('video')){
-    bgMode='video'; bgVid.src=url; bgVid.play();
-    prevVid.src=url; prevVid.style.display='block'; prevVid.play(); prevImg.style.display='none'; prevNone.style.display='none';
-    toast('Video background loaded');
-  } else {
-    bgMode='image'; bgImg.src=url;
-    prevImg.src=url; prevImg.style.display='block'; prevVid.style.display='none'; prevNone.style.display='none';
-    toast('Custom image loaded');
-  }
-  document.querySelectorAll('#bgGrid .fxItem').forEach(x=>x.classList.remove('active'));
+  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f);
+  if(f.type.startsWith('video')){ bgMode='video'; bgVid.src=url; bgVid.play(); prevVid.src=url; prevVid.style.display='block'; prevVid.play(); prevImg.style.display='none'; prevNone.style.display='none'; }
+  else { bgMode='image'; bgImg.src=url; prevImg.src=url; prevImg.style.display='block'; prevVid.style.display='none'; prevNone.style.display='none'; }
+  document.querySelectorAll('#bgGrid .fxItem').forEach(x=>x.classList.remove('active')); toast('Custom background - now covers wall');
 };
 
 document.getElementById('thresh').oninput=e=>{ thresh=+e.target.value; document.getElementById('thVal').textContent=thresh; };
 document.getElementById('smooth').oninput=e=>{ smooth=+e.target.value; document.getElementById('smVal').textContent=smooth; };
+document.getElementById('forceBg').onchange=e=>{ forceBg=e.target.checked; toast(forceBg?'Force bg: replaces wall without green':'Green sheet mode'); };
 
 function share(){ if(navigator.share) navigator.share({url:location.href}); else { navigator.clipboard.writeText(location.href); toast('Link copied'); } }
 
-// CORRECT GREEN SCREEN LOGIC
 function render(){
   if(!cam.videoWidth){ requestAnimationFrame(render); return; }
   const W=out.width, H=out.height;
-  
   if(bgMode==='none'){
-    // direct camera, no processing = fast
     ctx.drawImage(cam,0,0,W,H);
   } else {
-    // 1. Draw background to out canvas
-    const bg = bgMode==='video'? bgVid : bgImg;
-    if(bgMode==='video' && bg.readyState>=2){
-      ctx.drawImage(bg,0,0,W,H);
-    } else if(bgMode==='image' && bg.complete && bg.naturalWidth>0){
-      ctx.drawImage(bg,0,0,W,H);
-    } else {
-      ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,W,H);
-    }
-    // 2. Get background pixels
-    const bgFrame = ctx.getImageData(0,0,W,H);
-    const bgData = bgFrame.data;
-    // 3. Get camera pixels into tmp
-    tctx.drawImage(cam,0,0,W,H);
-    const camFrame = tctx.getImageData(0,0,W,H);
-    const cd = camFrame.data;
-    // 4. Composite: keep bg where green, keep cam where NOT green
-    for(let i=0;i<cd.length;i+=4){
-      const r=cd[i], g=cd[i+1], b=cd[i+2];
-      // green detection: green is dominant and bright
-      const isGreen = g>thresh && g>r+10 && g>b+10 && (g-r)>20;
-      if(!isGreen){
-        // person - overwrite bg with cam
-        bgData[i]=r; bgData[i+1]=g; bgData[i+2]=b; bgData[i+3]=255;
+    const bg=bgMode==='video'?bgVid:bgImg;
+    if(bgMode==='video' && bg.readyState>=2) ctx.drawImage(bg,0,0,W,H);
+    else if(bgMode==='image' && bg.complete && bg.naturalWidth>0) ctx.drawImage(bg,0,0,W,H);
+    else { ctx.fillStyle='#111'; ctx.fillRect(0,0,W,H); }
+    const bgFrame=ctx.getImageData(0,0,W,H); const bgData=bgFrame.data;
+    tctx.drawImage(cam,0,0,W,H); const camFrame=tctx.getImageData(0,0,W,H); const cd=camFrame.data;
+    const cx=W/2, cy=H/2;
+    for(let y=0;y<H;y++){
+      for(let x=0;x<W;x++){
+        const i=(y*W+x)*4; const r=cd[i], g=cd[i+1], b=cd[i+2];
+        let isBg=false;
+        if(forceBg){
+          // Force mode: keep center person, replace outer area + green areas
+          const dx=(x-cx)/W, dy=(y-cy)/H; const dist=Math.sqrt(dx*dx*4+dy*dy*2.5);
+          const isGreen = g>thresh && g>r+8 && g>b+8;
+          if(dist>0.45 || isGreen){ isBg=true; }
+        } else {
+          // Classic green only
+          isBg = g>thresh && g>r+10 && g>b+10;
+        }
+        if(!isBg){
+          bgData[i]=r; bgData[i+1]=g; bgData[i+2]=b; bgData[i+3]=255;
+        }
       }
-      // if isGreen, we leave bg pixel as is (background shows)
     }
     ctx.putImageData(bgFrame,0,0);
   }
   requestAnimationFrame(render);
 }
 
-document.getElementById('goBtn').onclick=function(){ this.classList.toggle('live'); this.textContent=this.classList.contains('live')?'END LIVE':'Go LIVE'; toast(this.classList.contains('live')?'🔴 LIVE with green screen':'Ended'); };
+// LIVE backend sync - THIS fixes "noones live" indicator
+async function goLiveBackend(start){
+  const token=localStorage.getItem('token')||localStorage.getItem('nvme_token')||sessionStorage.getItem('token');
+  const headers={'Content-Type':'application/json'}; if(token) headers['Authorization']='Bearer '+token;
+  try{
+    if(start){
+      const res=await fetch('/api/live/start',{method:'POST',headers,body:JSON.stringify({title:'LIVE'})});
+      const data=await res.json().catch(()=>({})); 
+      console.log('live/start',res.status,data);
+      if(res.ok){ document.getElementById('liveBadge').classList.add('on'); document.getElementById('rwText').textContent='🔴 LIVE - visible to other accounts'; toast('You are LIVE - other accounts can see you now'); }
+      else { toast('Go live failed: '+(data.error||res.status)+' - login in app.html first'); }
+    } else {
+      await fetch('/api/live/end',{method:'POST',headers}); 
+      document.getElementById('liveBadge').classList.remove('on'); toast('Live ended');
+    }
+  }catch(e){ console.log(e); toast('Live API error - check app.html login'); }
+}
 
-window.addEventListener('load',()=>{ start(); toggleFx(); });
+document.getElementById('goBtn').onclick=function(){
+  const willLive=!this.classList.contains('live');
+  this.classList.toggle('live',willLive); this.textContent=willLive?'END LIVE':'Go LIVE';
+  goLiveBackend(willLive);
+};
+
+window.addEventListener('load',()=>{ start(); setTimeout(()=>{ if(!fxOpen) toggleFx(); },500); });
 </script>
 </body>
 </html>

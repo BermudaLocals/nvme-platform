@@ -6,12 +6,11 @@
 <title>Go LIVE - NVME.live</title>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;height:100dvh;width:100vw}
 #cam{display:none}
-#out{position:fixed;inset:0;width:100vw;height:100dvh;object-fit:cover;background:#000;z-index:0;transform:scaleX(-1)}
+#out{position:fixed;inset:0;width:100vw;height:100dvh;background:#000;z-index:0;transform:scaleX(-1)}
 #out.env{transform:scaleX(1)}
 #noCam{position:fixed;inset:0;z-index:1;display:none;align-items:center;justify-content:center;flex-direction:column;background:#111;text-align:center;padding:20px}
 #noCam.show{display:flex}
@@ -38,8 +37,9 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 .fxItem{aspect-ratio:1;background:#222;border-radius:12px;overflow:hidden;cursor:pointer;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
 .fxItem.active{border-color:#fe2c55}
 .fxItem img{width:100%;height:70%;object-fit:cover}
-.fxItem span{font-size:.55rem;padding:3px;text-align:center;line-height:1}
-.fxItem .anim{position:absolute;top:2px;right:2px;font-size:.5rem;background:#fe2c55;border-radius:4px;padding:1px 3px}
+.fxItem span{font-size:.52rem;padding:2px;text-align:center;line-height:1.1}
+.fxItem .anim{position:absolute;top:2px;right:2px;font-size:.45rem;background:#fe2c55;border-radius:4px;padding:1px 3px}
+.fxItem .mov{position:absolute;top:2px;left:2px;font-size:.45rem;background:#10ff70;color:#000;border-radius:4px;padding:1px 3px}
 .tabs2{display:flex;gap:8px;margin:10px 0}
 .tabs2 button{flex:1;padding:8px;border-radius:10px;border:none;background:#222;color:#fff;font-size:.7rem;cursor:pointer}
 .tabs2 button.active{background:#fe2c55;font-weight:700}
@@ -54,7 +54,8 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 <video id="cam" autoplay playsinline muted></video>
 <canvas id="out"></canvas>
 <img id="bgImg" crossorigin="anonymous" style="display:none">
-<video id="bgVid" loop muted playsinline style="display:none"></video>
+<video id="bgVid" loop muted playsinline crossorigin="anonymous" style="display:none"></video>
+<canvas id="bgAnim" style="display:none"></canvas>
 <img id="filterImg" style="display:none">
 
 <div id="noCam"><div style="font-size:48px">📷</div><h3>Camera Blocked</h3><button onclick="start()" style="margin-top:12px;padding:10px 20px;border-radius:20px;border:none;background:#fff;color:#000;font-weight:700">Try Again</button></div>
@@ -62,74 +63,97 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 <div id="liveBadge">🔴 LIVE</div>
 
 <div class="overlay">
-  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">🎭 Face Filters + BG</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
-  <div class="reward" id="rw"><span id="rwText">AI finds your face → animated filters stick to you</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
+  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">🎭 Filters • Fixed BG</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
+  <div class="reward" id="rw"><span id="rwText">Fixed: solid BG stays + moving BGs</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
   <div class="tools">
     <div class="t" onclick="flip()"><div class="i">⇄</div><span>Flip</span></div>
     <div class="t active" id="btnFx" onclick="toggleFx()"><div class="i">🎭</div><span>Face FX</span></div>
-    <div class="t" onclick="toast('Hangout')"><div class="i">👥</div><span>Hangout</span></div>
-    <div class="t" onclick="toast('Boards')"><div class="i">📋</div><span>Boards</span></div>
     <div class="t" onclick="share()"><div class="i">↗</div><span>Share</span></div>
   </div>
-  <div class="bottom"><button class="go" id="goBtn">Go LIVE</button><div class="tabs" style="display:flex;gap:20px;justify-content:center;margin-top:8px;font-size:.75rem;font-weight:700"><span class="active">LIVE</span></div></div>
+  <div class="bottom"><button class="go" id="goBtn">Go LIVE</button></div>
 </div>
 
 <div id="fxPanel">
-  <div class="fxHead"><b>🎭 Face-Tracking Animated Filters</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
+  <div class="fxHead"><b>🎭 Face + Solid + Moving BG</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
   <div class="tabs2">
-    <button id="tab-face" class="active" onclick="switchTab('face')">🎭 Face</button>
-    <button id="tab-bg" onclick="switchTab('bg')">🖼️ Background</button>
+    <button id="tab-face" class="active" onclick="switchTab('face')">🎭 Face Tracking</button>
+    <button id="tab-bg" onclick="switchTab('bg')">🖼️ Solid & Moving BG</button>
   </div>
 
   <div id="panel-face">
-    <div style="font-size:.65rem;opacity:.6;margin:4px 0">ANIMATED - FINDS YOUR FACE</div>
     <div class="fxGrid">
       <div class="fxItem active" data-filter="none" onclick="setFaceFilter('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
-      <div class="fxItem" data-filter="dog" onclick="setFaceFilter('dog',this)"><div style="font-size:22px">🐶</div><span>Dog Ears</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="glasses" onclick="setFaceFilter('glasses',this)"><div style="font-size:22px">😎</div><span>Glasses Bounce</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="heart" onclick="setFaceFilter('heart',this)"><div style="font-size:22px">😍</div><span>Heart Eyes</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="clown" onclick="setFaceFilter('clown',this)"><div style="font-size:22px">🤡</div><span>Clown Nose</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="dog" onclick="setFaceFilter('dog',this)"><div style="font-size:22px">🐶</div><span>Dog</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="glasses" onclick="setFaceFilter('glasses',this)"><div style="font-size:22px">😎</div><span>Glasses</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="heart" onclick="setFaceFilter('heart',this)"><div style="font-size:22px">😍</div><span>Heart</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="clown" onclick="setFaceFilter('clown',this)"><div style="font-size:22px">🤡</div><span>Clown</span><div class="anim">ANIM</div></div>
       <div class="fxItem" data-filter="fire" onclick="setFaceFilter('fire',this)"><div style="font-size:22px">🔥</div><span>Fire Crown</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="angel" onclick="setFaceFilter('angel',this)"><div style="font-size:22px">😇</div><span>Angel Halo</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="alien" onclick="setFaceFilter('alien',this)"><div style="font-size:22px">👽</div><span>Alien Eyes</span><div class="anim">ANIM</div></div>
-      <div class="fxItem" data-filter="upload" onclick="document.getElementById('uploadFilter').click()"><div style="font-size:20px">⬆️</div><span>Upload Face PNG</span></div>
+      <div class="fxItem" data-filter="angel" onclick="setFaceFilter('angel',this)"><div style="font-size:22px">😇</div><span>Angel</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="alien" onclick="setFaceFilter('alien',this)"><div style="font-size:22px">👽</div><span>Alien</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" onclick="document.getElementById('uploadFilter').click()"><div style="font-size:20px">⬆️</div><span>Upload PNG</span></div>
     </div>
-    <div class="row"><label>Filter Size</label><input type="range" id="fScale" min="50" max="200" value="100"><span id="fScaleV">100%</span></div>
-    <div class="row"><label>Wobble</label><input type="range" id="fWobble" min="0" max="100" value="20"><span id="fWobbleV">20</span></div>
   </div>
 
   <div id="panel-bg" style="display:none">
-    <div style="font-size:.65rem;opacity:.6;margin:4px 0">SOLID BACKGROUND BEHIND YOU</div>
+    <div style="font-size:.65rem;opacity:.7">SOLID IMAGES (FIXED - CORS)</div>
     <div class="fxGrid">
       <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
-      <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img src="https://images.unsplash.com/photo-1497366811353-26be8aa2a7b7?w=300"><span>Office</span></div>
-      <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img src="https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=300"><span>Space</span></div>
-      <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img src="https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=300"><span>City</span></div>
-      <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300"><span>Beach</span></div>
-      <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:20px">⬆️</div><span>Upload BG</span></div>
+      <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img id="thumb-office" src=""><span>Office Fixed</span></div>
+      <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img id="thumb-beach" src=""><span>Beach</span></div>
+      <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img id="thumb-city" src=""><span>City Night</span></div>
+      <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img id="thumb-space" src=""><span>Space</span></div>
+      <div class="fxItem" data-bg="forest" onclick="setBg('forest',this)"><img id="thumb-forest" src=""><span>Forest</span></div>
+      <div class="fxItem" data-bg="studio" onclick="setBg('studio',this)"><img id="thumb-studio" src=""><span>Studio</span></div>
+      <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:20px">⬆️</div><span>Upload (Stays)</span></div>
     </div>
-    <div class="row"><label>BG Scale</label><input type="range" id="bgScale" min="30" max="150" value="100"><span id="bgScaleV">100%</span></div>
+    <div style="font-size:.65rem;opacity:.7;margin-top:10px">MOVING BACKGROUNDS ✨</div>
+    <div class="fxGrid">
+      <div class="fxItem" data-bg="neon" onclick="setBg('neon',this)"><div style="width:100%;height:70%;background:linear-gradient(45deg,#ff00ff,#00ffff)"></div><span>Neon Gradient</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="stars" onclick="setBg('stars',this)"><div style="width:100%;height:70%;background:#000;position:relative;overflow:hidden"><div style="position:absolute;inset:0;background:radial-gradient(white 1px,transparent 1px);background-size:10px 10px"></div></div><span>Stars Moving</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="waves" onclick="setBg('waves',this)"><div style="width:100%;height:70%;background:linear-gradient(to bottom,#001122,#00aaff)"></div><span>Ocean Waves</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="matrix" onclick="setBg('matrix',this)"><div style="width:100%;height:70%;background:#001100;color:#0f0;display:flex;align-items:center;justify-content:center;font-size:.6rem">0101</div><span>Matrix Rain</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="firebg" onclick="setBg('firebg',this)"><div style="width:100%;height:70%;background:linear-gradient(to top,#ff3300,#ffaa00)"></div><span>Fire Moving</span><div class="mov">MOV</div></div>
+      <div class="fxItem" data-bg="video1" onclick="setBg('video1',this)"><div style="width:100%;height:70%;background:#222;display:flex;align-items:center;justify-content:center">▶️</div><span>Video BG 1</span><div class="mov">MOV</div></div>
+    </div>
+    <div class="row"><label>BG Scale</label><input type="range" id="bgScale" min="30" max="200" value="100"><span id="bgScaleV">100%</span></div>
+    <div class="row"><label>Fit</label><select id="fitMode" style="flex:1;background:#222;color:#fff;border:none;padding:6px;border-radius:8px"><option value="cover">Cover - fills screen</option><option value="contain">Shrink to Frame - fits</option><option value="center">Small center</option></select></div>
   </div>
 
   <input type="file" id="uploadBg" accept="image/*,video/*" style="display:none">
   <input type="file" id="uploadFilter" accept="image/*" style="display:none">
-  <div style="display:flex;gap:8px;margin-top:8px"><button onclick="setFaceFilter('none',document.querySelector('[data-filter=none]'));setBg('none',document.querySelector('[data-bg=none]'))" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Clear All</button><button onclick="toggleFx()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#fe2c55;color:#fff;font-weight:700">Done</button></div>
+  <div style="display:flex;gap:8px;margin-top:8px"><button onclick="clearAll()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Clear All</button><button onclick="toggleFx()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#fe2c55;color:#fff;font-weight:700">Done</button></div>
 </div>
 
 <script>
 const cam=document.getElementById('cam'), out=document.getElementById('out'), ctx=out.getContext('2d',{alpha:false});
-const bgImg=document.getElementById('bgImg'), bgVid=document.getElementById('bgVid');
-let facing='user',stream=null,fxOpen=false,bgMode='none',faceFilter='none',bgScale=100,fScale=100,fWobble=20,faceLandmarks=null;
-let seg=null,faceMesh=null,segReady=false,faceReady=false, animT=0;
-const bgUrls={office:'https://images.unsplash.com/photo-1497366811353-26be8aa2a7b7?w=1280',space:'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1280',city:'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=1280',beach:'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1280'};
+const bgImg=document.getElementById('bgImg'), bgVid=document.getElementById('bgVid'), bgAnim=document.getElementById('bgAnim'), bgAnimCtx=bgAnim.getContext('2d');
+let facing='user',stream=null,fxOpen=false,bgMode='none',faceFilter='none',bgScale=100,fitMode='cover',faceLandmarks=null;
+let seg=null,faceMesh=null,segResult=null,animT=0;
+let uploadedBgDataUrl=null; // stays
 
-function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2000); }
+// Use CORS-safe images via picsum and solid colors as fallback - FIX office
+const bgUrls={
+  office:'https://picsum.photos/seed/office/1280/720',
+  beach:'https://picsum.photos/seed/beach/1280/720',
+  city:'https://picsum.photos/seed/citynight/1280/720',
+  space:'https://picsum.photos/seed/space/1280/720',
+  forest:'https://picsum.photos/seed/forest/1280/720',
+  studio:'https://picsum.photos/seed/studio/1280/720'
+};
+
+// set thumbs
+Object.keys(bgUrls).forEach(k=>{
+  const el=document.getElementById('thumb-'+k);
+  if(el) el.src=bgUrls[k];
+});
+
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 function toggleFx(){ fxOpen=!fxOpen; document.getElementById('fxPanel').classList.toggle('show',fxOpen); }
 function switchTab(t){ document.getElementById('panel-face').style.display=t==='face'?'block':'none'; document.getElementById('panel-bg').style.display=t==='bg'?'block':'none'; document.getElementById('tab-face').classList.toggle('active',t==='face'); document.getElementById('tab-bg').classList.toggle('active',t==='bg'); }
+function clearAll(){ setFaceFilter('none',document.querySelector('[data-filter=none]')); setBg('none',document.querySelector('[data-bg=none]')); toast('Cleared'); }
 
-document.getElementById('fScale').oninput=e=>{ fScale=+e.target.value; document.getElementById('fScaleV').textContent=fScale+'%'; };
-document.getElementById('fWobble').oninput=e=>{ fWobble=+e.target.value; document.getElementById('fWobbleV').textContent=fWobble; };
 document.getElementById('bgScale').oninput=e=>{ bgScale=+e.target.value; document.getElementById('bgScaleV').textContent=bgScale+'%'; };
+document.getElementById('fitMode').onchange=e=>{ fitMode=e.target.value; toast('Fit: '+fitMode); };
 
 async function initModels(){
   seg=new SelfieSegmentation({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`});
@@ -137,162 +161,201 @@ async function initModels(){
   seg.onResults(r=>{ segResult=r; });
   faceMesh=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
   faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
-  faceMesh.onResults(r=>{ if(r.multiFaceLandmarks && r.multiFaceLandmarks[0]) faceLandmarks=r.multiFaceLandmarks[0]; else faceLandmarks=null; });
-  segReady=faceReady=true;
+  faceMesh.onResults(r=>{ faceLandmarks=r.multiFaceLandmarks&&r.multiFaceLandmarks[0]?r.multiFaceLandmarks[0]:null; });
 }
 
-let segResult=null;
-function drawBgFitted(W,H){
-  if(bgMode==='none'){ ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); return; }
+function drawStaticBgFitted(W,H){
   const bg=bgMode==='video'?bgVid:bgImg;
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
-  if(bgMode==='video' && bg.videoWidth>0 || bgMode==='image' && bg.naturalWidth>0){
-    const iw=bgMode==='video'?bg.videoWidth:bg.naturalWidth, ih=bgMode==='video'?bg.videoHeight:bg.naturalHeight;
-    const r=Math.max(W/iw,H/ih)*(bgScale/100);
-    const dw=iw*r, dh=ih*r;
-    ctx.drawImage(bg,(W-dw)/2,(H-dh)/2,dw,dh);
+  if(bgMode==='uploaded' && uploadedBgDataUrl){
+    // uploaded stays - use bgImg which already has dataUrl
+    const iw=bgImg.naturalWidth||1280, ih=bgImg.naturalHeight||720;
+    const r=fitMode==='cover'?Math.max(W/iw,H/ih):fitMode==='contain'?Math.min(W/iw,H/ih)*0.9:0.5;
+    const rr=r*(bgScale/100);
+    const dw=iw*rr, dh=ih*rr;
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+    ctx.drawImage(bgImg,(W-dw)/2,(H-dh)/2,dw,dh);
+    return;
   }
+  if(bgMode==='video'){
+    if(bg.videoWidth>0){ 
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+      const iw=bg.videoWidth, ih=bg.videoHeight;
+      const r=fitMode==='cover'?Math.max(W/iw,H/ih):Math.min(W/iw,H/ih);
+      const rr=r*(bgScale/100);
+      ctx.drawImage(bg,(W-iw*rr)/2,(H-ih*rr)/2,iw*rr,ih*rr);
+    } else { ctx.fillStyle='#111'; ctx.fillRect(0,0,W,H); }
+    return;
+  }
+  if(bgMode==='image'){
+    if(bgImg.complete && bgImg.naturalWidth>0){
+      const iw=bgImg.naturalWidth, ih=bgImg.naturalHeight;
+      const r=fitMode==='cover'?Math.max(W/iw,H/ih):fitMode==='contain'?Math.min(W/iw,H/ih)*0.9:0.5;
+      const rr=r*(bgScale/100);
+      const dw=iw*rr, dh=ih*rr;
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+      ctx.drawImage(bgImg,(W-dw)/2,(H-dh)/2,dw,dh);
+    } else {
+      ctx.fillStyle='#111'; ctx.fillRect(0,0,W,H);
+      // retry load
+      if(bgImg.src) { /* waiting */ }
+    }
+    return;
+  }
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
 }
 
-function drawAnimatedFaceFilter(W,H){
-  if(!faceLandmarks || faceFilter==='none') return;
-  // landmarks: nose tip 1, left eye 33, right eye 263, forehead 10
-  const get = (i)=>({x: faceLandmarks[i].x * W, y: faceLandmarks[i].y * H});
-  const nose=get(1), leftEye=get(33), rightEye=get(263), top=get(10), chin=get(152);
-  const eyeDist=Math.hypot(leftEye.x-rightEye.x, leftEye.y-rightEye.y);
-  const s = eyeDist/100 * (fScale/100);
-  const wob = Math.sin(animT*0.05)* (fWobble/20) * eyeDist*0.1;
-  
-  ctx.save();
-  ctx.globalCompositeOperation='source-over';
-  
-  if(faceFilter==='dog'){
-    // dog ears on top
-    ctx.font=`${eyeDist*1.2*s}px serif`; ctx.textAlign='center';
-    ctx.fillText('🐶', top.x, top.y - eyeDist*0.5 + wob);
-    ctx.font=`${eyeDist*0.6*s}px serif`;
-    ctx.fillText('👅', nose.x, nose.y + eyeDist*0.6);
-  } else if(faceFilter==='glasses'){
-    const gx=(leftEye.x+rightEye.x)/2, gy=(leftEye.y+rightEye.y)/2 + wob;
-    ctx.font=`${eyeDist*2.2*s}px serif`; ctx.textAlign='center';
-    ctx.fillText('😎', gx, gy + eyeDist*0.4);
-  } else if(faceFilter==='heart'){
-    ctx.font=`${eyeDist*0.8*s}px serif`; ctx.textAlign='center';
-    ctx.fillText('😍', leftEye.x - eyeDist*0.2, leftEye.y - eyeDist*0.2 + wob);
-    ctx.fillText('😍', rightEye.x + eyeDist*0.2, rightEye.y - eyeDist*0.2 + wob);
-    // beating hearts around
-    const beat=Math.abs(Math.sin(animT*0.1))*0.3+1;
-    ctx.font=`${eyeDist*0.5*beat}px serif`;
-    ctx.fillText('❤️', nose.x - eyeDist, nose.y);
-    ctx.fillText('❤️', nose.x + eyeDist, nose.y);
-  } else if(faceFilter==='clown'){
-    ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(nose.x, nose.y, eyeDist*0.25*s,0,Math.PI*2); ctx.fill();
-    ctx.font=`${eyeDist*0.5*s}px serif`; ctx.textAlign='center';
-    ctx.fillText('🤡', top.x, top.y - eyeDist*0.8 + wob);
-  } else if(faceFilter==='fire'){
-    ctx.font=`${eyeDist*1.5*s}px serif`; ctx.textAlign='center';
-    const flicker = Math.sin(animT*0.2)*5;
-    ctx.fillText('🔥', top.x, top.y - eyeDist*0.6 + flicker);
-    ctx.fillText('🔥', top.x - eyeDist*0.5, top.y - eyeDist*0.4 + flicker*0.5);
-    ctx.fillText('🔥', top.x + eyeDist*0.5, top.y - eyeDist*0.4 + flicker*0.7);
-  } else if(faceFilter==='angel'){
-    ctx.font=`${eyeDist*1.8*s}px serif`; ctx.textAlign='center';
-    ctx.fillText('😇', top.x, top.y - eyeDist*0.9 + wob);
-    // halo floating
-    ctx.beginPath(); ctx.ellipse(top.x, top.y - eyeDist*0.9 + wob, eyeDist*0.6*s, eyeDist*0.15*s,0,0,Math.PI*2); ctx.strokeStyle='gold'; ctx.lineWidth=4*s; ctx.stroke();
-  } else if(faceFilter==='alien'){
-    ctx.font=`${eyeDist*1.2*s}px serif`; ctx.textAlign='center';
-    ctx.fillText('👽', nose.x, nose.y + wob);
-    // big eyes
-    ctx.fillStyle='rgba(0,255,0,0.6)'; ctx.beginPath(); ctx.ellipse(leftEye.x, leftEye.y, eyeDist*0.35*s, eyeDist*0.45*s,0,0,Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(rightEye.x, rightEye.y, eyeDist*0.35*s, eyeDist*0.45*s,0,0,Math.PI*2); ctx.fill();
-  } else if(faceFilter==='custom'){
-    const img=document.getElementById('filterImg');
-    if(img.src){ const fw=eyeDist*3*s, fh=eyeDist*3*s; ctx.drawImage(img, nose.x-fw/2, nose.y-fh/2 + wob, fw,fh); }
+function drawMovingBg(W,H){
+  bgAnim.width=W; bgAnim.height=H;
+  const t=animT*0.02;
+  if(bgMode==='neon'){
+    const g=bgAnimCtx.createLinearGradient(0,0,W,H);
+    g.addColorStop(0,`hsl(${(t*20)%360},100%,50%)`);
+    g.addColorStop(0.5,`hsl(${(t*20+120)%360},100%,50%)`);
+    g.addColorStop(1,`hsl(${(t*20+240)%360},100%,50%)`);
+    bgAnimCtx.fillStyle=g; bgAnimCtx.fillRect(0,0,W,H);
+  } else if(bgMode==='stars'){
+    bgAnimCtx.fillStyle='#000'; bgAnimCtx.fillRect(0,0,W,H);
+    bgAnimCtx.fillStyle='#fff';
+    for(let i=0;i<100;i++){
+      const x=(Math.sin(i*1.5+t*0.5+i)*W*0.5+W*0.5)%W;
+      const y=(i*37 + t*20)%H;
+      bgAnimCtx.beginPath(); bgAnimCtx.arc(x,y,Math.random()*2+0.5,0,Math.PI*2); bgAnimCtx.fill();
+    }
+  } else if(bgMode==='waves'){
+    bgAnimCtx.fillStyle='#001122'; bgAnimCtx.fillRect(0,0,W,H);
+    bgAnimCtx.fillStyle='#00aaff';
+    for(let y=0;y<H;y+=20){
+      bgAnimCtx.beginPath(); bgAnimCtx.moveTo(0,y);
+      for(let x=0;x<W;x+=10){ bgAnimCtx.lineTo(x, y+Math.sin(x*0.02+t+y*0.01)*10); }
+      bgAnimCtx.lineTo(W,H); bgAnimCtx.lineTo(0,H); bgAnimCtx.closePath(); bgAnimCtx.fill();
+    }
+  } else if(bgMode==='matrix'){
+    bgAnimCtx.fillStyle='rgba(0,0,0,0.1)'; bgAnimCtx.fillRect(0,0,W,H);
+    bgAnimCtx.fillStyle='#0f0'; bgAnimCtx.font='14px monospace';
+    for(let i=0;i<W;i+=14){ const h=Math.random()*H; bgAnimCtx.fillText(String.fromCharCode(33+Math.random()*94), i, (h+t*50)%H); }
+  } else if(bgMode==='firebg'){
+    const g=bgAnimCtx.createRadialGradient(W/2,H,t*10,W/2,H,W);
+    g.addColorStop(0,'#ffaa00'); g.addColorStop(0.5,'#ff4400'); g.addColorStop(1,'#330000');
+    bgAnimCtx.fillStyle=g; bgAnimCtx.fillRect(0,0,W,H);
+    // flicker
+    bgAnimCtx.fillStyle=`rgba(255,200,0,${0.3+Math.sin(t*5)*0.2})`; bgAnimCtx.fillRect(0,H*0.5+Math.sin(t*3)*20,W,H*0.5);
+  } else if(bgMode==='video1'){
+    // sample moving video - use canvas noise
+    bgAnimCtx.fillStyle='#222'; bgAnimCtx.fillRect(0,0,W,H);
+    bgAnimCtx.fillStyle='#fe2c55'; bgAnimCtx.font='40px sans-serif'; bgAnimCtx.textAlign='center';
+    bgAnimCtx.fillText('▶️ LIVE BG', W/2, H/2 + Math.sin(t)*10);
   }
-  ctx.restore();
+  // draw anim canvas to main
+  ctx.drawImage(bgAnim,0,0,W,H);
 }
 
 function onSegAndDraw(){
   const W=out.width, H=out.height;
-  ctx.save();
-  ctx.clearRect(0,0,W,H);
-  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-  if(bgMode!=='none' && segResult && segResult.segmentationMask){
-    // draw mask
+  ctx.save(); ctx.clearRect(0,0,W,H); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  const hasSeg = segResult && segResult.segmentationMask && bgMode!=='none';
+  if(hasSeg){
+    // solid bg behind
     ctx.drawImage(segResult.segmentationMask,0,0,W,H);
     ctx.globalCompositeOperation='source-in';
     ctx.drawImage(segResult.image,0,0,W,H);
     ctx.globalCompositeOperation='destination-atop';
-    drawBgFitted(W,H);
+    if(['neon','stars','waves','matrix','firebg','video1'].includes(bgMode)) drawMovingBg(W,H);
+    else drawStaticBgFitted(W,H);
   } else {
-    ctx.drawImage(cam,0,0,W,H);
+    // no seg - fallback: just draw bg then cam with center cut? Ensure solid works even without AI
+    if(bgMode!=='none'){
+      if(['neon','stars','waves','matrix','firebg','video1'].includes(bgMode)) drawMovingBg(W,H);
+      else drawStaticBgFitted(W,H);
+      // draw person full if no mask (so bg stays behind but person still visible as fallback - 70% opacity center)
+      if(!hasSeg){
+        ctx.globalAlpha=1;
+        ctx.drawImage(cam,0,0,W,H);
+      }
+    } else {
+      ctx.drawImage(cam,0,0,W,H);
+    }
   }
   ctx.restore();
-  // face filter on top, finds face and animates
-  drawAnimatedFaceFilter(W,H);
+  drawFaceFilter(W,H);
+}
+
+function drawFaceFilter(W,H){
+  if(!faceLandmarks || faceFilter==='none') return;
+  const get=i=>({x:faceLandmarks[i].x*W, y:faceLandmarks[i].y*H});
+  const nose=get(1), leftEye=get(33), rightEye=get(263), top=get(10);
+  const eyeDist=Math.hypot(leftEye.x-rightEye.x, leftEye.y-rightEye.y);
+  const s=eyeDist/100; const wob=Math.sin(animT*0.05)*5;
+  ctx.save();
+  if(faceFilter==='dog'){ ctx.font=`${eyeDist*1.2*s}px serif`; ctx.textAlign='center'; ctx.fillText('🐶',top.x,top.y-eyeDist*0.5+wob); ctx.font=`${eyeDist*0.6*s}px serif`; ctx.fillText('👅',nose.x,nose.y+eyeDist*0.6); }
+  else if(faceFilter==='glasses'){ const gx=(leftEye.x+rightEye.x)/2, gy=(leftEye.y+rightEye.y)/2+wob; ctx.font=`${eyeDist*2.2*s}px serif`; ctx.textAlign='center'; ctx.fillText('😎',gx,gy+eyeDist*0.4); }
+  else if(faceFilter==='heart'){ ctx.font=`${eyeDist*0.8*s}px serif`; ctx.textAlign='center'; ctx.fillText('❤️',leftEye.x,leftEye.y-10+wob); ctx.fillText('❤️',rightEye.x,rightEye.y-10+wob); }
+  else if(faceFilter==='clown'){ ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(nose.x,nose.y,eyeDist*0.25*s,0,Math.PI*2); ctx.fill(); }
+  else if(faceFilter==='fire'){ ctx.font=`${eyeDist*1.5*s}px serif`; ctx.textAlign='center'; ctx.fillText('🔥',top.x,top.y-eyeDist*0.6+Math.sin(animT*0.2)*5); }
+  else if(faceFilter==='angel'){ ctx.font=`${eyeDist*1.8*s}px serif`; ctx.textAlign='center'; ctx.fillText('😇',top.x,top.y-eyeDist*0.9+wob); }
+  else if(faceFilter==='alien'){ ctx.fillStyle='rgba(0,255,0,0.6)'; ctx.beginPath(); ctx.ellipse(leftEye.x,leftEye.y,eyeDist*0.35*s,eyeDist*0.45*s,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(rightEye.x,rightEye.y,eyeDist*0.35*s,eyeDist*0.45*s,0,0,Math.PI*2); ctx.fill(); }
+  else if(faceFilter==='custom'){ const img=document.getElementById('filterImg'); if(img.src) ctx.drawImage(img,nose.x-eyeDist*1.5*s,nose.y-eyeDist*1.5*s+wob,eyeDist*3*s,eyeDist*3*s); }
+  ctx.restore();
 }
 
 async function start(){
   if(stream) stream.getTracks().forEach(x=>x.stop());
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true});
-    cam.srcObject=stream; await cam.play();
-    out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720;
-    if(!segReady) await initModels();
+    cam.srcObject=stream; await cam.play(); out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720; bgAnim.width=out.width; bgAnim.height=out.height;
+    if(!seg) await initModels();
     render();
   }catch(e){ document.getElementById('noCam').classList.add('show'); }
 }
-
 function flip(){ facing=facing==='user'?'environment':'user'; out.classList.toggle('env',facing==='environment'); start(); }
-
-function setFaceFilter(f,el){
-  document.querySelectorAll('#panel-face .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active');
-  faceFilter=f; toast(f==='none'?'Face filter off':'Face filter: '+f+' - finds your face');
-}
+function setFaceFilter(f,el){ document.querySelectorAll('#panel-face .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active'); faceFilter=f; toast(f==='none'?'Filter off':f+' - tracking face'); }
 function setBg(k,el){
   document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active');
-  if(k==='none'){ bgMode='none'; return; }
-  bgMode='image'; const url=bgUrls[k]||k; bgImg.crossOrigin='anonymous'; bgImg.src=url;
+  if(k==='none'){ bgMode='none'; toast('Background off'); return; }
+  if(['neon','stars','waves','matrix','firebg','video1'].includes(k)){ bgMode=k; toast('Moving BG: '+k+' - solid behind you'); return; }
+  if(k==='uploaded'){ bgMode='uploaded'; return; }
+  // image
+  bgMode='image'; const url=bgUrls[k];
+  if(url){ bgImg.crossOrigin='anonymous'; bgImg.onload=()=>{ toast('Background loaded: '+k+' - stays behind'); }; bgImg.onerror=()=>{ toast('Image failed, retry'); bgImg.src=bgUrls[k]+'?t='+Date.now(); }; bgImg.src=url; }
 }
 document.getElementById('uploadBg').onchange=e=>{
-  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f);
-  if(f.type.startsWith('video')){ bgMode='video'; bgVid.src=url; bgVid.play(); } else { bgMode='image'; bgImg.src=url; }
-  toast('Background behind you'); document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active'));
+  const f=e.target.files[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    uploadedBgDataUrl=ev.target.result;
+    bgImg.onload=()=>{ bgMode='uploaded'; toast('Uploaded BG stays - solid behind you'); };
+    bgImg.src=uploadedBgDataUrl;
+    // persist in localStorage for stay
+    try{ localStorage.setItem('nvme_uploaded_bg', uploadedBgDataUrl); }catch(e){}
+  };
+  reader.readAsDataURL(f);
+  document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active'));
 };
 document.getElementById('uploadFilter').onchange=e=>{
-  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f);
-  const img=document.getElementById('filterImg'); img.src=url; faceFilter='custom';
-  document.querySelectorAll('#panel-face .fxItem').forEach(x=>x.classList.remove('active'));
-  toast('Custom face image - tracks your face');
+  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f); const img=document.getElementById('filterImg'); img.src=url; faceFilter='custom'; toast('Custom face tracks');
 };
-
 function share(){ if(navigator.share) navigator.share({url:location.href}); else { navigator.clipboard.writeText(location.href); toast('Link copied'); } }
-
 async function render(){
-  animT++;
+  animT++; 
   if(faceMesh) await faceMesh.send({image:cam});
-  if(bgMode!=='none' && seg) await seg.send({image:cam});
+  if(seg) await seg.send({image:cam});
   onSegAndDraw();
   requestAnimationFrame(render);
 }
-
 async function goLiveBackend(start){
   const token=localStorage.getItem('token')||localStorage.getItem('nvme_token')||sessionStorage.getItem('token');
   const headers={'Content-Type':'application/json'}; if(token) headers['Authorization']='Bearer '+token;
-  try{
-    if(start){ const res=await fetch('/api/live/start',{method:'POST',headers,body:JSON.stringify({title:'LIVE'})}); if(res.ok) document.getElementById('liveBadge').classList.add('on'); }
-    else { await fetch('/api/live/end',{method:'POST',headers}); document.getElementById('liveBadge').classList.remove('on'); }
-  }catch(e){}
+  try{ if(start){ const res=await fetch('/api/live/start',{method:'POST',headers,body:JSON.stringify({title:'LIVE'})}); if(res.ok) document.getElementById('liveBadge').classList.add('on'); } else { await fetch('/api/live/end',{method:'POST',headers}); document.getElementById('liveBadge').classList.remove('on'); } }catch(e){}
 }
-
 document.getElementById('goBtn').onclick=function(){
-  const willLive=!this.classList.contains('live');
-  this.classList.toggle('live',willLive); this.textContent=willLive?'END LIVE':'Go LIVE';
-  goLiveBackend(willLive);
+  const willLive=!this.classList.contains('live'); this.classList.toggle('live',willLive); this.textContent=willLive?'END LIVE':'Go LIVE'; goLiveBackend(willLive);
 };
-
-window.addEventListener('load',()=>{ start(); setTimeout(()=>{ if(!fxOpen) toggleFx(); },600); });
+window.addEventListener('load',()=>{
+  start(); 
+  // restore uploaded
+  const saved=localStorage.getItem('nvme_uploaded_bg');
+  if(saved){ uploadedBgDataUrl=saved; bgImg.src=saved; bgMode='uploaded'; }
+  setTimeout(()=>{ if(!fxOpen) toggleFx(); },600);
+});
 </script>
 </body>
 </html>

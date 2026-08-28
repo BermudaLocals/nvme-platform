@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Go LIVE - NVME.live</title>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;height:100dvh;width:100vw}
@@ -26,30 +28,24 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 .t span{font-size:.55rem}
 .bottom{margin-top:auto;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.2))}
 .go{width:100%;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
-.go.live{background:#10ff70;color:#000;box-shadow:0 0 12px #10ff70}
-.mini{display:flex;gap:10px;justify-content:center;font-size:.6rem;opacity:.7;margin-top:8px;flex-wrap:wrap}
-.mini span{cursor:pointer;padding:2px 6px;border-radius:8px}
-.mini span.active{background:rgba(255,255,255,.2);opacity:1}
-.tabs{display:flex;gap:20px;justify-content:center;margin-top:8px;font-size:.75rem;font-weight:700}
-.tabs span{cursor:pointer;opacity:.5}
-.tabs span.active{opacity:1}
+.go.live{background:#10ff70;color:#000}
 #toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.9);padding:14px 22px;border-radius:12px;z-index:100;display:none;font-size:.9rem;max-width:85%;text-align:center}
 #toast.show{display:block}
-#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:20;background:#151515;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:78dvh;overflow-y:auto}
+#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:20;background:#151515;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:85dvh;overflow-y:auto}
 #fxPanel.show{transform:translateY(0)}
 .fxHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.fxGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.fxItem{aspect-ratio:1;background:#222;border-radius:12px;overflow:hidden;cursor:pointer;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.fxGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.fxItem{aspect-ratio:1;background:#222;border-radius:12px;overflow:hidden;cursor:pointer;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
 .fxItem.active{border-color:#fe2c55}
-.fxItem img{width:100%;height:75%;object-fit:cover}
-.fxItem span{font-size:.6rem;padding:3px}
-.row{display:flex;align-items:center;gap:8px;margin:10px 0}
-.row label{font-size:.7rem;width:90px;opacity:.8}
-.row input[type=range]{flex:1}
-.row span{font-size:.7rem;width:28px;text-align:right}
-.fitBtns{display:flex;gap:6px;margin:8px 0}
-.fitBtns button{flex:1;padding:6px;border-radius:8px;border:none;background:#222;color:#fff;font-size:.65rem;cursor:pointer}
-.fitBtns button.active{background:#fe2c55}
+.fxItem img{width:100%;height:70%;object-fit:cover}
+.fxItem span{font-size:.55rem;padding:3px;text-align:center;line-height:1}
+.fxItem .anim{position:absolute;top:2px;right:2px;font-size:.5rem;background:#fe2c55;border-radius:4px;padding:1px 3px}
+.tabs2{display:flex;gap:8px;margin:10px 0}
+.tabs2 button{flex:1;padding:8px;border-radius:10px;border:none;background:#222;color:#fff;font-size:.7rem;cursor:pointer}
+.tabs2 button.active{background:#fe2c55;font-weight:700}
+.row{display:flex;align-items:center;gap:8px;margin:8px 0}
+.row label{font-size:.65rem;width:80px;opacity:.8}
+.row input{flex:1}
 #liveBadge{position:fixed;top:70px;left:12px;z-index:10;background:#fe2c55;padding:6px 12px;border-radius:20px;font-size:.7rem;font-weight:700;display:none}
 #liveBadge.on{display:block}
 </style>
@@ -59,194 +55,226 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 <canvas id="out"></canvas>
 <img id="bgImg" crossorigin="anonymous" style="display:none">
 <video id="bgVid" loop muted playsinline style="display:none"></video>
+<img id="filterImg" style="display:none">
 
 <div id="noCam"><div style="font-size:48px">📷</div><h3>Camera Blocked</h3><button onclick="start()" style="margin-top:12px;padding:10px 20px;border-radius:20px;border:none;background:#fff;color:#000;font-weight:700">Try Again</button></div>
 <div id="toast"></div>
 <div id="liveBadge">🔴 LIVE</div>
 
 <div class="overlay">
-  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">🎨 AI BG • HD</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
-  <div class="reward" id="rw"><span id="rwText">HD camera + background shrinks to frame</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
+  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">🎭 Face Filters + BG</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
+  <div class="reward" id="rw"><span id="rwText">AI finds your face → animated filters stick to you</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
   <div class="tools">
     <div class="t" onclick="flip()"><div class="i">⇄</div><span>Flip</span></div>
-    <div class="t active" id="btnFx" onclick="toggleFx()"><div class="i">🎨</div><span>Effects</span></div>
-    <div class="t" onclick="toggleBeauty()"><div class="i">✨</div><span>Beautify</span></div>
-    <div class="t"><div class="i">⚙</div><span>Settings</span></div>
-    <div class="t"><div class="i">👥</div><span>Hangout</span></div>
-    <div class="t"><div class="i">📋</div><span>Boards</span></div>
-    <div class="t"><div class="i">💬</div><span>Service+</span></div>
-    <div class="t"><div class="i">❤</div><span>Fan Club</span></div>
-    <div class="t"><div class="i">👁</div><span>Interact</span></div>
+    <div class="t active" id="btnFx" onclick="toggleFx()"><div class="i">🎭</div><span>Face FX</span></div>
+    <div class="t" onclick="toast('Hangout')"><div class="i">👥</div><span>Hangout</span></div>
+    <div class="t" onclick="toast('Boards')"><div class="i">📋</div><span>Boards</span></div>
     <div class="t" onclick="share()"><div class="i">↗</div><span>Share</span></div>
   </div>
-  <div class="bottom"><button class="go" id="goBtn">Go LIVE</button><div class="mini"><span class="active">📷 HD Device camera</span></div><div class="tabs"><span class="active">LIVE</span><span onclick="location='/app.html'">POST</span><span onclick="location='/app.html'">CREATE</span></div></div>
+  <div class="bottom"><button class="go" id="goBtn">Go LIVE</button><div class="tabs" style="display:flex;gap:20px;justify-content:center;margin-top:8px;font-size:.75rem;font-weight:700"><span class="active">LIVE</span></div></div>
 </div>
 
 <div id="fxPanel">
-  <div class="fxHead"><b>🎨 Background + HD Camera</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
-  
-  <div style="font-size:.7rem;opacity:.7;margin-bottom:6px">BACKGROUND - SOLID BEHIND YOU</div>
-  <div class="fxGrid" id="bgGrid">
-    <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:24px">🚫</div><span>None</span></div>
-    <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img src="https://images.unsplash.com/photo-1497366811353-26be8aa2a7b7?w=300"><span>Office</span></div>
-    <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img src="https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=300"><span>Space</span></div>
-    <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img src="https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=300"><span>City</span></div>
-    <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300"><span>Beach</span></div>
-    <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:22px">⬆️</div><span>Upload Own</span></div>
+  <div class="fxHead"><b>🎭 Face-Tracking Animated Filters</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
+  <div class="tabs2">
+    <button id="tab-face" class="active" onclick="switchTab('face')">🎭 Face</button>
+    <button id="tab-bg" onclick="switchTab('bg')">🖼️ Background</button>
   </div>
 
-  <div style="font-size:.7rem;opacity:.7;margin-top:12px">SHRINK TO FRAME</div>
-  <div class="fitBtns">
-    <button id="fit-cover" class="active" onclick="setFit('cover')">Fill</button>
-    <button id="fit-contain" onclick="setFit('contain')">Shrink to Frame</button>
-    <button id="fit-center" onclick="setFit('center')">Center Small</button>
+  <div id="panel-face">
+    <div style="font-size:.65rem;opacity:.6;margin:4px 0">ANIMATED - FINDS YOUR FACE</div>
+    <div class="fxGrid">
+      <div class="fxItem active" data-filter="none" onclick="setFaceFilter('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
+      <div class="fxItem" data-filter="dog" onclick="setFaceFilter('dog',this)"><div style="font-size:22px">🐶</div><span>Dog Ears</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="glasses" onclick="setFaceFilter('glasses',this)"><div style="font-size:22px">😎</div><span>Glasses Bounce</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="heart" onclick="setFaceFilter('heart',this)"><div style="font-size:22px">😍</div><span>Heart Eyes</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="clown" onclick="setFaceFilter('clown',this)"><div style="font-size:22px">🤡</div><span>Clown Nose</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="fire" onclick="setFaceFilter('fire',this)"><div style="font-size:22px">🔥</div><span>Fire Crown</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="angel" onclick="setFaceFilter('angel',this)"><div style="font-size:22px">😇</div><span>Angel Halo</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="alien" onclick="setFaceFilter('alien',this)"><div style="font-size:22px">👽</div><span>Alien Eyes</span><div class="anim">ANIM</div></div>
+      <div class="fxItem" data-filter="upload" onclick="document.getElementById('uploadFilter').click()"><div style="font-size:20px">⬆️</div><span>Upload Face PNG</span></div>
+    </div>
+    <div class="row"><label>Filter Size</label><input type="range" id="fScale" min="50" max="200" value="100"><span id="fScaleV">100%</span></div>
+    <div class="row"><label>Wobble</label><input type="range" id="fWobble" min="0" max="100" value="20"><span id="fWobbleV">20</span></div>
   </div>
-  <div class="row"><label>BG Scale</label><input type="range" id="bgScale" min="30" max="150" value="100"><span id="bgScaleVal">100%</span></div>
-  <div class="row"><label>BG Position</label><input type="range" id="bgPos" min="0" max="100" value="50"><span id="bgPosVal">50%</span></div>
 
-  <div style="font-size:.7rem;opacity:.7;margin-top:12px">CAMERA CLEAN</div>
-  <div class="row"><label>Sharpness</label><input type="range" id="sharp" min="0" max="100" value="15"><span id="sharpVal">15</span></div>
-  <div class="row"><label>Bright</label><input type="range" id="bright" min="80" max="130" value="108"><span id="brightVal">108</span></div>
-  <div class="row"><label>Beautify</label><input type="range" id="beauty" min="0" max="100" value="0"><span id="beautyVal">0</span></div>
+  <div id="panel-bg" style="display:none">
+    <div style="font-size:.65rem;opacity:.6;margin:4px 0">SOLID BACKGROUND BEHIND YOU</div>
+    <div class="fxGrid">
+      <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
+      <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img src="https://images.unsplash.com/photo-1497366811353-26be8aa2a7b7?w=300"><span>Office</span></div>
+      <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img src="https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=300"><span>Space</span></div>
+      <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img src="https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=300"><span>City</span></div>
+      <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300"><span>Beach</span></div>
+      <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:20px">⬆️</div><span>Upload BG</span></div>
+    </div>
+    <div class="row"><label>BG Scale</label><input type="range" id="bgScale" min="30" max="150" value="100"><span id="bgScaleV">100%</span></div>
+  </div>
 
-  <div style="display:flex;gap:8px;margin-top:10px"><button onclick="setBg('none',document.querySelector('[data-bg=none]'))" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Clear</button><button onclick="toggleFx()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#fe2c55;color:#fff;font-weight:700">Done HD</button></div>
   <input type="file" id="uploadBg" accept="image/*,video/*" style="display:none">
+  <input type="file" id="uploadFilter" accept="image/*" style="display:none">
+  <div style="display:flex;gap:8px;margin-top:8px"><button onclick="setFaceFilter('none',document.querySelector('[data-filter=none]'));setBg('none',document.querySelector('[data-bg=none]'))" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Clear All</button><button onclick="toggleFx()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#fe2c55;color:#fff;font-weight:700">Done</button></div>
 </div>
 
 <script>
 const cam=document.getElementById('cam'), out=document.getElementById('out'), ctx=out.getContext('2d',{alpha:false});
-const bgImg=document.getElementById('bgImg'), bgVid=document.getElementById('bgVid'), noCam=document.getElementById('noCam');
-let facing='user',stream=null,fxOpen=false,bgMode='none',fitMode='cover',bgScale=100,bgPos=50,sharp=15,bright=108,beauty=0;
-let segmentation=null,isSegReady=false;
+const bgImg=document.getElementById('bgImg'), bgVid=document.getElementById('bgVid');
+let facing='user',stream=null,fxOpen=false,bgMode='none',faceFilter='none',bgScale=100,fScale=100,fWobble=20,faceLandmarks=null;
+let seg=null,faceMesh=null,segReady=false,faceReady=false, animT=0;
 const bgUrls={office:'https://images.unsplash.com/photo-1497366811353-26be8aa2a7b7?w=1280',space:'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1280',city:'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=1280',beach:'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1280'};
 
-function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2000); }
 function toggleFx(){ fxOpen=!fxOpen; document.getElementById('fxPanel').classList.toggle('show',fxOpen); }
-function toggleBeauty(){ document.getElementById('beauty').value= beauty>0?0:40; beauty=parseInt(document.getElementById('beauty').value); document.getElementById('beautyVal').textContent=beauty; toast(beauty>0?'Beautify on':'Beautify off'); }
-function setFit(mode){ fitMode=mode; document.querySelectorAll('.fitBtns button').forEach(b=>b.classList.remove('active')); document.getElementById('fit-'+mode).classList.add('active'); toast('BG: '+mode); }
-document.getElementById('bgScale').oninput=e=>{ bgScale=+e.target.value; document.getElementById('bgScaleVal').textContent=bgScale+'%'; };
-document.getElementById('bgPos').oninput=e=>{ bgPos=+e.target.value; document.getElementById('bgPosVal').textContent=bgPos+'%'; };
-document.getElementById('sharp').oninput=e=>{ sharp=+e.target.value; document.getElementById('sharpVal').textContent=sharp; };
-document.getElementById('bright').oninput=e=>{ bright=+e.target.value; document.getElementById('brightVal').textContent=bright; };
-document.getElementById('beauty').oninput=e=>{ beauty=+e.target.value; document.getElementById('beautyVal').textContent=beauty; };
+function switchTab(t){ document.getElementById('panel-face').style.display=t==='face'?'block':'none'; document.getElementById('panel-bg').style.display=t==='bg'?'block':'none'; document.getElementById('tab-face').classList.toggle('active',t==='face'); document.getElementById('tab-bg').classList.toggle('active',t==='bg'); }
 
-async function initSegmentation(){
-  segmentation=new SelfieSegmentation({locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`});
-  segmentation.setOptions({modelSelection:1});
-  segmentation.onResults(onSegResults);
-  isSegReady=true;
+document.getElementById('fScale').oninput=e=>{ fScale=+e.target.value; document.getElementById('fScaleV').textContent=fScale+'%'; };
+document.getElementById('fWobble').oninput=e=>{ fWobble=+e.target.value; document.getElementById('fWobbleV').textContent=fWobble; };
+document.getElementById('bgScale').oninput=e=>{ bgScale=+e.target.value; document.getElementById('bgScaleV').textContent=bgScale+'%'; };
+
+async function initModels(){
+  seg=new SelfieSegmentation({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`});
+  seg.setOptions({modelSelection:1});
+  seg.onResults(r=>{ segResult=r; });
+  faceMesh=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
+  faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+  faceMesh.onResults(r=>{ if(r.multiFaceLandmarks && r.multiFaceLandmarks[0]) faceLandmarks=r.multiFaceLandmarks[0]; else faceLandmarks=null; });
+  segReady=faceReady=true;
 }
 
-function drawBackgroundFitted(W,H){
+let segResult=null;
+function drawBgFitted(W,H){
+  if(bgMode==='none'){ ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); return; }
   const bg=bgMode==='video'?bgVid:bgImg;
-  let imgW, imgH;
-  if(bgMode==='video' && bg.videoWidth>0){ imgW=bg.videoWidth; imgH=bg.videoHeight; }
-  else if(bgMode==='image' && bg.naturalWidth>0){ imgW=bg.naturalWidth; imgH=bg.naturalHeight; }
-  else { ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); return; }
-  
   ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
-  let drawW, drawH, drawX, drawY;
-  const scale = bgScale/100;
-  
-  if(fitMode==='cover'){
-    // Fill screen, crop excess - solid behind
-    const r=Math.max(W/imgW, H/imgH)*scale;
-    drawW=imgW*r; drawH=imgH*r;
-    drawX=(W-drawW)*(bgPos/100); drawY=(H-drawH)/2;
-  } else if(fitMode==='contain'){
-    // Shrink to frame - whole image visible
-    const r=Math.min(W/imgW, H/imgH)*scale*0.9;
-    drawW=imgW*r; drawH=imgH*r;
-    drawX=(W-drawW)*(bgPos/100); drawY=(H-drawH)/2;
-  } else { // center small
-    const r=0.5*scale;
-    drawW=imgW*r; drawH=imgH*r;
-    drawX=(W-drawW)*(bgPos/100); drawY=(H-drawH)/2;
+  if(bgMode==='video' && bg.videoWidth>0 || bgMode==='image' && bg.naturalWidth>0){
+    const iw=bgMode==='video'?bg.videoWidth:bg.naturalWidth, ih=bgMode==='video'?bg.videoHeight:bg.naturalHeight;
+    const r=Math.max(W/iw,H/ih)*(bgScale/100);
+    const dw=iw*r, dh=ih*r;
+    ctx.drawImage(bg,(W-dw)/2,(H-dh)/2,dw,dh);
   }
-  ctx.drawImage(bg,drawX,drawY,drawW,drawH);
 }
 
-function onSegResults(results){
+function drawAnimatedFaceFilter(W,H){
+  if(!faceLandmarks || faceFilter==='none') return;
+  // landmarks: nose tip 1, left eye 33, right eye 263, forehead 10
+  const get = (i)=>({x: faceLandmarks[i].x * W, y: faceLandmarks[i].y * H});
+  const nose=get(1), leftEye=get(33), rightEye=get(263), top=get(10), chin=get(152);
+  const eyeDist=Math.hypot(leftEye.x-rightEye.x, leftEye.y-rightEye.y);
+  const s = eyeDist/100 * (fScale/100);
+  const wob = Math.sin(animT*0.05)* (fWobble/20) * eyeDist*0.1;
+  
+  ctx.save();
+  ctx.globalCompositeOperation='source-over';
+  
+  if(faceFilter==='dog'){
+    // dog ears on top
+    ctx.font=`${eyeDist*1.2*s}px serif`; ctx.textAlign='center';
+    ctx.fillText('🐶', top.x, top.y - eyeDist*0.5 + wob);
+    ctx.font=`${eyeDist*0.6*s}px serif`;
+    ctx.fillText('👅', nose.x, nose.y + eyeDist*0.6);
+  } else if(faceFilter==='glasses'){
+    const gx=(leftEye.x+rightEye.x)/2, gy=(leftEye.y+rightEye.y)/2 + wob;
+    ctx.font=`${eyeDist*2.2*s}px serif`; ctx.textAlign='center';
+    ctx.fillText('😎', gx, gy + eyeDist*0.4);
+  } else if(faceFilter==='heart'){
+    ctx.font=`${eyeDist*0.8*s}px serif`; ctx.textAlign='center';
+    ctx.fillText('😍', leftEye.x - eyeDist*0.2, leftEye.y - eyeDist*0.2 + wob);
+    ctx.fillText('😍', rightEye.x + eyeDist*0.2, rightEye.y - eyeDist*0.2 + wob);
+    // beating hearts around
+    const beat=Math.abs(Math.sin(animT*0.1))*0.3+1;
+    ctx.font=`${eyeDist*0.5*beat}px serif`;
+    ctx.fillText('❤️', nose.x - eyeDist, nose.y);
+    ctx.fillText('❤️', nose.x + eyeDist, nose.y);
+  } else if(faceFilter==='clown'){
+    ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(nose.x, nose.y, eyeDist*0.25*s,0,Math.PI*2); ctx.fill();
+    ctx.font=`${eyeDist*0.5*s}px serif`; ctx.textAlign='center';
+    ctx.fillText('🤡', top.x, top.y - eyeDist*0.8 + wob);
+  } else if(faceFilter==='fire'){
+    ctx.font=`${eyeDist*1.5*s}px serif`; ctx.textAlign='center';
+    const flicker = Math.sin(animT*0.2)*5;
+    ctx.fillText('🔥', top.x, top.y - eyeDist*0.6 + flicker);
+    ctx.fillText('🔥', top.x - eyeDist*0.5, top.y - eyeDist*0.4 + flicker*0.5);
+    ctx.fillText('🔥', top.x + eyeDist*0.5, top.y - eyeDist*0.4 + flicker*0.7);
+  } else if(faceFilter==='angel'){
+    ctx.font=`${eyeDist*1.8*s}px serif`; ctx.textAlign='center';
+    ctx.fillText('😇', top.x, top.y - eyeDist*0.9 + wob);
+    // halo floating
+    ctx.beginPath(); ctx.ellipse(top.x, top.y - eyeDist*0.9 + wob, eyeDist*0.6*s, eyeDist*0.15*s,0,0,Math.PI*2); ctx.strokeStyle='gold'; ctx.lineWidth=4*s; ctx.stroke();
+  } else if(faceFilter==='alien'){
+    ctx.font=`${eyeDist*1.2*s}px serif`; ctx.textAlign='center';
+    ctx.fillText('👽', nose.x, nose.y + wob);
+    // big eyes
+    ctx.fillStyle='rgba(0,255,0,0.6)'; ctx.beginPath(); ctx.ellipse(leftEye.x, leftEye.y, eyeDist*0.35*s, eyeDist*0.45*s,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(rightEye.x, rightEye.y, eyeDist*0.35*s, eyeDist*0.45*s,0,0,Math.PI*2); ctx.fill();
+  } else if(faceFilter==='custom'){
+    const img=document.getElementById('filterImg');
+    if(img.src){ const fw=eyeDist*3*s, fh=eyeDist*3*s; ctx.drawImage(img, nose.x-fw/2, nose.y-fh/2 + wob, fw,fh); }
+  }
+  ctx.restore();
+}
+
+function onSegAndDraw(){
   const W=out.width, H=out.height;
   ctx.save();
   ctx.clearRect(0,0,W,H);
-  // high quality
   ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-  // Apply cleaner filter to person
-  const b=bright/100;
-  ctx.filter=`brightness(${b}) contrast(1.05) saturate(1.1)`;
-  // Draw mask
-  ctx.drawImage(results.segmentationMask,0,0,W,H);
-  ctx.globalCompositeOperation='source-in';
-  ctx.drawImage(results.image,0,0,W,H);
-  ctx.filter='none';
-  // Beautify blur slight skin smoothing if enabled
-  if(beauty>0){
-    ctx.globalCompositeOperation='source-over';
-    ctx.globalAlpha=beauty/300;
-    ctx.filter=`blur(${beauty/20}px)`;
-    ctx.drawImage(results.image,0,0,W,H);
-    ctx.filter='none'; ctx.globalAlpha=1;
-  }
-  // Background behind
-  ctx.globalCompositeOperation='destination-atop';
-  drawBackgroundFitted(W,H);
-  // Sharpen via overlay
-  if(sharp>0){
-    ctx.globalCompositeOperation='source-over';
-    ctx.globalAlpha=sharp/200;
-    ctx.filter=`contrast(1.3)`;
-    ctx.drawImage(results.image,0,0,W,H);
-    ctx.filter='none'; ctx.globalAlpha=1;
+  if(bgMode!=='none' && segResult && segResult.segmentationMask){
+    // draw mask
+    ctx.drawImage(segResult.segmentationMask,0,0,W,H);
+    ctx.globalCompositeOperation='source-in';
+    ctx.drawImage(segResult.image,0,0,W,H);
+    ctx.globalCompositeOperation='destination-atop';
+    drawBgFitted(W,H);
+  } else {
+    ctx.drawImage(cam,0,0,W,H);
   }
   ctx.restore();
+  // face filter on top, finds face and animates
+  drawAnimatedFaceFilter(W,H);
 }
 
 async function start(){
   if(stream) stream.getTracks().forEach(x=>x.stop());
   try{
-    // HD cleaner camera - 1080p, high quality
-    stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:facing,width:{ideal:1920,height:1080},height:{ideal:1080},frameRate:{ideal:30},aspectRatio:16/9},
-      audio:true
-    });
-    cam.srcObject=stream; await cam.play(); noCam.classList.remove('show');
-    out.width=cam.videoWidth||1920; out.height=cam.videoHeight||1080;
-    if(!isSegReady) await initSegmentation();
-    renderLoop();
-  }catch(e){ noCam.classList.add('show'); console.error(e); }
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true});
+    cam.srcObject=stream; await cam.play();
+    out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720;
+    if(!segReady) await initModels();
+    render();
+  }catch(e){ document.getElementById('noCam').classList.add('show'); }
 }
 
 function flip(){ facing=facing==='user'?'environment':'user'; out.classList.toggle('env',facing==='environment'); start(); }
 
-function setBg(key,el){
-  document.querySelectorAll('#bgGrid .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active');
-  if(key==='none'){ bgMode='none'; return; }
-  bgMode='image'; const url=bgUrls[key]||key; bgImg.crossOrigin='anonymous'; bgImg.src=url;
+function setFaceFilter(f,el){
+  document.querySelectorAll('#panel-face .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active');
+  faceFilter=f; toast(f==='none'?'Face filter off':'Face filter: '+f+' - finds your face');
 }
-
+function setBg(k,el){
+  document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active');
+  if(k==='none'){ bgMode='none'; return; }
+  bgMode='image'; const url=bgUrls[k]||k; bgImg.crossOrigin='anonymous'; bgImg.src=url;
+}
 document.getElementById('uploadBg').onchange=e=>{
   const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f);
-  if(f.type.startsWith('video')){ bgMode='video'; bgVid.src=url; bgVid.play(); }
-  else { bgMode='image'; bgImg.src=url; }
-  setFit('contain'); document.getElementById('bgScale').value=90; bgScale=90; document.getElementById('bgScaleVal').textContent='90%';
-  toast('Uploaded - shrink to frame enabled');
-  document.querySelectorAll('#bgGrid .fxItem').forEach(x=>x.classList.remove('active'));
+  if(f.type.startsWith('video')){ bgMode='video'; bgVid.src=url; bgVid.play(); } else { bgMode='image'; bgImg.src=url; }
+  toast('Background behind you'); document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active'));
+};
+document.getElementById('uploadFilter').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f);
+  const img=document.getElementById('filterImg'); img.src=url; faceFilter='custom';
+  document.querySelectorAll('#panel-face .fxItem').forEach(x=>x.classList.remove('active'));
+  toast('Custom face image - tracks your face');
 };
 
 function share(){ if(navigator.share) navigator.share({url:location.href}); else { navigator.clipboard.writeText(location.href); toast('Link copied'); } }
 
-async function renderLoop(){
-  if(bgMode==='none'){
-    ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-    ctx.filter=`brightness(${bright/100}) contrast(1.05) saturate(1.1)`;
-    ctx.drawImage(cam,0,0,out.width,out.height);
-    ctx.filter='none';
-    requestAnimationFrame(renderLoop);
-  } else {
-    await segmentation.send({image:cam});
-    requestAnimationFrame(renderLoop);
-  }
+async function render(){
+  animT++;
+  if(faceMesh) await faceMesh.send({image:cam});
+  if(bgMode!=='none' && seg) await seg.send({image:cam});
+  onSegAndDraw();
+  requestAnimationFrame(render);
 }
 
 async function goLiveBackend(start){

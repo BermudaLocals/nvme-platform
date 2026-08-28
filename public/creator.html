@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Go LIVE - NVME.live Battle</title>
+<title>Go LIVE - NVME.live Battle Invite</title>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -11,274 +11,337 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;height:100dvh;width:100vw}
 #cam{display:none}
-#out{position:fixed;inset:0;width:100vw;height:100dvh;background:#000;z-index:0}
-#out.single{transform:scaleX(-1)}
-#out.battle{object-fit:cover}
+#out{position:fixed;inset:0;width:100vw;height:100dvh;background:#000;z-index:0;transform:scaleX(-1)}
 #battleWrap{position:fixed;inset:0;z-index:0;display:none}
 #battleWrap.on{display:flex}
-.battleSide{flex:1;position:relative;overflow:hidden;background:#111;border:2px solid #222}
+.battleSide{flex:1;position:relative;overflow:hidden;background:#111;border:1px solid #222}
 .battleSide video,.battleSide canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .battleSide.me canvas{transform:scaleX(-1)}
-.battleSide .label{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:12px;font-size:.7rem;z-index:2}
-.battleSide .mic{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:12px;font-size:.7rem;z-index:2}
-.vs{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;background:#fe2c55;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;box-shadow:0 0 20px #fe2c55}
-#noCam{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;flex-direction:column;background:#111;text-align:center;padding:20px}
-#noCam.show{display:flex}
+.battleSide .label{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.7);padding:4px 10px;border-radius:12px;font-size:.7rem;z-index:2;font-weight:700}
+.battleSide .mic{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:12px;font-size:.65rem;z-index:2}
+.vs{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;background:#fe2c55;width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;box-shadow:0 0 20px #fe2c55;font-size:1.1rem}
 .overlay{position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;pointer-events:none}
 .overlay *{pointer-events:auto}
 .top{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
 .icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer;font-size:14px;text-decoration:none}
 .pill{padding:6px 12px;border-radius:20px;background:rgba(0,0,0,.55);font-size:.7rem;cursor:pointer}
-.reward{margin:6px 10px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.15);font-size:.7rem;display:flex;justify-content:space-between;gap:8px}
-.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:10px;align-items:center;overflow-y:auto}
+.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:10px;align-items:center}
 .t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
 .t .i{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid rgba(255,255,255,.15)}
 .t.active .i{background:#fe2c55}
 .t span{font-size:.55rem}
-.bottom{margin-top:auto;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.2))}
-.go{width:100%;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
-.go.live{background:#10ff70;color:#000;box-shadow:0 0 10px #10ff70}
-.battleBtn{width:100%;height:40px;margin-top:8px;border-radius:20px;border:none;background:#7c3aed;color:#fff;font-weight:700;cursor:pointer}
-.battleBtn.on{background:#10ff70;color:#000}
+.bottom{position:fixed;bottom:0;left:0;right:0;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.1));z-index:16;display:flex;gap:8px;align-items:center}
+.go{flex:1;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
+.go.live{background:#10ff70;color:#000}
+.battleBottom{width:56px;height:48px;border-radius:24px;border:none;background:#7c3aed;color:#fff;font-weight:800;font-size:1.2rem;cursor:pointer;display:none;align-items:center;justify-content:center;position:relative}
+.battleBottom.on{display:flex}
+.battleBottom.hasInvite{animation:pulse 1s infinite;background:#fe2c55}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.inviteDot{position:absolute;top:-4px;right:-4px;background:#ff0;color:#000;width:20px;height:20px;border-radius:50%;font-size:.7rem;display:none;align-items:center;justify-content:center;font-weight:900}
+.inviteDot.on{display:flex}
 #toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.9);padding:14px 22px;border-radius:12px;z-index:100;display:none;font-size:.9rem;max-width:85%;text-align:center}
 #toast.show{display:block}
-#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:25;background:#151515;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:88dvh;overflow-y:auto}
+#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:25;background:#151515;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:85dvh;overflow-y:auto}
 #fxPanel.show{transform:translateY(0)}
+#battlePanel{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#111;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:85dvh;overflow-y:auto}
+#battlePanel.show{transform:translateY(0)}
 .fxHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .fxGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .fxItem{aspect-ratio:1;background:#222;border-radius:12px;overflow:hidden;cursor:pointer;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
 .fxItem.active{border-color:#fe2c55}
 .fxItem img{width:100%;height:70%;object-fit:cover}
 .fxItem span{font-size:.52rem;padding:2px;text-align:center}
-.tabs2{display:flex;gap:8px;margin:10px 0}
-.tabs2 button{flex:1;padding:8px;border-radius:10px;border:none;background:#222;color:#fff;font-size:.7rem;cursor:pointer}
-.tabs2 button.active{background:#fe2c55;font-weight:700}
-.row{display:flex;align-items:center;gap:8px;margin:8px 0}
-.row label{font-size:.65rem;width:85px;opacity:.8}
-.row input,.row select{flex:1}
-#battleModal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:20px}
-#battleModal.on{display:flex}
-.modalBox{background:#1a1a1a;border-radius:16px;padding:16px;width:100%;max-width:360px}
-.modalBox input{width:100%;padding:10px;border-radius:10px;border:none;background:#222;color:#fff;margin:8px 0}
-.modalBox button{width:100%;padding:12px;border-radius:12px;border:none;font-weight:700;cursor:pointer;margin-top:6px}
+.liveList{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto}
+.liveRow{display:flex;align-items:center;gap:10px;background:#1e1e1e;padding:10px;border-radius:12px}
+.liveRow img{width:44px;height:44px;border-radius:50%;object-fit:cover}
+.liveRow .info{flex:1}
+.liveRow .info b{font-size:.8rem}
+.liveRow .info div{font-size:.65rem;opacity:.6}
+.liveRow button{padding:8px 14px;border-radius:20px;border:none;background:#fe2c55;color:#fff;font-weight:700;cursor:pointer;font-size:.7rem}
+.liveRow button.invited{background:#333}
+.inviteBanner{position:fixed;top:60px;left:10px;right:10px;z-index:40;background:#1a1a1a;border:1px solid #fe2c55;border-radius:12px;padding:12px;display:none;align-items:center;gap:10px}
+.inviteBanner.on{display:flex}
+.inviteBanner img{width:40px;height:40px;border-radius:50%}
 #liveBadge{position:fixed;top:70px;left:12px;z-index:16;background:#fe2c55;padding:6px 12px;border-radius:20px;font-size:.7rem;font-weight:700;display:none}
 #liveBadge.on{display:block}
 </style>
 </head>
 <body>
 <video id="cam" autoplay playsinline muted></video>
-<canvas id="out" class="single"></canvas>
+<canvas id="out"></canvas>
 <div id="battleWrap">
-  <div class="battleSide me"><canvas id="meCanvas"></canvas><div class="label" id="meLabel">YOU</div><div class="mic" id="meMic">🎤 ON</div></div>
-  <div class="battleSide guest"><video id="guestVideo" autoplay playsinline></video><canvas id="guestCanvas"></canvas><div class="label" id="guestLabel">GUEST - Waiting...</div><div class="mic" id="guestMic">🎤 ON</div></div>
+  <div class="battleSide me"><canvas id="meCanvas"></canvas><div class="label">YOU</div><div class="mic" id="meMic">🎤 ON</div></div>
+  <div class="battleSide guest"><video id="guestVideo" autoplay playsinline></video><canvas id="guestCanvas"></canvas><div class="label" id="guestLabel">GUEST</div><div class="mic" id="guestMic">🎤 ON</div></div>
   <div class="vs">VS</div>
 </div>
 <img id="bgImg" crossorigin="anonymous" style="display:none">
 <canvas id="work" style="display:none"></canvas>
-<img id="filterImg" style="display:none">
-<div id="noCam"><div style="font-size:48px">📷</div><h3>Camera Blocked</h3><button onclick="start()" style="margin-top:12px;padding:10px 20px;border-radius:20px;border:none;background:#fff;color:#000;font-weight:700">Try Again</button></div>
+
 <div id="toast"></div>
-<div id="liveBadge">🔴 LIVE • BATTLE</div>
+<div id="liveBadge">🔴 LIVE</div>
+
+<!-- INVITE BANNER - when someone invites YOU -->
+<div class="inviteBanner" id="inviteBanner">
+  <img id="inviterAvatar" src="https://picsum.photos/seed/inv/100">
+  <div style="flex:1"><b id="inviterName">Someone</b><div style="font-size:.7rem;opacity:.7">invited you to a battle!</div></div>
+  <button onclick="acceptBattleInvite()" style="background:#10ff70;color:#000;padding:8px 14px;border-radius:20px;border:none;font-weight:700">Accept</button>
+  <button onclick="declineBattleInvite()" style="background:#333;color:#fff;padding:8px 14px;border-radius:20px;border:none">Decline</button>
+</div>
 
 <div class="overlay">
-  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">⚔️ Battle • BG Remove</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
-  <div class="reward" id="rw"><span id="rwText">Battle split-screen + split mic ready</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
+  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">🎨 BG • ⚔️ Battle</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
   <div class="tools">
     <div class="t" onclick="flip()"><div class="i">⇄</div><span>Flip</span></div>
     <div class="t active" onclick="toggleFx()"><div class="i">🎨</div><span>BG</span></div>
-    <div class="t" onclick="openBattle()"><div class="i">⚔️</div><span>Battle</span></div>
-    <div class="t" onclick="toggleMic('me')"><div class="i" id="meMicIcon">🎤</div><span id="meMicTxt">Mic Me</span></div>
-    <div class="t" onclick="toggleMic('guest')"><div class="i" id="guestMicIcon">🎤</div><span>Mic Guest</span></div>
-    <div class="t" onclick="share()"><div class="i">↗</div><span>Share</span></div>
+    <div class="t" onclick="toggleMic('me')"><div class="i" id="meMicIcon">🎤</div><span>My Mic</span></div>
+    <div class="t" onclick="toggleMic('guest')"><div class="i" id="guestMicIcon">🎤</div><span>Guest</span></div>
   </div>
-  <div class="bottom"><button class="go" id="goBtn">Go LIVE</button><button class="battleBtn" id="battleBtn" onclick="openBattle()">⚔️ START BATTLE SPLIT-SCREEN</button></div>
 </div>
 
-<div id="battleModal">
-  <div class="modalBox">
-    <h3>⚔️ Battle Split-Screen</h3>
-    <p style="font-size:.7rem;opacity:.7;margin:6px 0">Two mics, split screen live. Invite guest.</p>
-    <div style="background:#222;border-radius:10px;padding:10px;margin:8px 0">
-      <div style="font-size:.7rem;opacity:.7">Your Battle ID:</div>
-      <div id="myPeerId" style="font-weight:700;word-break:break-all">Loading...</div>
-      <button onclick="copyId()" style="background:#333;color:#fff;margin-top:6px">Copy ID</button>
-    </div>
-    <input id="remoteId" placeholder="Paste guest Battle ID here">
-    <button onclick="connectBattle()" style="background:#fe2c55;color:#fff">Connect ⚔️ Split Screen</button>
-    <button onclick="startBattleLocal()" style="background:#7c3aed;color:#fff">Test Local Split (No Guest)</button>
-    <div style="font-size:.6rem;opacity:.5;margin-top:6px">Guest: open nvme.live/creator and paste host ID to join battle</div>
-    <button onclick="closeBattle()" style="background:#222;color:#fff">Close</button>
-    <button onclick="endBattle()" style="background:#111;color:#ff4444;border:1px solid #ff4444">End Battle</button>
-  </div>
+<div class="bottom">
+  <button class="battleBottom" id="battleBottomBtn" onclick="openBattlePanel()">⚔️<div class="inviteDot" id="inviteDot">1</div></button>
+  <button class="go" id="goBtn">Go LIVE</button>
 </div>
 
 <div id="fxPanel">
-  <div class="fxHead"><b>BG Remove + Battle</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
-  <div class="tabs2">
-    <button id="tab-bg" class="active" onclick="switchTab('bg')">🖼️ BG Remove</button>
-    <button id="tab-battle" onclick="switchTab('battle')">⚔️ Battle Settings</button>
-    <button id="tab-face" onclick="switchTab('face')">🎭 Face</button>
+  <div class="fxHead"><b>BG - Removes Room</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
+  <div class="fxGrid">
+    <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
+    <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img src="https://picsum.photos/seed/officefix/300/200"><span>Office</span></div>
+    <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img src="https://picsum.photos/seed/beachfix/300/200"><span>Beach</span></div>
+    <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img src="https://picsum.photos/seed/cityfix/300/200"><span>City</span></div>
+    <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img src="https://picsum.photos/seed/spacefix/300/200"><span>Space</span></div>
+    <div class="fxItem" data-bg="neon" onclick="setBg('neon',this)"><div style="width:100%;height:70%;background:linear-gradient(45deg,#ff00ff,#00ffff)"></div><span>Neon Move</span></div>
+    <div class="fxItem" data-bg="stars" onclick="setBg('stars',this)"><div style="width:100%;height:70%;background:#000"></div><span>Stars Move</span></div>
+    <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:20px">⬆️</div><span>Upload</span></div>
   </div>
-  <div id="panel-bg">
-    <div class="fxGrid">
-      <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
-      <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img src="https://picsum.photos/seed/officefix/300/200"><span>Office</span></div>
-      <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img src="https://picsum.photos/seed/beachfix/300/200"><span>Beach</span></div>
-      <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img src="https://picsum.photos/seed/cityfix/300/200"><span>City</span></div>
-      <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img src="https://picsum.photos/seed/spacefix/300/200"><span>Space</span></div>
-      <div class="fxItem" data-bg="neon" onclick="setBg('neon',this)"><div style="width:100%;height:70%;background:linear-gradient(45deg,#ff00ff,#00ffff)"></div><span>Neon Move</span></div>
-      <div class="fxItem" data-bg="stars" onclick="setBg('stars',this)"><div style="width:100%;height:70%;background:#000"></div><span>Stars Move</span></div>
-      <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:20px">⬆️</div><span>Upload</span></div>
-    </div>
-    <div class="row"><label>BG Scale</label><input type="range" id="bgScale" min="30" max="200" value="100"><span id="bgScaleV">100%</span></div>
+  <input type="file" id="uploadBg" accept="image/*" style="display:none">
+</div>
+
+<div id="battlePanel">
+  <div class="fxHead"><b>⚔️ Battle - Invite Live Streamers</b><button onclick="closeBattlePanel()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
+  <div style="font-size:.7rem;opacity:.7;margin-bottom:8px">When you're LIVE, tap any live streamer to invite to battle. They can invite you too.</div>
+  <div style="display:flex;gap:8px;margin-bottom:10px">
+    <button onclick="fetchLiveUsers()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#222;color:#fff">🔄 Refresh Live List</button>
+    <button onclick="copyBattleLink()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#7c3aed;color:#fff;font-weight:700">Copy Battle Link</button>
   </div>
-  <div id="panel-battle" style="display:none">
-    <div style="font-size:.7rem;margin:6px 0">Split Mic Controls</div>
-    <div class="row"><label>My Mic</label><input type="range" id="meVol" min="0" max="100" value="100"><span id="meVolV">100%</span></div>
-    <div class="row"><label>Guest Mic</label><input type="range" id="guestVol" min="0" max="100" value="100"><span id="guestVolV">100%</span></div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button onclick="toggleMic('me')" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Toggle My Mic</button>
-      <button onclick="toggleMic('guest')" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Toggle Guest Mic</button>
-    </div>
-    <button onclick="openBattle()" style="width:100%;margin-top:8px;padding:12px;border-radius:12px;border:none;background:#fe2c55;color:#fff;font-weight:700">Open Battle Invite</button>
+  <div id="liveCount" style="font-size:.65rem;opacity:.6;margin-bottom:6px">Finding live streamers...</div>
+  <div class="liveList" id="liveList"></div>
+  <div id="noLive" style="text-align:center;padding:20px;opacity:.5;display:none">No other live streamers right now<br><span style="font-size:.7rem">Share your Battle ID to invite</span></div>
+  <div style="background:#1a1a1a;border-radius:12px;padding:10px;margin-top:10px">
+    <div style="font-size:.7rem;opacity:.6">Your Battle ID (share to invite)</div>
+    <div style="display:flex;gap:8px;margin-top:6px"><div id="myPeerId" style="flex:1;background:#222;padding:8px;border-radius:8px;font-size:.7rem;word-break:break-all">Loading...</div><button onclick="copyId()" style="padding:8px 12px;border-radius:8px;border:none;background:#333;color:#fff">Copy</button></div>
+    <input id="remoteId" placeholder="Paste Battle ID to join" style="width:100%;margin-top:8px;padding:10px;border-radius:8px;border:none;background:#222;color:#fff">
+    <button onclick="connectBattleDirect()" style="width:100%;margin-top:8px;padding:12px;border-radius:12px;border:none;background:#fe2c55;color:#fff;font-weight:700">Join Battle Direct</button>
   </div>
-  <div id="panel-face" style="display:none">
-    <div class="fxGrid">
-      <div class="fxItem active" data-filter="none" onclick="setFaceFilter('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
-      <div class="fxItem" data-filter="dog" onclick="setFaceFilter('dog',this)"><div style="font-size:22px">🐶</div><span>Dog</span></div>
-      <div class="fxItem" data-filter="glasses" onclick="setFaceFilter('glasses',this)"><div style="font-size:22px">😎</div><span>Glasses</span></div>
-      <div class="fxItem" data-filter="fire" onclick="setFaceFilter('fire',this)"><div style="font-size:22px">🔥</div><span>Fire</span></div>
-    </div>
-  </div>
-  <input type="file" id="uploadBg" accept="image/*,video/*" style="display:none">
-  <input type="file" id="uploadFilter" accept="image/*" style="display:none">
+  <button onclick="endBattle()" style="width:100%;margin-top:10px;padding:12px;border-radius:12px;border:none;background:#111;color:#ff4444;border:1px solid #333">End Battle</button>
 </div>
 
 <script>
 const cam=document.getElementById('cam'), out=document.getElementById('out'), ctx=out.getContext('2d',{alpha:false});
 const meCanvas=document.getElementById('meCanvas'), meCtx=meCanvas.getContext('2d');
 const guestVideo=document.getElementById('guestVideo'), guestCanvas=document.getElementById('guestCanvas'), guestCtx=guestCanvas.getContext('2d');
-const battleWrap=document.getElementById('battleWrap');
-const bgImg=document.getElementById('bgImg'), work=document.getElementById('work'), wctx=work.getContext('2d');
-let facing='user',stream=null,fxOpen=false,bgMode='none',faceFilter='none',bgScale=100,faceLandmarks=null,seg=null,faceMesh=null,segResult=null,animT=0;
-let isBattle=false, peer=null, conn=null, call=null, meMuted=false, guestMuted=false;
-let meStreamForBattle=null;
+const battleWrap=document.getElementById('battleWrap'), work=document.getElementById('work'), wctx=work.getContext('2d'), bgImg=document.getElementById('bgImg');
+let stream=null,seg=null,faceMesh=null,segResult=null,bgMode='none',bgScale=100,facing='user',animT=0;
+let isLive=false,isBattle=false,peer=null,call=null,pendingInvite=null;
+let meMuted=false,guestMuted=false;
 const bgUrls={office:'https://picsum.photos/seed/officefix/1280/720',beach:'https://picsum.photos/seed/beachfix/1280/720',city:'https://picsum.photos/seed/cityfix/1280/720',space:'https://picsum.photos/seed/spacefix/1280/720'};
 
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
-function toggleFx(){ fxOpen=!fxOpen; document.getElementById('fxPanel').classList.toggle('show',fxOpen); }
-function switchTab(t){ document.getElementById('panel-bg').style.display=t==='bg'?'block':'none'; document.getElementById('panel-battle').style.display=t==='battle'?'block':'none'; document.getElementById('panel-face').style.display=t==='face'?'block':'none'; document.querySelectorAll('.tabs2 button').forEach(b=>b.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); }
-function openBattle(){ document.getElementById('battleModal').classList.add('on'); }
-function closeBattle(){ document.getElementById('battleModal').classList.remove('on'); }
+function toggleFx(){ document.getElementById('fxPanel').classList.toggle('show'); document.getElementById('battlePanel').classList.remove('show'); }
+function openBattlePanel(){ document.getElementById('battlePanel').classList.add('show'); document.getElementById('fxPanel').classList.remove('show'); fetchLiveUsers(); }
+function closeBattlePanel(){ document.getElementById('battlePanel').classList.remove('show'); }
 
+// PeerJS
 async function initPeer(){
   peer=new Peer(null,{config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}});
-  peer.on('open',id=>{ document.getElementById('myPeerId').textContent=id; });
-  peer.on('call',async incomingCall=>{
-    toast('Guest calling - joining battle');
-    const answerStream=meStreamForBattle||stream;
-    incomingCall.answer(answerStream);
-    incomingCall.on('stream',remoteStream=>{
-      guestVideo.srcObject=remoteStream;
-      guestVideo.onloadedmetadata=()=>{ guestVideo.play(); startBattleUI(); };
-      document.getElementById('guestLabel').textContent='GUEST CONNECTED';
-    });
-    call=incomingCall;
+  peer.on('open',id=>{
+    document.getElementById('myPeerId').textContent=id;
+    localStorage.setItem('nvme_peer_id',id);
+    // register live when live
+    registerPeer();
   });
+  peer.on('call',async incoming=>{
+    // someone inviting you to battle
+    const inviter = incoming.metadata?.name || 'Live Streamer';
+    showInviteBanner(inviter, incoming);
+  });
+  peer.on('error',e=>console.log(e));
 }
+function showInviteBanner(name, incomingCall){
+  pendingInvite=incomingCall;
+  document.getElementById('inviterName').textContent=name;
+  document.getElementById('inviteBanner').classList.add('on');
+  document.getElementById('battleBottomBtn').classList.add('hasInvite');
+  document.getElementById('inviteDot').classList.add('on');
+  toast(name+' invited you to battle! Bottom left');
+  // vibrate
+  if(navigator.vibrate) navigator.vibrate([200,100,200]);
+}
+function acceptBattleInvite(){
+  if(!pendingInvite) return;
+  pendingInvite.answer(stream);
+  pendingInvite.on('stream',s=>{
+    guestVideo.srcObject=s; guestVideo.play(); startBattleUI(); document.getElementById('guestLabel').textContent='BATTLE: '+document.getElementById('inviterName').textContent;
+  });
+  document.getElementById('inviteBanner').classList.remove('on');
+  document.getElementById('battleBottomBtn').classList.remove('hasInvite');
+  document.getElementById('inviteDot').classList.remove('on');
+  closeBattlePanel();
+  toast('Battle accepted! Split screen');
+}
+function declineBattleInvite(){ pendingInvite=null; document.getElementById('inviteBanner').classList.remove('on'); document.getElementById('battleBottomBtn').classList.remove('hasInvite'); document.getElementById('inviteDot').classList.remove('on'); }
+
 function copyId(){ navigator.clipboard.writeText(document.getElementById('myPeerId').textContent); toast('Battle ID copied'); }
-function connectBattle(){
-  const rid=document.getElementById('remoteId').value.trim(); if(!rid) return toast('Paste guest ID');
-  const remoteStream=meStreamForBattle||stream;
-  const c=peer.call(rid,remoteStream);
-  c.on('stream',s=>{ guestVideo.srcObject=s; guestVideo.play(); startBattleUI(); document.getElementById('guestLabel').textContent='GUEST CONNECTED'; toast('Battle connected - split screen'); });
-  c.on('error',e=>toast('Connect failed: '+e));
-  call=c; closeBattle();
+function copyBattleLink(){ const id=document.getElementById('myPeerId').textContent; const url=location.origin+location.pathname+'?battle='+id; navigator.clipboard.writeText(url); toast('Battle link copied'); }
+
+async function fetchLiveUsers(){
+  const list=document.getElementById('liveList'), count=document.getElementById('liveCount'), noLive=document.getElementById('noLive');
+  count.textContent='Loading live streamers...'; list.innerHTML='';
+  try{
+    const token=localStorage.getItem('token')||localStorage.getItem('nvme_token')||'';
+    const headers={}; if(token) headers['Authorization']='Bearer '+token;
+    // try multiple possible endpoints
+    let lives=[];
+    try{
+      const res=await fetch('/api/live/list',{headers}); if(res.ok){ const data=await res.json(); lives=data.lives||data.users||data||[]; }
+    }catch(e){}
+    if(lives.length===0){
+      try{
+        const res2=await fetch('/api/live/active',{headers}); if(res2.ok){ const d2=await res2.json(); lives=d2.lives||d2||[]; }
+      }catch(e){}
+    }
+    // fallback: use mock if API not ready + show peer discovery
+    if(lives.length===0){
+      // try localStorage battle lobby (simple)
+      const mock=[{id:'demo1',username:'LiveUser_1',avatar:'https://picsum.photos/seed/u1/100',title:'Chatting',peerId:''},{id:'demo2',username:'LiveUser_2',avatar:'https://picsum.photos/seed/u2/100',title:'Music live',peerId:''}];
+      // only show if we are testing
+      if(location.search.includes('demo')) lives=mock;
+    }
+    // remove self
+    const myId=localStorage.getItem('user_id')||'';
+    lives=lives.filter(u=>u.id!==myId && u.userId!==myId);
+
+    if(lives.length===0){ count.textContent='No other live streamers now'; noLive.style.display='block'; list.innerHTML=''; return; }
+    noLive.style.display='none'; count.textContent=lives.length+' live now - tap to invite to battle';
+    list.innerHTML=lives.map(u=>`
+      <div class="liveRow">
+        <img src="${u.avatar||u.avatarUrl||'https://picsum.photos/seed/'+(u.username||'a')+'/100'}">
+        <div class="info"><b>${u.username||u.name||'Live Streamer'}</b><div>🔴 LIVE • ${u.title||u.room||'Ready to battle'}</div></div>
+        <button onclick="inviteToBattle('${u.peerId||u.peer_id||''}','${u.username||u.name||'Streamer'}','${u.id||u.userId||''}')">Invite ⚔️</button>
+      </div>
+    `).join('');
+  }catch(e){ count.textContent='Could not load lives - use Battle ID'; document.getElementById('noLive').style.display='block'; }
 }
-function startBattleLocal(){
-  // test without guest - shows your cam twice split
-  guestVideo.srcObject=null;
-  startBattleUI(true);
-  toast('Local battle test - split screen');
-  closeBattle();
+
+async function inviteToBattle(peerId, username, userId){
+  if(!isLive){ toast('Go LIVE first to battle'); return; }
+  if(!peerId){
+    // try invite via backend
+    try{
+      const token=localStorage.getItem('token')||''; const headers={'Content-Type':'application/json'}; if(token) headers['Authorization']='Bearer '+token;
+      await fetch('/api/battle/invite',{method:'POST',headers,body:JSON.stringify({toUserId:userId})});
+      toast('Invite sent to '+username+'! They will see popup bottom left');
+    }catch(e){ toast('Copy Battle ID and send to '+username); copyBattleLink(); }
+    return;
+  }
+  // direct peer invite
+  const c=peer.call(peerId,stream,{metadata:{name:localStorage.getItem('username')||'Streamer'}});
+  c.on('stream',s=>{ guestVideo.srcObject=s; guestVideo.play(); startBattleUI(); document.getElementById('guestLabel').textContent='BATTLE: '+username; });
+  toast('Inviting '+username+' to battle...');
+  startBattleUI();
 }
-function startBattleUI(isLocal=false){
-  isBattle=true; battleWrap.classList.add('on'); out.style.display='none'; document.getElementById('liveBadge').classList.add('on'); document.getElementById('battleBtn').classList.add('on'); document.getElementById('battleBtn').textContent='⚔️ BATTLE LIVE';
-  if(isLocal){ guestCanvas.style.display='block'; document.getElementById('guestLabel').textContent='TEST - SAME CAM'; }
+function connectBattleDirect(){
+  const rid=document.getElementById('remoteId').value.trim(); if(!rid) return toast('Paste Battle ID');
+  const c=peer.call(rid,stream,{metadata:{name:localStorage.getItem('username')||'Streamer'}});
+  c.on('stream',s=>{ guestVideo.srcObject=s; guestVideo.play(); startBattleUI(); });
+  toast('Joining battle...'); closeBattlePanel();
 }
-function endBattle(){
-  isBattle=false; battleWrap.classList.remove('on'); out.style.display='block'; document.getElementById('battleBtn').classList.remove('on'); document.getElementById('battleBtn').textContent='⚔️ START BATTLE SPLIT-SCREEN';
-  if(call) call.close(); if(guestVideo.srcObject) guestVideo.srcObject=null; document.getElementById('battleModal').classList.remove('on'); toast('Battle ended');
+function startBattleUI(){
+  isBattle=true; battleWrap.classList.add('on'); out.style.display='none'; document.getElementById('liveBadge').textContent='🔴 LIVE • BATTLE VS'; document.getElementById('liveBadge').classList.add('on');
+  meCanvas.width=640; meCanvas.height=720; guestCanvas.width=640; guestCanvas.height=720;
 }
+function endBattle(){ isBattle=false; battleWrap.classList.remove('on'); out.style.display='block'; if(call) call.close(); if(guestVideo.srcObject) guestVideo.srcObject.getTracks().forEach(t=>t.stop()); guestVideo.srcObject=null; toast('Battle ended'); }
+
 function toggleMic(who){
-  if(who==='me'){
-    meMuted=!meMuted; if(stream) stream.getAudioTracks().forEach(t=>t.enabled=!meMuted);
-    document.getElementById('meMic').textContent=meMuted?'🔇 MUTED':'🎤 ON'; document.getElementById('meMicIcon').textContent=meMuted?'🔇':'🎤'; toast(meMuted?'Your mic muted':'Your mic on');
-  } else {
-    guestMuted=!guestMuted; guestVideo.muted=guestMuted; document.getElementById('guestMic').textContent=guestMuted?'🔇 MUTED':'🎤 ON'; toast(guestMuted?'Guest mic muted':'Guest mic on');
-  }
+  if(who==='me'){ meMuted=!meMuted; stream.getAudioTracks().forEach(t=>t.enabled=!meMuted); document.getElementById('meMic').textContent=meMuted?'🔇':'🎤 ON'; document.getElementById('meMicIcon').textContent=meMuted?'🔇':'🎤'; }
+  else { guestMuted=!guestMuted; guestVideo.muted=guestMuted; document.getElementById('guestMic').textContent=guestMuted?'🔇':'🎤 ON'; }
 }
-document.getElementById('meVol').oninput=e=>{ const v=e.target.value/100; if(meCanvas) meCanvas.style.opacity=v; document.getElementById('meVolV').textContent=e.target.value+'%'; if(stream){ stream.getAudioTracks().forEach(t=>{ /* volume via gain */ }); } };
-document.getElementById('guestVol').oninput=e=>{ guestVideo.volume=e.target.value/100; document.getElementById('guestVolV').textContent=e.target.value+'%'; };
 
-async function initModels(){
-  seg=new SelfieSegmentation({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`}); seg.setOptions({modelSelection:1}); seg.onResults(r=>segResult=r);
-  faceMesh=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`}); faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5}); faceMesh.onResults(r=>{ faceLandmarks=r.multiFaceLandmarks&&r.multiFaceLandmarks[0]?r.multiFaceLandmarks[0]:null; });
+async function initModels(){ seg=new SelfieSegmentation({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`}); seg.setOptions({modelSelection:1}); seg.onResults(r=>segResult=r); faceMesh=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`}); faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true}); faceMesh.onResults(()=>{}); }
+
+function drawBg(W,H,context){
+  if(bgMode==='none'){ context.fillStyle='#000'; context.fillRect(0,0,W,H); return; }
+  if(['neon','stars'].includes(bgMode)){ const g=context.createLinearGradient(0,0,W,H); g.addColorStop(0,`hsl(${(animT*2)%360},100%,50%)`); g.addColorStop(1,`hsl(${(animT*2+180)%360},100%,50%)`); context.fillStyle=g; context.fillRect(0,0,W,H); }
+  else if(bgImg.complete&&bgImg.naturalWidth>0){ const iw=bgImg.naturalWidth,ih=bgImg.naturalHeight; let r=Math.max(W/iw,H/ih)*(bgScale/100); context.drawImage(bgImg,(W-iw*r)/2,(H-ih*r)/2,iw*r,ih*r); }
 }
-function drawBg(W,H){
-  if(bgMode==='none'){ ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); return; }
-  if(['neon','stars'].includes(bgMode)){
-    const t=animT*0.02; const g=ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,`hsl(${(t*30)%360},100%,50%)`); g.addColorStop(1,`hsl(${(t*30+180)%360},100%,50%)`); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  } else {
-    if(bgImg.complete&&bgImg.naturalWidth>0){ const iw=bgImg.naturalWidth, ih=bgImg.naturalHeight; let r=Math.max(W/iw,H/ih)*(bgScale/100); ctx.drawImage(bgImg,(W-iw*r)/2,(H-ih*r)/2,iw*r,ih*r); } else { ctx.fillStyle='#222'; ctx.fillRect(0,0,W,H); }
-  }
-}
-function compositeSingle(){
+function composite(){
   const W=out.width,H=out.height;
-  if(bgMode==='none'){ ctx.drawImage(cam,0,0,W,H); return; }
-  drawBg(W,H);
-  if(segResult&&segResult.segmentationMask){ work.width=W; work.height=H; wctx.clearRect(0,0,W,H); wctx.drawImage(segResult.segmentationMask,0,0,W,H); wctx.globalCompositeOperation='source-in'; wctx.drawImage(segResult.image,0,0,W,H); ctx.drawImage(work,0,0,W,H); }
-}
-function compositeBattle(){
+  if(!isBattle){
+    if(bgMode==='none'){ ctx.drawImage(cam,0,0,W,H); return; }
+    drawBg(W,H,ctx);
+    if(segResult&&segResult.segmentationMask){ work.width=W; work.height=H; wctx.clearRect(0,0,W,H); wctx.drawImage(segResult.segmentationMask,0,0,W,H); wctx.globalCompositeOperation='source-in'; wctx.drawImage(segResult.image,0,0,W,H); ctx.drawImage(work,0,0,W,H); }
+    return;
+  }
+  // battle mode
   animT++;
-  const W=meCanvas.width||640, H=meCanvas.height||720;
-  // me side - with BG removal
-  if(bgMode!=='none'){ 
-    meCtx.fillStyle='#000'; meCtx.fillRect(0,0,W,H);
-    if(['neon','stars'].includes(bgMode)){ const g=meCtx.createLinearGradient(0,0,W,H); g.addColorStop(0,`hsl(${(animT*2)%360},100%,50%)`); g.addColorStop(1,`hsl(${(animT*2+180)%360},100%,50%)`); meCtx.fillStyle=g; meCtx.fillRect(0,0,W,H); }
-    else if(bgImg.complete) meCtx.drawImage(bgImg,0,0,W,H);
-    if(segResult&&segResult.segmentationMask){ work.width=W; work.height=H; wctx.clearRect(0,0,W,H); wctx.drawImage(segResult.segmentationMask,0,0,W,H); wctx.globalCompositeOperation='source-in'; wctx.drawImage(segResult.image,0,0,W,H); meCtx.drawImage(work,0,0,W,H); }
-    else meCtx.drawImage(cam,0,0,W,H);
-  } else { meCtx.drawImage(cam,0,0,W,H); }
-  // guest side
-  if(guestVideo.srcObject && guestVideo.readyState>=2){ guestCtx.drawImage(guestVideo,0,0,guestCanvas.width,guestCanvas.height); }
-  else if(document.getElementById('guestLabel').textContent.includes('TEST')){ guestCtx.drawImage(cam,0,0,guestCanvas.width,guestCanvas.height); guestCtx.fillStyle='rgba(124,58,237,0.3)'; guestCtx.fillRect(0,0,W,H); }
+  const bw=meCanvas.width,bh=meCanvas.height;
+  // me
+  drawBg(bw,bh,meCtx);
+  if(segResult&&segResult.segmentationMask){ work.width=bw; work.height=bh; wctx.clearRect(0,0,bw,bh); wctx.drawImage(segResult.segmentationMask,0,0,bw,bh); wctx.globalCompositeOperation='source-in'; wctx.drawImage(segResult.image,0,0,bw,bh); meCtx.drawImage(work,0,0,bw,bh); } else meCtx.drawImage(cam,0,0,bw,bh);
+  // guest
+  if(guestVideo.srcObject&&guestVideo.readyState>=2){ guestCtx.drawImage(guestVideo,0,0,guestCanvas.width,guestCanvas.height); }
 }
-
+async function registerPeer(){
+  // tell backend our peerId so others can invite us when live
+  try{
+    const token=localStorage.getItem('token')||''; if(!token) return;
+    const headers={'Content-Type':'application/json','Authorization':'Bearer '+token};
+    const peerId=document.getElementById('myPeerId').textContent;
+    if(peerId&&peerId!=='Loading...') await fetch('/api/live/peer',{method:'POST',headers,body:JSON.stringify({peerId})});
+  }catch(e){}
+}
 async function start(){
   if(stream) stream.getTracks().forEach(x=>x.stop());
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:{echoCancellation:true,noiseSuppression:true}});
-    cam.srcObject=stream; await cam.play(); out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720; meCanvas.width=640; meCanvas.height=720; guestCanvas.width=640; guestCanvas.height=720; meStreamForBattle=stream;
+    cam.srcObject=stream; await cam.play(); out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720; meCanvas.width=640; meCanvas.height=720; guestCanvas.width=640; guestCanvas.height=720;
     if(!seg) await initModels(); if(!peer) await initPeer();
     loop();
-  }catch(e){ document.getElementById('noCam').classList.add('show'); }
+  }catch(e){ toast('Camera blocked'); }
 }
 function flip(){ facing=facing==='user'?'environment':'user'; start(); }
-function setBg(k,el){ document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active'); if(k==='none'){bgMode='none';return;} if(['neon','stars'].includes(k)){bgMode=k;return;} bgMode='image'; const url=bgUrls[k]; bgImg.crossOrigin='anonymous'; bgImg.src=url; }
-function setFaceFilter(f,el){ document.querySelectorAll('#panel-face .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active'); faceFilter=f; }
+function setBg(k,el){ document.querySelectorAll('.fxGrid .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active'); if(k==='none'){bgMode='none';return;} if(['neon','stars'].includes(k)){bgMode=k;return;} bgMode='image'; const urls={office:'https://picsum.photos/seed/officefix/1280/720',beach:'https://picsum.photos/seed/beachfix/1280/720',city:'https://picsum.photos/seed/cityfix/1280/720',space:'https://picsum.photos/seed/spacefix/1280/720'}; bgImg.crossOrigin='anonymous'; bgImg.src=urls[k]||k; }
 document.getElementById('uploadBg').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ bgImg.src=ev.target.result; bgMode='image'; localStorage.setItem('nvme_uploaded_bg',ev.target.result); }; r.readAsDataURL(f); };
-function share(){ const id=document.getElementById('myPeerId').textContent; const url=location.origin+'/creator?battle='+id; if(navigator.share) navigator.share({title:'Join my battle',url}); else { navigator.clipboard.writeText(url); toast('Battle link copied: '+url); } }
-async function loop(){
-  if(faceMesh) await faceMesh.send({image:cam});
-  if(seg) await seg.send({image:cam});
-  if(isBattle) compositeBattle(); else compositeSingle();
-  requestAnimationFrame(loop);
+async function loop(){ if(seg) await seg.send({image:cam}); composite(); requestAnimationFrame(loop); }
+
+async function goLiveBackend(startLive){
+  const token=localStorage.getItem('token')||localStorage.getItem('nvme_token')||''; const headers={'Content-Type':'application/json'}; if(token) headers['Authorization']='Bearer '+token;
+  try{
+    if(startLive){
+      const res=await fetch('/api/live/start',{method:'POST',headers,body:JSON.stringify({title:'LIVE',peerId:document.getElementById('myPeerId').textContent})});
+      if(res.ok){ isLive=true; document.getElementById('liveBadge').classList.add('on'); document.getElementById('battleBottomBtn').classList.add('on'); toast('You are LIVE - bottom left ⚔️ to battle'); registerPeer(); pollInvites(); }
+    } else {
+      await fetch('/api/live/end',{method:'POST',headers}); isLive=false; document.getElementById('liveBadge').classList.remove('on'); document.getElementById('battleBottomBtn').classList.remove('on'); if(isBattle) endBattle();
+    }
+  }catch(e){ isLive=startLive; if(startLive){ document.getElementById('liveBadge').classList.add('on'); document.getElementById('battleBottomBtn').classList.add('on'); toast('LIVE (local) - battle button bottom left'); } }
 }
-async function goLiveBackend(start){ const token=localStorage.getItem('token')||localStorage.getItem('nvme_token')||sessionStorage.getItem('token'); const headers={'Content-Type':'application/json'}; if(token) headers['Authorization']='Bearer '+token; try{ if(start){ const res=await fetch('/api/live/start',{method:'POST',headers,body:JSON.stringify({title:'BATTLE LIVE',battle:true}}); if(res.ok) document.getElementById('liveBadge').classList.add('on'); } else { await fetch('/api/live/end',{method:'POST',headers}); document.getElementById('liveBadge').classList.remove('on'); } }catch(e){} }
+function pollInvites(){
+  if(!isLive) return;
+  setInterval(async()=>{
+    try{
+      const token=localStorage.getItem('token')||''; const headers={}; if(token) headers['Authorization']='Bearer '+token;
+      const res=await fetch('/api/battle/invites',{headers}); if(res.ok){ const data=await res.json(); const invites=data.invites||[]; if(invites.length>0){ const inv=invites[0]; showInviteBanner(inv.fromName||'Streamer',{answer:()=>{},on:()=>{}}); pendingInvite={fake:true,fromId:inv.fromPeerId||inv.fromId}; } }
+    }catch(e){}
+  },4000);
+}
 document.getElementById('goBtn').onclick=function(){ const willLive=!this.classList.contains('live'); this.classList.toggle('live',willLive); this.textContent=willLive?'END LIVE':'Go LIVE'; goLiveBackend(willLive); };
-document.getElementById('bgScale').oninput=e=>{ bgScale=+e.target.value; document.getElementById('bgScaleV').textContent=bgScale+'%'; };
-window.addEventListener('load',()=>{ start(); const saved=localStorage.getItem('nvme_uploaded_bg'); if(saved) bgImg.src=saved; const params=new URLSearchParams(location.search); const battleId=params.get('battle'); if(battleId){ document.getElementById('remoteId').value=battleId; openBattle(); toast('Battle invite - paste ID to join'); } setTimeout(()=>{ if(!fxOpen) toggleFx(); },800); });
+window.addEventListener('load',()=>{
+  start();
+  const saved=localStorage.getItem('nvme_uploaded_bg'); if(saved) bgImg.src=saved;
+  const params=new URLSearchParams(location.search); const b=params.get('battle'); if(b){ document.getElementById('remoteId').value=b; setTimeout(()=>openBattlePanel(),1000); }
+  setTimeout(()=>{ toggleFx(); },800);
+});
 </script>
 </body>
 </html>

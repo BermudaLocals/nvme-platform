@@ -7,89 +7,192 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;height:100dvh;width:100vw}
-#cam{position:fixed;inset:0;width:100vw;height:100dvh;object-fit:cover;object-position:center top;background:#111;z-index:0;transform:scaleX(-1)}
-#cam.env{transform:scaleX(1)}
+#cam{display:none}
+#out{position:fixed;inset:0;width:100vw;height:100dvh;object-fit:cover;background:#0a0a0a;z-index:0;transform:scaleX(-1)}
+#out.env{transform:scaleX(1)}
+#noCam{position:fixed;inset:0;z-index:1;display:none;align-items:center;justify-content:center;flex-direction:column;background:radial-gradient(circle at 50% 30%,#222,#000);text-align:center;padding:20px}
+#noCam.show{display:flex}
 .overlay{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;pointer-events:none}
 .overlay *{pointer-events:auto}
 .top{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
 .icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer;text-decoration:none;font-size:14px}
 .pill{padding:6px 12px;border-radius:20px;background:rgba(0,0,0,.55);font-size:.75rem;cursor:pointer}
 .reward{margin:6px 10px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.15);font-size:.7rem;display:flex;justify-content:space-between;gap:8px}
-.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:12px;align-items:center;overflow-y:auto}
-.t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;-webkit-tap-highlight-color:transparent}
-.t .i{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid rgba(255,255,255,.15);transition:.15s}
-.t:active .i{transform:scale(.9);background:rgba(255,255,255,.25)}
+.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:12px;align-items:center;overflow-y:auto;z-index:6}
+.t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+.t .i{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid rgba(255,255,255,.15)}
+.t.active .i{background:#fe2c55;border-color:#fe2c55}
 .t span{font-size:.55rem;text-shadow:0 1px 2px #000}
 .bottom{margin-top:auto;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.2))}
-.go{width:100%;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer;transition:.2s}
-.go.live{background:#10ff70;color:#000;box-shadow:0 0 20px #10ff70}
-.go:active{transform:scale(.98)}
+.go{width:100%;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
+.go.live{background:#10ff70;color:#000}
 .mini{display:flex;gap:10px;justify-content:center;font-size:.6rem;opacity:.7;margin-top:8px;flex-wrap:wrap}
 .mini span{cursor:pointer;padding:2px 6px;border-radius:8px}
 .mini span.active{background:rgba(255,255,255,.2);opacity:1}
 .tabs{display:flex;gap:20px;justify-content:center;margin-top:8px;font-size:.75rem;font-weight:700}
 .tabs span{cursor:pointer;opacity:.5;padding-bottom:3px;border-bottom:2px solid transparent}
 .tabs span.active{opacity:1;border-color:#fff}
-#toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);padding:14px 22px;border-radius:12px;z-index:100;display:none;font-size:.9rem;text-align:center;max-width:80%}
+#toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);padding:14px 22px;border-radius:12px;z-index:100;display:none;font-size:.9rem;max-width:80%;text-align:center}
 #toast.show{display:block}
+/* Effects Panel */
+#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:20;background:#111;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:65dvh;overflow-y:auto}
+#fxPanel.show{transform:translateY(0)}
+.fxHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.fxGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.fxItem{aspect-ratio:1;background:#222;border-radius:12px;overflow:hidden;cursor:pointer;position:relative;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.fxItem.active{border-color:#fe2c55}
+.fxItem img{width:100%;height:70%;object-fit:cover}
+.fxItem span{font-size:.6rem;padding:4px}
+.sliderRow{display:flex;align-items:center;gap:10px;margin:10px 0}
+.sliderRow input{flex:1}
 </style>
 </head>
 <body>
 <video id="cam" autoplay playsinline muted></video>
-<div id="toast"></div>
-<div class="overlay">
-  <div class="top">
-    <a class="icon" href="/app.html">✕</a>
-    <div class="pill" onclick="toast('Add sound coming soon')">♫ Add sound</div>
-    <div style="display:flex;gap:6px"><button class="icon" onclick="flip()" title="Flip">↻</button><a class="icon" href="/app.html">✕</a></div>
-  </div>
-  <div class="reward" id="rw"><span>Scaled LIVE Rewards: complete missions +$0.01</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff;cursor:pointer">✕</button></div>
+<canvas id="out"></canvas>
+<img id="bgImg" style="display:none">
+<video id="bgVid" loop muted style="display:none"></video>
 
+<div id="noCam"><div style="font-size:48px">📷</div><h3 style="margin:10px 0">Camera Blocked</h3><p style="opacity:.7;font-size:.85rem">Allow camera in address bar → Reload</p><button onclick="start()" style="margin-top:16px;padding:10px 20px;border-radius:20px;border:none;background:#fff;color:#000;font-weight:700;cursor:pointer">Try Again</button></div>
+<div id="toast"></div>
+
+<div class="overlay">
+  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toast('Add sound coming soon')">♫ Add sound</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
+  <div class="reward" id="rw"><span>Scaled LIVE Rewards: complete missions +$0.01</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff;cursor:pointer">✕</button></div>
   <div class="tools">
     <div class="t" onclick="flip()"><div class="i">⇄</div><span>Flip</span></div>
-    <div class="t" onclick="toast('✨ Beautify - Coming Soon')"><div class="i">✨</div><span>Beautify</span></div>
-    <div class="t" onclick="toast('🎨 Effects - Coming Soon')"><div class="i">🎨</div><span>Effects</span></div>
-    <div class="t" onclick="toast('⚙ Settings opened')"><div class="i">⚙</div><span>Settings</span></div>
-    <div class="t" onclick="toast('👥 Hangout - Coming Soon')"><div class="i">👥</div><span>Hangout</span></div>
-    <div class="t" onclick="toast('📋 Boards - Coming Soon')"><div class="i">📋</div><span>Boards</span></div>
-    <div class="t" onclick="toast('💬 Service+ - Coming Soon')"><div class="i">💬</div><span>Service+</span></div>
-    <div class="t" onclick="toast('❤ Fan Club - Coming Soon')"><div class="i">❤</div><span>Fan Club</span></div>
-    <div class="t" onclick="toast('👁 Interact - Coming Soon')"><div class="i">👁</div><span>Interact</span></div>
+    <div class="t"><div class="i">✨</div><span>Beautify</span></div>
+    <div class="t active" id="btnEffects" onclick="toggleFx()"><div class="i">🎨</div><span>Effects</span></div>
+    <div class="t" onclick="toast('⚙ Settings')"><div class="i">⚙</div><span>Settings</span></div>
+    <div class="t" onclick="toast('👥 Hangout')"><div class="i">👥</div><span>Hangout</span></div>
+    <div class="t" onclick="toast('📋 Boards')"><div class="i">📋</div><span>Boards</span></div>
+    <div class="t" onclick="toast('💬 Service+')"><div class="i">💬</div><span>Service+</span></div>
+    <div class="t" onclick="toast('❤ Fan Club')"><div class="i">❤</div><span>Fan Club</span></div>
+    <div class="t" onclick="toast('👁 Interact')"><div class="i">👁</div><span>Interact</span></div>
     <div class="t" onclick="share()"><div class="i">↗</div><span>Share</span></div>
   </div>
-
   <div class="bottom">
-    <div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:8px"><span style="background:rgba(0,0,0,.5);padding:4px 10px;border-radius:12px;cursor:pointer" onclick="window.location='/app.html'">👑 Build Your Digital System</span><span style="cursor:pointer" onclick="toast('LIVE goal - Coming Soon')">◉ LIVE goal</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:8px"><span style="background:rgba(0,0,0,.5);padding:4px 10px;border-radius:12px" onclick="location='/app.html'">👑 Build Your Digital System</span><span>◉ LIVE goal</span></div>
     <button class="go" id="goBtn">Go LIVE</button>
-    <div class="mini">
-      <span id="m-voice" onclick="setMode('voice')">🎤 Voice chat</span>
-      <span id="m-camera" class="active" onclick="setMode('camera')">📷 Device camera</span>
-      <span id="m-gaming" onclick="setMode('gaming')">🎮 Mobile gaming</span>
-      <span id="m-studio" onclick="setMode('studio')">💻 LIVE Studio</span>
-    </div>
-    <div class="tabs"><span id="tab-live" class="active" onclick="setTab('live')">LIVE</span><span id="tab-post" onclick="setTab('post')">POST</span><span id="tab-create" onclick="setTab('create')">CREATE</span></div>
+    <div class="mini"><span class="active">📷 Device camera</span><span>🎤 Voice</span><span>🎮 Gaming</span><span>💻 Studio</span></div>
+    <div class="tabs"><span class="active">LIVE</span><span>POST</span><span>CREATE</span></div>
   </div>
 </div>
 
-<script>
-const cam=document.getElementById('cam');
-let facing='user',stream=null,isLive=false;
-function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2000); }
-async function start(){ if(stream) stream.getTracks().forEach(x=>x.stop()); try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true}); cam.srcObject=stream; await cam.play(); }catch(e){ toast('Allow Camera: click lock icon > Allow > Reload'); console.log(e); } }
-function flip(){ facing=facing==='user'?'environment':'user'; cam.classList.toggle('env',facing==='environment'); start(); toast('Flipped to '+(facing==='user'?'front':'back')); }
-function share(){ if(navigator.share){ navigator.share({title:'NVME.live',url:location.href}); } else { navigator.clipboard.writeText(location.href); toast('Link copied!'); } }
-function setMode(m){ document.querySelectorAll('.mini span').forEach(s=>s.classList.remove('active')); document.getElementById('m-'+m).classList.add('active'); toast(m+' mode selected'); }
-function setTab(t){ document.querySelectorAll('.tabs span').forEach(s=>s.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); if(t==='post'){ window.location='/app.html'; } else if(t==='create'){ window.location='/app.html'; } else { toast('LIVE mode'); } }
+<!-- Effects / Green Screen Panel -->
+<div id="fxPanel">
+  <div class="fxHead"><b>🎨 Effects • Green Screen</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
+  
+  <div style="font-size:.7rem;opacity:.7;margin:6px 0">GREEN SCREEN</div>
+  <div class="fxGrid" id="bgGrid">
+    <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:28px">🚫</div><span>None</span></div>
+    <div class="fxItem" data-bg="https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=300" onclick="setBg(this.dataset.bg,this)"><img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=300"><span>Office</span></div>
+    <div class="fxItem" data-bg="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=300" onclick="setBg(this.dataset.bg,this)"><img src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=300"><span>Space</span></div>
+    <div class="fxItem" data-bg="https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=300" onclick="setBg(this.dataset.bg,this)"><img src="https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=300"><span>City</span></div>
+    <div class="fxItem" data-bg="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300" onclick="setBg(this.dataset.bg,this)"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300"><span>Beach</span></div>
+    <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:28px">⬆️</div><span>Upload</span></div>
+  </div>
 
-document.getElementById('goBtn').onclick=function(){
-  isLive=!isLive;
-  this.textContent=isLive?'END LIVE':'Go LIVE';
-  this.classList.toggle('live',isLive);
-  if(isLive){ toast('🔴 You are LIVE now!'); } else { toast('Live ended'); }
+  <div class="sliderRow"><span style="font-size:.7rem">Sensitivity</span><input type="range" id="thresh" min="20" max="120" value="55"><span id="thVal" style="font-size:.7rem">55</span></div>
+  <div class="sliderRow"><span style="font-size:.7rem">Smooth</span><input type="range" id="smooth" min="0" max="20" value="8"><span id="smVal" style="font-size:.7rem">8</span></div>
+
+  <input type="file" id="uploadBg" accept="image/*,video/*" style="display:none">
+  <div style="margin-top:8px;font-size:.65rem;opacity:.6">Tip: Use a solid green background behind you. Upload your own image/video as green screen.</div>
+</div>
+
+<script>
+const cam=document.getElementById('cam'), out=document.getElementById('out'), ctx=out.getContext('2d',{willReadFrequently:true});
+const bgImg=document.getElementById('bgImg'), bgVid=document.getElementById('bgVid'), noCam=document.getElementById('noCam');
+let facing='user',stream=null,fxOpen=false,bgMode='none',thresh=55,smooth=8;
+
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2000); }
+function toggleFx(){ fxOpen=!fxOpen; document.getElementById('fxPanel').classList.toggle('show',fxOpen); document.getElementById('btnEffects').classList.toggle('active',fxOpen); }
+
+async function start(){
+  if(stream) stream.getTracks().forEach(x=>x.stop());
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true});
+    cam.srcObject=stream; await cam.play(); noCam.classList.remove('show'); render();
+  }catch(e){ noCam.classList.add('show'); }
+}
+function flip(){ facing=facing==='user'?'environment':'user'; out.classList.toggle('env',facing==='environment'); start(); }
+
+function setBg(src,el){
+  document.querySelectorAll('#bgGrid .fxItem').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  if(src==='none'){ bgMode='none'; toast('Green screen off'); return; }
+  bgMode='image';
+  bgImg.crossOrigin='anonymous';
+  bgImg.src=src;
+  bgImg.onload=()=>toast('Background set');
+}
+
+// upload own
+document.getElementById('uploadBg').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const url=URL.createObjectURL(f);
+  if(f.type.startsWith('video')){ bgMode='video'; bgVid.src=url; bgVid.play(); toast('Video background set'); }
+  else { bgMode='image'; bgImg.src=url; toast('Custom background set'); }
+  document.querySelectorAll('#bgGrid .fxItem').forEach(x=>x.classList.remove('active'));
 };
 
+document.getElementById('thresh').oninput=e=>{ thresh=+e.target.value; document.getElementById('thVal').textContent=thresh; };
+document.getElementById('smooth').oninput=e=>{ smooth=+e.target.value; document.getElementById('smVal').textContent=smooth; };
+
+function share(){ if(navigator.share) navigator.share({url:location.href}); else { navigator.clipboard.writeText(location.href); toast('Link copied'); } }
+
+function render(){
+  if(cam.videoWidth===0){ requestAnimationFrame(render); return; }
+  out.width=cam.videoWidth; out.height=cam.videoHeight;
+  // draw bg first
+  if(bgMode==='none'){
+    ctx.drawImage(cam,0,0,out.width,out.height);
+  } else {
+    // draw background
+    let bg = bgMode==='video'? bgVid : bgImg;
+    if(bg.readyState!==undefined && bgMode==='video' && bg.videoWidth>0 || bgMode==='image' && bg.complete){
+      ctx.drawImage(bg,0,0,out.width,out.height);
+    } else {
+      ctx.fillStyle='#222'; ctx.fillRect(0,0,out.width,out.height);
+    }
+    // temp canvas for person
+    const tmp=document.createElement('canvas'); tmp.width=out.width; tmp.height=out.height;
+    const tctx=tmp.getContext('2d'); tctx.drawImage(cam,0,0,out.width,out.height);
+    const frame=tctx.getImageData(0,0,out.width,out.height);
+    const d=frame.data;
+    for(let i=0;i<d.length;i+=4){
+      const r=d[i], g=d[i+1], b=d[i+2];
+      // chroma key: green dominant
+      const isGreen = g>thresh && g>r+smooth && g>b+smooth && (g-r)>(15+smooth/2);
+      if(isGreen){
+        // make transparent by copying bg pixel already drawn - just skip setting
+        // we need to keep bg, so make alpha 0 to keep bg
+        // Instead of alpha, we replace with bg pixel from ctx - we already drew bg, so set alpha to 0 then later compositing will show bg
+        // Simpler: if green, don't overwrite - keep bg already drawn. So we check and if NOT green, draw person pixel over bg
+        continue;
+      } else {
+        // draw person pixel over bg - we will write directly
+      }
+    }
+    // second pass: actually composite person non-green over bg
+    // we need to overlay only non-green
+    const outData=ctx.getImageData(0,0,out.width,out.height); // bg
+    const o=outData.data;
+    for(let i=0;i<d.length;i+=4){
+      const r=d[i], g=d[i+1], b=d[i+2];
+      const isGreen = g>thresh && g>r+smooth && g>b+smooth && (g-r)>(15+smooth/2);
+      if(!isGreen){
+        o[i]=r; o[i+1]=g; o[i+2]=b; o[i+3]=255;
+      }
+    }
+    ctx.putImageData(outData,0,0);
+  }
+  requestAnimationFrame(render);
+}
+
+document.getElementById('goBtn').onclick=function(){ this.classList.toggle('live'); this.textContent=this.classList.contains('live')?'END LIVE':'Go LIVE'; toast(this.classList.contains('live')?'🔴 LIVE':'Ended'); };
+
 window.addEventListener('load',start);
-document.addEventListener('click',()=>{ if(!stream) start(); },{once:true});
 </script>
 </body>
 </html>

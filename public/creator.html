@@ -4,60 +4,92 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Go LIVE - NVME.live</title>
-<link rel="icon" href="/img/icon-192.png">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;height:100dvh;width:100vw}
-#cam{position:fixed;inset:0;width:100vw;height:100dvh;object-fit:cover;object-position:center center;background:#000;z-index:0;transform:scaleX(-1)}
+#cam{position:fixed;inset:0;width:100vw;height:100dvh;object-fit:cover;object-position:center top;background:#111;z-index:0;transform:scaleX(-1)}
 #cam.env{transform:scaleX(1)}
 .overlay{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;pointer-events:none}
 .overlay *{pointer-events:auto}
 .top{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
-.icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer;text-decoration:none}
-.pill{padding:6px 12px;border-radius:20px;background:rgba(0,0,0,.55);font-size:.75rem}
+.icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer;text-decoration:none;font-size:14px}
+.pill{padding:6px 12px;border-radius:20px;background:rgba(0,0,0,.55);font-size:.75rem;cursor:pointer}
 .reward{margin:6px 10px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.15);font-size:.7rem;display:flex;justify-content:space-between;gap:8px}
-.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:14px;align-items:center}
-.t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
-.t .i{width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid rgba(255,255,255,.1)}
+.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:12px;align-items:center;overflow-y:auto}
+.t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;-webkit-tap-highlight-color:transparent}
+.t .i{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid rgba(255,255,255,.15);transition:.15s}
+.t:active .i{transform:scale(.9);background:rgba(255,255,255,.25)}
 .t span{font-size:.55rem;text-shadow:0 1px 2px #000}
-.bottom{margin-top:auto;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.85),transparent)}
-.go{width:100%;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
-.go.live{background:#0f0;color:#000}
+.bottom{margin-top:auto;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.2))}
+.go{width:100%;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer;transition:.2s}
+.go.live{background:#10ff70;color:#000;box-shadow:0 0 20px #10ff70}
+.go:active{transform:scale(.98)}
 .mini{display:flex;gap:10px;justify-content:center;font-size:.6rem;opacity:.7;margin-top:8px;flex-wrap:wrap}
-.tabs{display:flex;gap:20px;justify-content:center;margin-top:8px;font-size:.7rem;font-weight:700;opacity:.6}
-.tabs .a{opacity:1;border-bottom:2px solid #fff}
+.mini span{cursor:pointer;padding:2px 6px;border-radius:8px}
+.mini span.active{background:rgba(255,255,255,.2);opacity:1}
+.tabs{display:flex;gap:20px;justify-content:center;margin-top:8px;font-size:.75rem;font-weight:700}
+.tabs span{cursor:pointer;opacity:.5;padding-bottom:3px;border-bottom:2px solid transparent}
+.tabs span.active{opacity:1;border-color:#fff}
+#toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);padding:14px 22px;border-radius:12px;z-index:100;display:none;font-size:.9rem;text-align:center;max-width:80%}
+#toast.show{display:block}
 </style>
 </head>
 <body>
 <video id="cam" autoplay playsinline muted></video>
+<div id="toast"></div>
 <div class="overlay">
-  <div class="top"><a href="/app.html" class="icon">✕</a><div class="pill">♫ Add sound</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a href="/app.html" class="icon">✕</a></div></div>
-  <div class="reward" id="rw"><span>Scaled LIVE Rewards: complete missions +$0.01</span><button onclick="rw.remove()" style="background:none;border:none;color:#fff;cursor:pointer">✕</button></div>
+  <div class="top">
+    <a class="icon" href="/app.html">✕</a>
+    <div class="pill" onclick="toast('Add sound coming soon')">♫ Add sound</div>
+    <div style="display:flex;gap:6px"><button class="icon" onclick="flip()" title="Flip">↻</button><a class="icon" href="/app.html">✕</a></div>
+  </div>
+  <div class="reward" id="rw"><span>Scaled LIVE Rewards: complete missions +$0.01</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff;cursor:pointer">✕</button></div>
+
   <div class="tools">
     <div class="t" onclick="flip()"><div class="i">⇄</div><span>Flip</span></div>
-    <div class="t"><div class="i">✨</div><span>Beautify</span></div>
-    <div class="t"><div class="i">🎨</div><span>Effects</span></div>
-    <div class="t"><div class="i">⚙</div><span>Settings</span></div>
-    <div class="t"><div class="i">👥</div><span>Hangout</span></div>
-    <div class="t"><div class="i">📋</div><span>Boards</span></div>
-    <div class="t"><div class="i">💬</div><span>Service+</span></div>
-    <div class="t"><div class="i">❤</div><span>Fan Club</span></div>
-    <div class="t"><div class="i">👁</div><span>Interact</span></div>
-    <div class="t"><div class="i">↗</div><span>Share</span></div>
+    <div class="t" onclick="toast('✨ Beautify - Coming Soon')"><div class="i">✨</div><span>Beautify</span></div>
+    <div class="t" onclick="toast('🎨 Effects - Coming Soon')"><div class="i">🎨</div><span>Effects</span></div>
+    <div class="t" onclick="toast('⚙ Settings opened')"><div class="i">⚙</div><span>Settings</span></div>
+    <div class="t" onclick="toast('👥 Hangout - Coming Soon')"><div class="i">👥</div><span>Hangout</span></div>
+    <div class="t" onclick="toast('📋 Boards - Coming Soon')"><div class="i">📋</div><span>Boards</span></div>
+    <div class="t" onclick="toast('💬 Service+ - Coming Soon')"><div class="i">💬</div><span>Service+</span></div>
+    <div class="t" onclick="toast('❤ Fan Club - Coming Soon')"><div class="i">❤</div><span>Fan Club</span></div>
+    <div class="t" onclick="toast('👁 Interact - Coming Soon')"><div class="i">👁</div><span>Interact</span></div>
+    <div class="t" onclick="share()"><div class="i">↗</div><span>Share</span></div>
   </div>
+
   <div class="bottom">
-    <div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:8px"><span style="background:rgba(0,0,0,.5);padding:4px 10px;border-radius:12px">👑 Build Your Digital System</span><span>◉ LIVE goal</span></div>
-    <button class="go" id="go">Go LIVE</button>
-    <div class="mini"><span>🎤 Voice</span><span>📷 Camera</span><span>🎮 Gaming</span><span>💻 Studio</span></div>
-    <div class="tabs"><span class="a">LIVE</span><span>POST</span><span>CREATE</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:8px"><span style="background:rgba(0,0,0,.5);padding:4px 10px;border-radius:12px;cursor:pointer" onclick="window.location='/app.html'">👑 Build Your Digital System</span><span style="cursor:pointer" onclick="toast('LIVE goal - Coming Soon')">◉ LIVE goal</span></div>
+    <button class="go" id="goBtn">Go LIVE</button>
+    <div class="mini">
+      <span id="m-voice" onclick="setMode('voice')">🎤 Voice chat</span>
+      <span id="m-camera" class="active" onclick="setMode('camera')">📷 Device camera</span>
+      <span id="m-gaming" onclick="setMode('gaming')">🎮 Mobile gaming</span>
+      <span id="m-studio" onclick="setMode('studio')">💻 LIVE Studio</span>
+    </div>
+    <div class="tabs"><span id="tab-live" class="active" onclick="setTab('live')">LIVE</span><span id="tab-post" onclick="setTab('post')">POST</span><span id="tab-create" onclick="setTab('create')">CREATE</span></div>
   </div>
 </div>
+
 <script>
-const cam=document.getElementById('cam'); let facing='user',stream=null;
-async function start(){ if(stream) stream.getTracks().forEach(t=>t.stop()); try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true}); cam.srcObject=stream; await cam.play(); }catch(e){ alert('Allow camera: click lock > Allow'); } }
-function flip(){ facing=facing==='user'?'environment':'user'; cam.classList.toggle('env',facing==='environment'); start(); }
-document.getElementById('go').onclick=function(){ this.classList.toggle('live'); this.textContent=this.classList.contains('live')?'END LIVE':'Go LIVE'; };
+const cam=document.getElementById('cam');
+let facing='user',stream=null,isLive=false;
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2000); }
+async function start(){ if(stream) stream.getTracks().forEach(x=>x.stop()); try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true}); cam.srcObject=stream; await cam.play(); }catch(e){ toast('Allow Camera: click lock icon > Allow > Reload'); console.log(e); } }
+function flip(){ facing=facing==='user'?'environment':'user'; cam.classList.toggle('env',facing==='environment'); start(); toast('Flipped to '+(facing==='user'?'front':'back')); }
+function share(){ if(navigator.share){ navigator.share({title:'NVME.live',url:location.href}); } else { navigator.clipboard.writeText(location.href); toast('Link copied!'); } }
+function setMode(m){ document.querySelectorAll('.mini span').forEach(s=>s.classList.remove('active')); document.getElementById('m-'+m).classList.add('active'); toast(m+' mode selected'); }
+function setTab(t){ document.querySelectorAll('.tabs span').forEach(s=>s.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); if(t==='post'){ window.location='/app.html'; } else if(t==='create'){ window.location='/app.html'; } else { toast('LIVE mode'); } }
+
+document.getElementById('goBtn').onclick=function(){
+  isLive=!isLive;
+  this.textContent=isLive?'END LIVE':'Go LIVE';
+  this.classList.toggle('live',isLive);
+  if(isLive){ toast('🔴 You are LIVE now!'); } else { toast('Live ended'); }
+};
+
 window.addEventListener('load',start);
+document.addEventListener('click',()=>{ if(!stream) start(); },{once:true});
 </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
-<head>
+<head><meta charset="utf-8">
   <meta charset="UTF-8" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
@@ -61,7 +61,7 @@ function renderBattleLobby(parts) {
     <div style="display:flex;align-items:center;gap:8px;padding:4px;border-bottom:1px solid var(--border);">
       <img src="${p.avatar_url || '/img/default-avatar.png'}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">
       <span style="font-weight:600;font-size:0.85rem;">${esc(p.username)}</span>
-      <span style="margin-left:auto;font-size:0.75rem;color:var(--cyan);">${p.team === 'b' ? 'ðŸ”µ' : 'ðŸ”´'} ${esc(p.display_name || p.username)}</span>
+      <span style="margin-left:auto;font-size:0.75rem;color:var(--cyan);">${p.team === 'b' ? ' : ' ${esc(p.display_name || p.username)}</span>
     </div>
   `).join('');
 }
@@ -75,7 +75,7 @@ async function startBattle() {
   document.getElementById('battle-active').style.display = 'block';
   document.getElementById('battle-card').style.display = 'block';
   startBattleTimer(60);
-  showNotification('ðŸ”¥ BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
+  showNotification(' BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
   pollBattleLeaderboard();
 }
 
@@ -105,20 +105,20 @@ async function pollBattleLeaderboard() {
 function renderBattleLeaderboard(parts) {
   const el = document.getElementById('battle-leaderboard');
   const splitEl = document.getElementById('battle-split-screen');
-  const active = parts.filter(p => p.status === 'active').sort((a,b) => b.gifts_received - a.gifts_received);
+  const active = parts.filter(p => p.status === 'active').sort((a,b) => b.GIFTS_received - a.GIFTS_received);
   const eliminated = parts.filter(p => p.status === 'eliminated');
 
   // Update leaderboard list
   el.innerHTML = `
-    <div style="font-weight:700;margin-bottom:4px;">ðŸ† Leaderboard</div>
+    <div style="font-weight:700;margin-bottom:4px;"> Leaderboard</div>
     ${active.map((p,i) => `
       <div style="display:flex;align-items:center;gap:6px;padding:3px 0;${i===0?'color:gold;font-weight:700;':''}">
         <span style="width:20px;text-align:center;">${i+1}</span>
         <span style="flex:1;">${esc(p.username)}</span>
-        <span style="color:var(--gold);">ðŸ’Ž ${p.gifts_received}</span>
+        <span style="color:var(--gold);"> ${p.GIFTS_received}</span>
       </div>
     `).join('')}
-    ${eliminated.length ? `<div style="margin-top:8px;color:var(--red);font-size:0.75rem;">ðŸ’€ Eliminated: ${eliminated.map(e => esc(e.username)).join(', ')}</div>` : ''}
+    ${eliminated.length ? `<div style="margin-top:8px;color:var(--red);font-size:0.75rem;"> Eliminated: ${eliminated.map(e => esc(e.username)).join(', ')}</div>` : ''}
   `;
 
   // Update split-screen slots
@@ -128,7 +128,7 @@ function renderBattleLeaderboard(parts) {
         <div class="battle-slot-bg" id="battle-bg-${p.user_id || p.id}" style="background-image: url('${p.bg_url || ''}')"></div>
         <div class="battle-slot-bg-overlay"></div>
         <label class="battle-slot-upload" title="Upload background image">
-          <span style="font-size:0.7rem;">ðŸ“· BG</span>
+          <span style="font-size:0.7rem;"> BG</span>
           <input type="file" accept="image/*" onchange="uploadBattleBg('${p.user_id || p.id}', this)" />
         </label>
         <div class="battle-slot-content">
@@ -136,12 +136,12 @@ function renderBattleLeaderboard(parts) {
             <img class="battle-slot-avatar" src="${p.avatar_url || '/img/default-avatar.png'}" alt="" />
             <div class="battle-slot-info">
               <div class="battle-slot-name">${esc(p.username)}</div>
-              <div class="battle-slot-team">${esc(p.team === 'b' ? 'ðŸ”µ Team B' : 'ðŸ”´ Team A')}</div>
+              <div class="battle-slot-team">${esc(p.team === 'b' ? ' Team B' : ' Team A')}</div>
             </div>
           </div>
-          <div class="battle-slot-gifts">
-            <div class="battle-slot-gift-count">${p.gifts_received || 0}</div>
-            <div class="battle-slot-gift-label">gifts received</div>
+          <div class="battle-slot-GIFTS">
+            <div class="battle-slot-gift-count">${p.GIFTS_received || 0}</div>
+            <div class="battle-slot-gift-label">GIFTS received</div>
           </div>
         </div>
       </div>
@@ -192,10 +192,10 @@ async function eliminateLowest() {
   const active = d.participants.filter(p => p.status === 'active');
   if (active.length > 1) {
     const lowest = active[active.length - 1];
-    showNotification(`ðŸ’€ ${lowest.username} ELIMINATED!`, 'Keep those gifts coming!', 'warning');
+    showNotification(` ${lowest.username} ELIMINATED!`, 'Keep those GIFTS coming!', 'warning');
   }
   if (active.length <= 1) {
-    showNotification('ðŸ† BATTLE WINNER!', `${active[0]?.username || 'Unknown'} wins!`, 'success');
+    showNotification(' BATTLE WINNER!', `${active[0]?.username || 'Unknown'} wins!`, 'success');
   }
 }
 
@@ -208,7 +208,7 @@ async function endBattle() {
   document.getElementById('battle-controls').style.display = 'block';
   document.getElementById('battle-card').style.display = 'none';
   currentBattleId = null;
-  showNotification('ðŸ† Battle Ended!', 'Winners announced!', 'success');
+  showNotification(' Battle Ended!', 'Winners announced!', 'success');
 }
 
 </script>
@@ -288,7 +288,7 @@ async function endBattle() {
       font-size: 0.85rem;
     }
 
-    /* Mobile stream control */
+    /* Mobile STREAM CONTROL */
     .go-live-panel {
       padding: 16px;
     }
@@ -942,7 +942,7 @@ async function endBattle() {
     .text-center { text-align: center; }
     .refresh-note { font-size: .72rem; color: var(--muted); }
     .copy-success { color: var(--green); font-size: .78rem; display: none; }
-    .earnings-usd {
+    .EARNINGS-usd {
       font-size: 1.8rem; font-weight: 800;
       background: linear-gradient(135deg, var(--magenta), var(--cyan));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
@@ -1020,7 +1020,7 @@ async function endBattle() {
     .battle-slot-info { flex: 1; }
     .battle-slot-name { font-weight: 700; font-size: 0.95rem; }
     .battle-slot-team { font-size: 0.75rem; color: var(--muted); }
-    .battle-slot-gifts {
+    .battle-slot-GIFTS {
       text-align: center;
       margin-top: auto;
     }
@@ -1450,7 +1450,7 @@ async function endBattle() {
 <!-- NVME Mobile Back Bar -->
 <div style="position:fixed;top:0;left:0;right:0;height:52px;background:rgba(7,7,13,0.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.06);z-index:9999;display:flex;align-items:center;padding:0 1rem;gap:0.75rem">
   <a href="/app.html" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;text-decoration:none;flex-shrink:0">&#8592;</a>
-  <span style="font-weight:700;font-size:1rem;color:#fff">ðŸŽ¬ Creator Studio</span>
+  <span style="font-weight:700;font-size:1rem;color:#fff"> Creator Studio</span>
   <a href="/app.html" style="margin-left:auto;display:flex;align-items:center;gap:6px;text-decoration:none"><img src="/img/icon-192.png" alt="NVME" style="width:28px;height:28px;border-radius:7px" onerror="this.style.display='none'"></a>
 </div>
 <div style="height:52px"></div>
@@ -1470,11 +1470,9 @@ async function endBattle() {
     <div class="avatar" id="user-avatar">?</div>
     <span id="user-display">Loadingâ€¦</span>
     <div id="wallet-display" style="display:flex;align-items:center;gap:4px;background:linear-gradient(135deg,rgba(124,92,252,0.2),rgba(233,30,140,0.2));border:1px solid rgba(124,92,252,0.3);border-radius:20px;padding:4px 12px;font-size:0.8rem;font-weight:600;margin-left:8px;cursor:pointer;" onclick="openWallet()">
-      <span>ðŸ’Ž</span>
-      <span id="credit-balance">0</span>
+      <span>      <span id="credit-balance">0</span>
     </div>
-    <button id="push-toggle" class="btn btn-ghost btn-sm" onclick="togglePushNotifications()" title="Notify followers when live" style="margin-left:8px;">ðŸ””</button>
-  </div>
+    <button id="push-toggle" class="btn btn-ghost btn-sm" onclick="togglePushNotifications()" title="Notify followers when live" style="margin-left:8px;">  </div>
 </nav>
 
 <!-- TOAST CONTAINER -->
@@ -1482,8 +1480,7 @@ async function endBattle() {
 
 <!-- AUTH GATE -->
 <div id="auth-gate">
-  <div style="font-size:3rem;">ðŸ”</div>
-  <h2>Creator Dashboard</h2>
+  <div style="font-size:3rem;">  <h2>Creator Dashboard</h2>
   <p>Please <a href="/app">sign in at nvme.live/app</a> to access your Go Live dashboard and manage your streams.</p>
 </div>
 
@@ -1493,19 +1490,19 @@ async function endBattle() {
   <!-- â”€â”€ ROW 1: STATS â”€â”€ -->
   <div class="grid-3 mb-24">
     <div class="stat-card cyan">
-      <div class="stat-label">ðŸ‘ Viewers</div>
-      <div class="stat-value cyan" id="stat-viewers">0</div>
+      <div class="stat-label"> VIEWERS</div>
+      <div class="stat-value cyan" id="stat-VIEWERS">0</div>
       <div class="stat-sub">Live right now</div>
     </div>
     <div class="stat-card magenta">
-      <div class="stat-label">ðŸŽ Gifts</div>
-      <div class="stat-value magenta" id="stat-gifts">0</div>
+      <div class="stat-label"> GIFTS</div>
+      <div class="stat-value magenta" id="stat-GIFTS">0</div>
       <div class="stat-sub">This session</div>
     </div>
     <div class="stat-card green">
-      <div class="stat-label">ðŸ’° Earnings</div>
-      <div class="earnings-usd" id="stat-earnings">$0.00</div>
-      <div class="stat-sub">Total gifts value</div>
+      <div class="stat-label"> EARNINGS</div>
+      <div class="EARNINGS-usd" id="stat-EARNINGS">$0.00</div>
+      <div class="stat-sub">Total GIFTS value</div>
     </div>
   </div>
 
@@ -1514,13 +1511,12 @@ async function endBattle() {
 
     <!-- GO LIVE CONTROL -->
     <div class="card">
-      <div class="card-title"><span class="icon">ðŸ“¡</span> Stream Control</div>
+      <div class="card-title"><span class="icon"> STREAM CONTROL</div>
       <div class="go-live-panel">
         <div class="live-ring" id="live-ring">
     <video id="host-preview" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:none;"></video>
     <canvas id="host-canvas" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:none;"></canvas>
-    <span id="ring-emoji" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;">ðŸ“¹</span>
-  </div>
+    <span id="ring-emoji" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;">  </div>
         <div class="filter-carousel swipe-container" style="display:flex;gap:10px;overflow-x:auto;padding:10px 4px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
           <div class="filter-chip active" onclick="setCameraFilter('none', this)" data-filter="none"><div class="filter-preview" style="background:linear-gradient(135deg,#f093fb,#f5576c);"></div><span>Original</span></div>
           <div class="filter-chip" onclick="setCameraFilter('beauty', this)" data-filter="beauty"><div class="filter-preview" style="background:linear-gradient(135deg,#ffecd2,#fcb69f);"></div><span>Beauty</span></div>
@@ -1557,7 +1553,7 @@ async function endBattle() {
         <div class="live-status-text" id="live-status-text">Not streaming</div>
         <div>
           <div class="viewer-count-big" id="viewer-count-big">0</div>
-          <div class="viewer-label">viewers watching</div>
+          <div class="viewer-label">VIEWERS watching</div>
         </div>
 
         <div class="flex-row" style="gap:12px;flex-wrap:wrap;justify-content:center;">
@@ -1566,7 +1562,7 @@ async function endBattle() {
         </div>
 
         <div id="stream-key-section" style="width:100%;display:none;">
-          <div class="card-title" style="margin-bottom:8px;"><span class="icon">ðŸ”‘</span> Stream Key</div>
+          <div class="card-title" style="margin-bottom:8px;"><span class="icon"> Stream Key</div>
           <div class="key-row">
             <div class="key-display hidden-key" id="stream-key-display">â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢</div>
             <button class="btn btn-ghost btn-sm" id="btn-toggle-key" onclick="toggleKey()">Show</button>
@@ -1577,62 +1573,62 @@ async function endBattle() {
 
         <!-- VOICE EFFECTS -->
         <div id="voice-effects-section" style="width:100%;margin-top:16px;">
-          <div class="card-title" style="margin-bottom:8px;"><span class="icon">ðŸŽ™ï¸</span> Voice Effects</div>
+          <div class="card-title" style="margin-bottom:8px;"><span class="icon"> Voice Effects</div>
           <div class="swipe-container" style="display:flex;gap:6px;overflow-x:auto;padding:4px 0;scrollbar-width:none;">
-            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('none')" style="white-space:nowrap;font-size:0.75rem;">ðŸŽ™ï¸ Normal</button>
-            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('chipmunk')" style="white-space:nowrap;font-size:0.75rem;">ðŸ¿ï¸ Chipmunk</button>
-            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('robot')" style="white-space:nowrap;font-size:0.75rem;">ðŸ¤– Robot</button>
-            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('deep')" style="white-space:nowrap;font-size:0.75rem;">ðŸ» Deep</button>
-            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('echo')" style="white-space:nowrap;font-size:0.75rem;">ðŸ”ï¸ Echo</button>
-            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('underwater')" style="white-space:nowrap;font-size:0.75rem;">ðŸŒŠ Underwater</button>
-            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('telephone')" style="white-space:nowrap;font-size:0.75rem;">ðŸ“ž Telephone</button>
-            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('alien')" style="white-space:nowrap;font-size:0.75rem;">ðŸ‘½ Alien</button>
-            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('monster')" style="white-space:nowrap;font-size:0.75rem;">ðŸ‘¹ Monster</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('none')" style="white-space:nowrap;font-size:0.75rem;"> Normal</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('chipmunk')" style="white-space:nowrap;font-size:0.75rem;"> Chipmunk</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('robot')" style="white-space:nowrap;font-size:0.75rem;"> Robot</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('deep')" style="white-space:nowrap;font-size:0.75rem;"> Deep</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('echo')" style="white-space:nowrap;font-size:0.75rem;"> Echo</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('underwater')" style="white-space:nowrap;font-size:0.75rem;"> Underwater</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('telephone')" style="white-space:nowrap;font-size:0.75rem;"> Telephone</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('alien')" style="white-space:nowrap;font-size:0.75rem;"> Alien</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyVoiceEffect('monster')" style="white-space:nowrap;font-size:0.75rem;"> Monster</button>
           </div>
         </div>
 
-        <!-- SOUND EFFECTS (Host-controlled, viewers hear it) -->
+        <!-- SOUND EFFECTS (Host-controlled, VIEWERS hear it) -->
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin:0 -4px;">
           <style>.sound-scroll::-webkit-scrollbar { display: none; }</style>
         <div id="sound-effects-section" style="width:100%;margin-top:16px;">
-          <div class="card-title" style="margin-bottom:8px;"><span class="icon">ðŸ”Š</span> Sound Effects <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">(Viewers hear these!)</span></div>
+          <div class="card-title" style="margin-bottom:8px;"><span class="icon"> Sound Effects <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">(VIEWERS hear these!)</span></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
             <!-- HYPE -->
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('airhorn')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(255,0,0,0.1),rgba(255,100,0,0.1));border-color:rgba(255,0,0,0.3);">ðŸ“¢ Air Horn</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('letsgo')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(0,255,0,0.1),rgba(0,200,0,0.1));border-color:rgba(0,255,0,0.3);">ðŸ”¥ Let's Go!</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('airhorn')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(255,0,0,0.1),rgba(255,100,0,0.1));border-color:rgba(255,0,0,0.3);"> Air Horn</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('letsgo')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(0,255,0,0.1),rgba(0,200,0,0.1));border-color:rgba(0,255,0,0.3);"> Let's Go!</button>
             <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('hype')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,165,0,0.1));border-color:rgba(255,215,0,0.3);">âš¡ Hype</button>
             <!-- REACTIONS -->
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('applause')" style="font-size:0.75rem;">ðŸ‘ Clap</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('cheer')" style="font-size:0.75rem;">ðŸŽ‰ Cheer</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('wow')" style="font-size:0.75rem;">ðŸ¤© Wow</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('bruh')" style="font-size:0.75rem;">ðŸ˜’ Bruh</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('applause')" style="font-size:0.75rem;"> Clap</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('cheer')" style="font-size:0.75rem;"> Cheer</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('wow')" style="font-size:0.75rem;"> Wow</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('bruh')" style="font-size:0.75rem;"> Bruh</button>
             <!-- TENSION -->
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('drumroll')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(124,92,252,0.1),rgba(233,30,140,0.1));">ðŸ¥ Drumroll</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('suspense')" style="font-size:0.75rem;">ðŸ˜° Suspense</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('drumroll')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(124,92,252,0.1),rgba(233,30,140,0.1));"> Drumroll</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('suspense')" style="font-size:0.75rem;"> Suspense</button>
             <!-- FAIL -->
             <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('fail')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(255,0,0,0.1),rgba(200,0,0,0.1));border-color:rgba(255,0,0,0.3);">âŒ Fail</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('sad')" style="font-size:0.75rem;">ðŸ˜¢ Sad</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('sad')" style="font-size:0.75rem;"> Sad</button>
             <!-- MONEY -->
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('cash')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(0,255,0,0.1),rgba(0,200,0,0.1));border-color:rgba(0,255,0,0.3);">ðŸ’° Cash</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('cash')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(0,255,0,0.1),rgba(0,200,0,0.1));border-color:rgba(0,255,0,0.3);"> Cash</button>
             <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('success')" style="font-size:0.75rem;background:linear-gradient(135deg,rgba(0,255,0,0.1),rgba(0,200,0,0.1));border-color:rgba(0,255,0,0.3);">âœ… Success</button>
             <!-- FUN -->
             <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('magic')" style="font-size:0.75rem;">âœ¨ Magic</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('boing')" style="font-size:0.75rem;">ðŸŒ€ Boing</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('whistle')" style="font-size:0.75rem;">ðŸ“¯ Whistle</button>
-            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('ping')" style="font-size:0.75rem;">ðŸ”” Ping</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('boing')" style="font-size:0.75rem;"> Boing</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('whistle')" style="font-size:0.75rem;"> Whistle</button>
+            <button class="btn btn-ghost btn-sm" onclick="playSoundEffect('ping')" style="font-size:0.75rem;"> Ping</button>
           </div>
         </div>
         </div>
 
         <!-- LIVE GOAL -->
         <div id="live-goal-section" style="width:100%;margin-top:16px;">
-          <div class="card-title" style="margin-bottom:8px;"><span class="icon">ðŸŽ¯</span> Live Goal</div>
+          <div class="card-title" style="margin-bottom:8px;"><span class="icon"> Live Goal</div>
           <div id="goal-setter">
             <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <input type="number" id="goal-target" placeholder="Target gifts" style="flex:1;min-width:80px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:0.85rem;" />
+              <input type="number" id="goal-target" placeholder="Target GIFTS" style="flex:1;min-width:80px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:0.85rem;" />
               <input type="text" id="goal-reward" placeholder="Reward (e.g. Dance)" style="flex:2;min-width:120px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:0.85rem;" />
             </div>
-            <button class="btn btn-ghost btn-sm" onclick="setLiveGoal()">ðŸŽ¯ Set Goal</button>
+            <button class="btn btn-ghost btn-sm" onclick="setLiveGoal()"> Set Goal</button>
           </div>
           <div id="goal-display" style="display:none;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -1649,7 +1645,7 @@ async function endBattle() {
 
     <!-- AI STUDIO (Kimi K3) -->
     <div class="card">
-      <div class="card-title"><span class="icon">ðŸ¤–</span> AI Studio <span style="font-size:0.65rem;background:linear-gradient(135deg,#7c5cfc,#c026d3);padding:2px 8px;border-radius:20px;margin-left:8px;vertical-align:middle;">KIMI K3</span></div>
+      <div class="card-title"><span class="icon"> AI STUDIO <span style="font-size:0.65rem;background:linear-gradient(135deg,#7c5cfc,#c026d3);padding:2px 8px;border-radius:20px;margin-left:8px;vertical-align:middle;">KIMI K3</span></div>
       <div class="form-group">
         <label>Viral Script Generator</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -1691,7 +1687,7 @@ async function endBattle() {
         </div>
         <div class="form-group">
           <label>Description</label>
-          <textarea id="stream-desc" placeholder="Tell viewers what this stream is aboutâ€¦"></textarea>
+          <textarea id="stream-desc" placeholder="Tell VIEWERS what this stream is aboutâ€¦"></textarea>
         </div>
         <div class="form-group">
           <div class="toggle-row">
@@ -1721,13 +1717,13 @@ async function endBattle() {
     <div class="card">
       <div class="section-header">
         <div>
-          <div class="section-title">ðŸ† Gift Leaderboard</div>
+          <div class="section-title"> Gift Leaderboard</div>
           <div class="section-sub refresh-note" id="lb-refresh-note">Auto-refreshes every 30s</div>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="loadLeaderboard()">â†» Refresh</button>
       </div>
       <div id="leaderboard-list" class="leaderboard-list">
-        <div class="empty-state"><span class="emoji">ðŸŽ</span>No gifts yet â€” go live to start receiving!</div>
+        <div class="empty-state"><span class="emoji"> GIFTS yet â€” go live to start receiving!</div>
       </div>
     </div>
 
@@ -1735,13 +1731,13 @@ async function endBattle() {
     <div class="card">
       <div class="section-header">
         <div>
-          <div class="section-title">ðŸ“‹ My Streams</div>
+          <div class="section-title"> My Streams</div>
           <div class="section-sub">Last 20 streams</div>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="loadStreams()">â†» Refresh</button>
       </div>
       <div id="stream-list" class="stream-list">
-        <div class="empty-state"><span class="emoji">ðŸ“¡</span>No streams yet â€” create your first one!</div>
+        <div class="empty-state"><span class="emoji"> streams yet â€” create your first one!</div>
       </div>
     </div>
   </div>
@@ -1774,7 +1770,7 @@ async function endBattle() {
       </div>
       <div id="battle-participants" class="battle-participants"></div>
       <div style="display:flex;gap:10px;margin-top:16px;">
-        <button class="btn btn-cyan" style="flex:1;" onclick="startBattle()">ðŸ”¥ Start Battle</button>
+        <button class="btn btn-cyan" style="flex:1;" onclick="startBattle()"> Start Battle</button>
         <button class="btn btn-danger" style="flex:1;" onclick="endBattle()">Cancel</button>
       </div>
     </div>
@@ -1787,29 +1783,29 @@ async function endBattle() {
       <!-- SABOTAGE / ATTACK GIFTS -->
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
         <div style="font-weight:700;font-size:0.85rem;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
-          <span>âš¡</span> Attack Gifts <span style="font-size:0.7rem;color:var(--red);font-weight:400;">(steal opponent points!)</span>
+          <span>âš¡</span> Attack GIFTS <span style="font-size:0.7rem;color:var(--red);font-weight:400;">(steal opponent points!)</span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
           <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('bomb', 50, 25)" title="Bomb: -25 opponent points">
-            ðŸ’£ <span style="font-size:0.7rem;">Bomb<br>50ðŸ’Ž / -25pts</span>
+             <span style="font-size:0.7rem;">Bomb<br>50 / -25pts</span>
           </button>
           <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('lightning', 100, 50)" title="Lightning: -50 opponent points">
-            âš¡ <span style="font-size:0.7rem;">Lightning<br>100ðŸ’Ž / -50pts</span>
+            âš¡ <span style="font-size:0.7rem;">Lightning<br>100 / -50pts</span>
           </button>
           <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('virus', 250, 100)" title="Virus: -100 opponent points">
-            ðŸ¦  <span style="font-size:0.7rem;">Virus<br>250ðŸ’Ž / -100pts</span>
+             <span style="font-size:0.7rem;">Virus<br>250 / -100pts</span>
           </button>
           <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('nuke', 500, 250)" title="Nuke: -250 opponent points">
-            â˜¢ï¸ <span style="font-size:0.7rem;">NUKE<br>500ðŸ’Ž / -250pts</span>
+            â˜¢ï¸ <span style="font-size:0.7rem;">NUKE<br>500 / -250pts</span>
           </button>
           <button class="btn btn-ghost btn-sm" onclick="sendAttackGift('blackhole', 1000, 500)" title="Black Hole: -500 opponent points">
-            ðŸ•³ï¸ <span style="font-size:0.7rem;">Black Hole<br>1KðŸ’Ž / -500pts</span>
+             <span style="font-size:0.7rem;">Black Hole<br>1K / -500pts</span>
           </button>
         </div>
       </div>
 
       <div class="battle-leaderboard-mini">
-        <div style="font-weight:700;font-size:0.8rem;margin-bottom:10px;">ðŸ† Live Leaderboard</div>
+        <div style="font-weight:700;font-size:0.8rem;margin-bottom:10px;"> Live Leaderboard</div>
         <div id="battle-leaderboard"></div>
       </div>
       <button class="btn btn-danger btn-full" style="margin-top:16px;" onclick="endBattle()">â¹ End Battle</button>
@@ -1859,7 +1855,7 @@ const headers = {
 let currentStreamId  = null;
 let isLive           = false;
 let viewerCount      = 0;
-let totalGifts       = 0;
+let totalGIFTS       = 0;
 let totalGiftValue   = 0;
 let streamKey        = null;
 let keyVisible       = false;
@@ -1938,7 +1934,7 @@ function initSocket() {
 
     socket.on('viewer_count', ({ count }) => {
       viewerCount = Number(count) || 0;
-      document.getElementById('stat-viewers').textContent     = fmt(viewerCount);
+      document.getElementById('stat-VIEWERS').textContent     = fmt(viewerCount);
       document.getElementById('viewer-count-big').textContent = fmt(viewerCount);
     });
 
@@ -2029,7 +2025,7 @@ async function activateHostCamera() {
     if (emoji) emoji.style.display = 'none';
     return true;
   } catch(e) {
-    showNotification('ðŸ“· Camera needed', 'Allow camera + mic access â€” check browser permissions', 'warning');
+    showNotification(' Camera needed', 'Allow camera + mic access â€” check browser permissions', 'warning');
     return false;
   }
 }
@@ -2221,11 +2217,11 @@ async function applyVoiceEffect(effect) {
     voiceEffectNode.connect(audioContext.destination);
   }
 
-  showNotification('ðŸŽ™ï¸ Voice Effect', effect === 'none' ? 'Voice effect off' : `${effect} voice activated`, 'success');
+  showNotification(' Voice Effect', effect === 'none' ? 'Voice effect off' : `${effect} voice activated`, 'success');
 }
 
 // â”€â”€ SOUND EFFECTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// â”€â”€ SOUND EFFECTS (Host-controlled, broadcasts to ALL viewers) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ SOUND EFFECTS (Host-controlled, broadcasts to ALL VIEWERS) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const soundEffects = {
   // HYPE / ENERGY
   airhorn:     'https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=airhorn-21480.mp3',
@@ -2265,7 +2261,7 @@ function preloadSounds() {
   });
 }
 
-// HOST plays sound â†’ broadcasts to ALL viewers in stream
+// HOST plays sound â†’ broadcasts to ALL VIEWERS in stream
 function playSoundEffect(name) {
   // Play locally for host
   const sound = preloadedSounds[name];
@@ -2277,12 +2273,12 @@ function playSoundEffect(name) {
     audio.play().catch(() => {});
   }
 
-  // Broadcast to ALL viewers via Socket.io
+  // Broadcast to ALL VIEWERS via Socket.io
   if (socket && currentStreamId) {
     socket.emit('play_sound', { stream_id: currentStreamId, sound: name });
   }
 
-  showNotification('ðŸ”Š Sound Effect', `${name.toUpperCase()} sent to viewers!`, 'success');
+  showNotification(' Sound Effect', `${name.toUpperCase()} sent to VIEWERS!`, 'success');
 }
 
 // VIEWERS listen for host's sound effects
@@ -2316,7 +2312,7 @@ async function sendAttackGift(type, cost, damage) {
 
   // Check if user has enough credits
   if (userCredits < cost) {
-    showNotification('Insufficient Credits', `You need ${cost}ðŸ’Ž for this attack. Buy more credits!`, 'warning');
+    showNotification('Insufficient Credits', `You need ${cost} for this attack. Buy more credits!`, 'warning');
     openWallet();
     return;
   }
@@ -2330,7 +2326,7 @@ async function sendAttackGift(type, cost, damage) {
     if (d.ok) {
       userCredits = d.new_balance;
       updateWalletDisplay();
-      showNotification(`ðŸ’¥ ${type.toUpperCase()} DEPLOYED!`, `-${damage} points to opponent!`, 'live');
+      showNotification(` ${type.toUpperCase()} DEPLOYED!`, `-${damage} points to opponent!`, 'live');
       // Visual effect
       showAttackEffect(type);
       pollBattleLeaderboard();
@@ -2342,15 +2338,11 @@ async function sendAttackGift(type, cost, damage) {
 
 function showAttackEffect(type) {
   const effects = {
-    bomb: 'ðŸ’¥',
-    lightning: 'âš¡',
-    virus: 'ðŸ¦ ',
-    nuke: 'â˜¢ï¸',
-    blackhole: 'ðŸ•³ï¸'
-  };
+    bomb: '    lightning: 'âš¡',
+    virus: '    nuke: 'â˜¢ï¸',
+    blackhole: '  };
   const el = document.createElement('div');
-  el.textContent = effects[type] || 'ðŸ’¥';
-  el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);font-size:8rem;z-index:9999;animation:attackPop 1s ease forwards;pointer-events:none;';
+  el.textContent = effects[type] || '  el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);font-size:8rem;z-index:9999;animation:attackPop 1s ease forwards;pointer-events:none;';
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1200);
 }
@@ -2374,13 +2366,13 @@ async function goLive() {
 
   try {
     // STEP 1 â€” camera on
-    showNotification('ðŸ“¹ Starting cameraâ€¦', '', 'info');
+    showNotification(' Starting cameraâ€¦', '', 'info');
     const camOk = await activateHostCamera();
     if (!camOk) { btn.disabled = false; btn.innerHTML = 'â–¶ Go Live'; return; }
 
     // STEP 2 â€” auto-create stream if none selected
     if (!currentStreamId) {
-      showNotification('ðŸ“¡ Creating your streamâ€¦', '', 'info');
+      showNotification(' Creating your streamâ€¦', '', 'info');
       const autoTitle = document.getElementById('stream-title')?.value.trim()
         || ('LIVE â€” ' + new Date().toLocaleDateString());
       const cr = await fetch(`${API}/api/streams`, {
@@ -2415,7 +2407,7 @@ async function goLive() {
       renderStreamKey();
     }
     loadStreams();
-    showNotification('ðŸ”´ You are LIVE!', 'Camera is on â€” gifts are active. Go rock it!', 'live');
+    showNotification(' You are LIVE!', 'Camera is on â€” GIFTS are active. Go rock it!', 'live');
   } catch(err) {
     console.error('goLive error:', err);
     showNotification('âŒ Error', err.message, 'error');
@@ -2477,7 +2469,7 @@ function updateLiveState(live) {
     statusT.style.color = 'var(--muted)';
     btnGo.style.display  = 'inline-flex';
     btnEnd.style.display = 'none';
-    document.getElementById('stat-viewers').textContent     = '0';
+    document.getElementById('stat-VIEWERS').textContent     = '0';
     document.getElementById('viewer-count-big').textContent = '0';
   }
 }
@@ -2498,7 +2490,7 @@ async function loadStreams() {
 function renderStreamList(streams) {
   const el = document.getElementById('stream-list');
   if (!streams.length) {
-    el.innerHTML = '<div class="empty-state"><span class="emoji">ðŸ“¡</span>No streams yet â€” create your first one!</div>';
+    el.innerHTML = '<div class="empty-state"><span class="emoji"> streams yet â€” create your first one!</div>';
     return;
   }
   el.innerHTML = streams.map(s => {
@@ -2512,7 +2504,7 @@ function renderStreamList(streams) {
            title="Click to select this stream">
         <div class="stream-info">
           <div class="stream-title-text">${esc(s.title || 'Untitled Stream')}</div>
-          <div class="stream-meta">${timeStr}${timeStr ? ' Â· ' : ''}${fmt(s.viewer_peak || 0)} peak viewers Â· ${fmt(s.total_gifts_received || 0)} gifts</div>
+          <div class="stream-meta">${timeStr}${timeStr ? ' Â· ' : ''}${fmt(s.viewer_peak || 0)} peak VIEWERS Â· ${fmt(s.total_GIFTS_received || 0)} GIFTS</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
           ${isPremium ? '<span class="status-badge premium">â­ Premium</span>' : ''}
@@ -2545,16 +2537,16 @@ async function loadLeaderboard() {
     const data = await r.json();
     const leaders = data.leaderboard || data.data || data || [];
     renderLeaderboard(Array.isArray(leaders) ? leaders : []);
-    // update earnings from leaderboard total
+    // update EARNINGS from leaderboard total
     const total = leaders.reduce((s, l) => s + (Number(l.total_value || l.amount_usd || 0)), 0);
     if (total > totalGiftValue) {
       totalGiftValue = total;
-      document.getElementById('stat-earnings').textContent = fmtUSD(total);
+      document.getElementById('stat-EARNINGS').textContent = fmtUSD(total);
     }
     const giftCount = leaders.reduce((s, l) => s + (Number(l.gift_count || l.count || 0)), 0);
-    if (giftCount > totalGifts) {
-      totalGifts = giftCount;
-      document.getElementById('stat-gifts').textContent = fmt(giftCount);
+    if (giftCount > totalGIFTS) {
+      totalGIFTS = giftCount;
+      document.getElementById('stat-GIFTS').textContent = fmt(giftCount);
     }
   } catch(e) {
     console.warn('leaderboard error', e);
@@ -2567,7 +2559,7 @@ async function loadLeaderboard() {
 function renderLeaderboard(leaders) {
   const el = document.getElementById('leaderboard-list');
   if (!leaders.length) {
-    el.innerHTML = '<div class="empty-state"><span class="emoji">ðŸŽ</span>No gifts yet on this stream!</div>';
+    el.innerHTML = '<div class="empty-state"><span class="emoji"> GIFTS yet on this stream!</div>';
     return;
   }
   el.innerHTML = leaders.slice(0,10).map((l, i) => {
@@ -2580,7 +2572,7 @@ function renderLeaderboard(leaders) {
       <div class="leader-item">
         <div class="leader-rank ${rClass}">${rank}</div>
         <div class="leader-name">${name}
-          ${count ? `<span style="font-weight:400;color:var(--muted);font-size:.75rem;"> Â· ${fmt(count)} gifts</span>` : ''}
+          ${count ? `<span style="font-weight:400;color:var(--muted);font-size:.75rem;"> Â· ${fmt(count)} GIFTS</span>` : ''}
         </div>
         <div class="leader-amount">${amount}</div>
       </div>`;
@@ -2674,7 +2666,7 @@ async function aiGenScript() {
   const btn = document.getElementById('btn-ai-script');
   const out = document.getElementById('ai-script-out');
   const topic = document.getElementById('ai-script-topic').value.trim();
-  if (!topic) { showNotification('AI Studio', 'Enter a topic first', 'warn'); return; }
+  if (!topic) { showNotification('AI STUDIO', 'Enter a topic first', 'warn'); return; }
   btn.disabled = true; btn.textContent = 'âš¡ Generatingâ€¦';
   try {
     const r = await fetch('/api/ai/script', { method: 'POST', headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ topic, style: document.getElementById('ai-script-style').value, duration: +document.getElementById('ai-script-duration').value }) });
@@ -2682,19 +2674,19 @@ async function aiGenScript() {
     if (!r.ok) throw new Error(d.error || 'AI error');
     out.style.display = 'block';
     out.innerHTML = `<div style="background:rgba(124,92,252,0.1);border:1px solid rgba(124,92,252,0.3);border-radius:10px;padding:12px;font-size:0.82rem;line-height:1.55;">
-      <div style="color:#f59e0b;font-weight:700;margin-bottom:6px;">ðŸŽ¬ HOOK (0-3s)</div><div style="margin-bottom:10px;">${esc(d.hook||'')}</div>
-      <div style="color:#06b6d4;font-weight:700;margin-bottom:6px;">ðŸ“‹ BEATS</div>${(d.beats||[]).map((b,i)=>`<div style="margin:3px 0;">${i+1}. ${esc(b)}</div>`).join('')}
-      <div style="color:#ec4899;font-weight:700;margin:10px 0 6px;">ðŸ“£ CTA</div><div style="margin-bottom:10px;">${esc(d.cta||'')}</div>
+      <div style="color:#f59e0b;font-weight:700;margin-bottom:6px;"> HOOK (0-3s)</div><div style="margin-bottom:10px;">${esc(d.hook||'')}</div>
+      <div style="color:#06b6d4;font-weight:700;margin-bottom:6px;"> BEATS</div>${(d.beats||[]).map((b,i)=>`<div style="margin:3px 0;">${i+1}. ${esc(b)}</div>`).join('')}
+      <div style="color:#ec4899;font-weight:700;margin:10px 0 6px;"> CTA</div><div style="margin-bottom:10px;">${esc(d.cta||'')}</div>
       <div style="color:#94a3b8;font-size:0.75rem;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">Caption: ${esc(d.caption||'')}<br>${esc(d.hashtags||'')}</div>
     </div>`;
-  } catch (e) { out.style.display='block'; out.innerHTML = `<div style="color:#f87171;font-size:0.78rem;">AI Studio: ${esc(e.message)}</div>`; }
+  } catch (e) { out.style.display='block'; out.innerHTML = `<div style="color:#f87171;font-size:0.78rem;">AI STUDIO: ${esc(e.message)}</div>`; }
   btn.disabled = false; btn.textContent = 'âš¡ Generate Script';
 }
 async function aiGenTags() {
   const btn = document.getElementById('btn-ai-tags');
   const out = document.getElementById('ai-tags-out');
   const topic = document.getElementById('ai-tags-topic').value.trim();
-  if (!topic) { showNotification('AI Studio', 'Enter a topic first', 'warn'); return; }
+  if (!topic) { showNotification('AI STUDIO', 'Enter a topic first', 'warn'); return; }
   btn.disabled = true; btn.textContent = '#ï¸âƒ£ â€¦';
   try {
     const r = await fetch('/api/ai/hashtags', { method: 'POST', headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
@@ -2708,7 +2700,7 @@ async function aiGenTags() {
       <div><b style="color:#a78bfa;">NICHE</b> ${(d.niche||[]).map(t=>chip(t,'rgba(167,139,250,0.2)')).join('')}</div>
       <div><b style="color:#ec4899;">NVME</b> ${(d.branded||[]).map(t=>chip(t,'rgba(236,72,153,0.2)')).join('')}</div>
       <div style="color:#64748b;font-size:0.68rem;margin-top:4px;">Tap any tag to copy</div></div>`;
-  } catch (e) { out.style.display='block'; out.innerHTML = `<div style="color:#f87171;font-size:0.78rem;">AI Studio: ${esc(e.message)}</div>`; }
+  } catch (e) { out.style.display='block'; out.innerHTML = `<div style="color:#f87171;font-size:0.78rem;">AI STUDIO: ${esc(e.message)}</div>`; }
   btn.disabled = false; btn.textContent = '#ï¸âƒ£ Get Tags';
 }
 async function loadAiUsage() {
@@ -2737,10 +2729,8 @@ function giftTier(val) {
   return 'COMMON';
 }
 function giftEmoji(tier) {
-  const map = { EPIC: 'ðŸ’Ž', RARE: 'ðŸŒŸ', COMMON: 'ðŸŽ' };
-  return map[tier] || 'ðŸŽ';
-}
-function tierClass(tier) {
+  const map = { EPIC: ' RARE: ' COMMON: ' };
+  return map[tier] || ' tierClass(tier) {
   const map = { EPIC: 'tier3', RARE: 'tier2', COMMON: 'tier1' };
   return map[(tier||'').toUpperCase()] || 'tier1';
 }
@@ -2750,7 +2740,7 @@ function statusClass(s) {
   return m[(s||'').toLowerCase()] || 'ended';
 }
 function statusLabel(s) {
-  const m = { live: 'â— LIVE', active: 'â— LIVE', ended: 'âœ“ Ended', completed: 'âœ“ Ended', pending: 'â³ Pending', scheduled: 'ðŸ• Scheduled' };
+  const m = { live: 'â— LIVE', active: 'â— LIVE', ended: 'âœ“ Ended', completed: 'âœ“ Ended', pending: 'â³ Pending', scheduled: ' Scheduled' };
   return m[(s||'').toLowerCase()] || s || 'ended';
 }
 
@@ -2802,7 +2792,7 @@ function renderBattleLobby(parts) {
     <div style="display:flex;align-items:center;gap:8px;padding:4px;border-bottom:1px solid var(--border);">
       <img src="${p.avatar_url || '/img/default-avatar.png'}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">
       <span style="font-weight:600;font-size:0.85rem;">${esc(p.username)}</span>
-      <span style="margin-left:auto;font-size:0.75rem;color:var(--cyan);">${p.team === 'b' ? 'ðŸ”µ' : 'ðŸ”´'} ${esc(p.display_name || p.username)}</span>
+      <span style="margin-left:auto;font-size:0.75rem;color:var(--cyan);">${p.team === 'b' ? ' : ' ${esc(p.display_name || p.username)}</span>
     </div>
   `).join('');
 }
@@ -2816,7 +2806,7 @@ async function startBattle() {
   document.getElementById('battle-active').style.display = 'block';
   document.getElementById('battle-card').style.display = 'block';
   startBattleTimer(60);
-  showNotification('ðŸ”¥ BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
+  showNotification(' BATTLE STARTED!', 'Gift to vote! Lowest gets eliminated!', 'live');
   pollBattleLeaderboard();
 }
 
@@ -2846,20 +2836,20 @@ async function pollBattleLeaderboard() {
 function renderBattleLeaderboard(parts) {
   const el = document.getElementById('battle-leaderboard');
   const splitEl = document.getElementById('battle-split-screen');
-  const active = parts.filter(p => p.status === 'active').sort((a,b) => b.gifts_received - a.gifts_received);
+  const active = parts.filter(p => p.status === 'active').sort((a,b) => b.GIFTS_received - a.GIFTS_received);
   const eliminated = parts.filter(p => p.status === 'eliminated');
 
   // Update leaderboard list
   el.innerHTML = `
-    <div style="font-weight:700;margin-bottom:4px;">ðŸ† Leaderboard</div>
+    <div style="font-weight:700;margin-bottom:4px;"> Leaderboard</div>
     ${active.map((p,i) => `
       <div style="display:flex;align-items:center;gap:6px;padding:3px 0;${i===0?'color:gold;font-weight:700;':''}">
         <span style="width:20px;text-align:center;">${i+1}</span>
         <span style="flex:1;">${esc(p.username)}</span>
-        <span style="color:var(--gold);">ðŸ’Ž ${p.gifts_received}</span>
+        <span style="color:var(--gold);"> ${p.GIFTS_received}</span>
       </div>
     `).join('')}
-    ${eliminated.length ? `<div style="margin-top:8px;color:var(--red);font-size:0.75rem;">ðŸ’€ Eliminated: ${eliminated.map(e => esc(e.username)).join(', ')}</div>` : ''}
+    ${eliminated.length ? `<div style="margin-top:8px;color:var(--red);font-size:0.75rem;"> Eliminated: ${eliminated.map(e => esc(e.username)).join(', ')}</div>` : ''}
   `;
 
   // Update split-screen slots
@@ -2869,7 +2859,7 @@ function renderBattleLeaderboard(parts) {
         <div class="battle-slot-bg" id="battle-bg-${p.user_id || p.id}" style="background-image: url('${p.bg_url || ''}')"></div>
         <div class="battle-slot-bg-overlay"></div>
         <label class="battle-slot-upload" title="Upload background image">
-          <span style="font-size:0.7rem;">ðŸ“· BG</span>
+          <span style="font-size:0.7rem;"> BG</span>
           <input type="file" accept="image/*" onchange="uploadBattleBg('${p.user_id || p.id}', this)" />
         </label>
         <div class="battle-slot-content">
@@ -2877,12 +2867,12 @@ function renderBattleLeaderboard(parts) {
             <img class="battle-slot-avatar" src="${p.avatar_url || '/img/default-avatar.png'}" alt="" />
             <div class="battle-slot-info">
               <div class="battle-slot-name">${esc(p.username)}</div>
-              <div class="battle-slot-team">${esc(p.team === 'b' ? 'ðŸ”µ Team B' : 'ðŸ”´ Team A')}</div>
+              <div class="battle-slot-team">${esc(p.team === 'b' ? ' Team B' : ' Team A')}</div>
             </div>
           </div>
-          <div class="battle-slot-gifts">
-            <div class="battle-slot-gift-count">${p.gifts_received || 0}</div>
-            <div class="battle-slot-gift-label">gifts received</div>
+          <div class="battle-slot-GIFTS">
+            <div class="battle-slot-gift-count">${p.GIFTS_received || 0}</div>
+            <div class="battle-slot-gift-label">GIFTS received</div>
           </div>
         </div>
       </div>
@@ -2933,10 +2923,10 @@ async function eliminateLowest() {
   const active = d.participants.filter(p => p.status === 'active');
   if (active.length > 1) {
     const lowest = active[active.length - 1];
-    showNotification(`ðŸ’€ ${lowest.username} ELIMINATED!`, 'Keep those gifts coming!', 'warning');
+    showNotification(` ${lowest.username} ELIMINATED!`, 'Keep those GIFTS coming!', 'warning');
   }
   if (active.length <= 1) {
-    showNotification('ðŸ† BATTLE WINNER!', `${active[0]?.username || 'Unknown'} wins!`, 'success');
+    showNotification(' BATTLE WINNER!', `${active[0]?.username || 'Unknown'} wins!`, 'success');
   }
 }
 
@@ -2949,7 +2939,7 @@ async function endBattle() {
   document.getElementById('battle-controls').style.display = 'block';
   document.getElementById('battle-card').style.display = 'none';
   currentBattleId = null;
-  showNotification('ðŸ† Battle Ended!', 'Winners announced!', 'success');
+  showNotification(' Battle Ended!', 'Winners announced!', 'success');
 }
 
 // Show battle card when live
@@ -3048,7 +3038,7 @@ async function acceptBattleInvite() {
     if (d.ok) {
       hideBattleInviteToast();
       currentBattleId = d.battle.id;
-      showNotification('ðŸ”¥ BATTLE ACCEPTED!', 'You\'re now in a head-to-head battle!', 'live');
+      showNotification(' BATTLE ACCEPTED!', 'You\'re now in a head-to-head battle!', 'live');
       document.getElementById('battle-controls').style.display = 'none';
       document.getElementById('battle-lobby').style.display = 'none';
       document.getElementById('battle-active').style.display = 'block';
@@ -3100,8 +3090,7 @@ async function togglePushNotifications() {
         pushSubscription = sub;
         pushEnabled = true;
         btn.classList.add('subscribed');
-        btn.innerHTML = 'ðŸ””';
-        // Send subscription to server
+        btn.innerHTML = '        // Send subscription to server
         await fetch(`${API}/api/push/subscribe`, {
           method: 'POST', headers,
           body: JSON.stringify({ subscription: sub.toJSON() })
@@ -3120,8 +3109,7 @@ async function togglePushNotifications() {
     }
     pushEnabled = false;
     btn.classList.remove('subscribed');
-    btn.innerHTML = 'ðŸ””';
-    showNotification('Unsubscribed', 'Push notifications disabled', 'info');
+    btn.innerHTML = '    showNotification('Unsubscribed', 'Push notifications disabled', 'info');
   }
 }
 
@@ -3134,13 +3122,13 @@ function urlBase64ToUint8Array(base64String) {
 
 async function notifyFollowers() {
   if (!pushEnabled) {
-    showNotification('Enable Notifications', 'Click the ðŸ”” bell to notify followers when live', 'warning');
+    showNotification('Enable Notifications', 'Click the  bell to notify followers when live', 'warning');
     return;
   }
   try {
     await fetch(`${API}/api/push/notify`, {
       method: 'POST', headers,
-      body: JSON.stringify({ title: 'ðŸ”´ LIVE NOW!', body: document.getElementById('user-display').textContent + ' is streaming on NVME.LIVE', url: 'https://nvme.live/live/' + currentStreamId })
+      body: JSON.stringify({ title: ' LIVE NOW!', body: document.getElementById('user-display').textContent + ' is streaming on NVME.LIVE', url: 'https://nvme.live/live/' + currentStreamId })
     });
   } catch(e) { console.error('Notify error:', e); }
 }
@@ -3158,9 +3146,9 @@ function setLiveGoal() {
   currentGoal = { target, reward, current: 0 };
   document.getElementById('goal-setter').style.display = 'none';
   document.getElementById('goal-display').style.display = 'block';
-  document.getElementById('goal-text').textContent = reward || `Reach ${target} gifts!`;
+  document.getElementById('goal-text').textContent = reward || `Reach ${target} GIFTS!`;
   updateGoalDisplay();
-  showNotification('ðŸŽ¯ Goal Set!', `${target} gifts for: ${reward || 'the goal'}`, 'success');
+  showNotification(' Goal Set!', `${target} GIFTS for: ${reward || 'the goal'}`, 'success');
   // Send to server
   fetch(`${API}/api/streams/${currentStreamId}/goal`, {
     method: 'POST', headers,
@@ -3180,7 +3168,7 @@ function updateGoalProgress(giftValue) {
   currentGoal.current += giftValue || 1;
   updateGoalDisplay();
   if (currentGoal.current >= currentGoal.target) {
-    showNotification('ðŸŽ‰ GOAL REACHED!', currentGoal.reward || 'Target achieved!', 'success');
+    showNotification(' GOAL REACHED!', currentGoal.reward || 'Target achieved!', 'success');
     confettiEffect();
     currentGoal = null;
     document.getElementById('goal-setter').style.display = 'block';
@@ -3229,7 +3217,7 @@ function createPoll() {
   document.getElementById('poll-active').style.display = 'block';
   document.getElementById('poll-question-display').textContent = question;
   renderPollResults();
-  showNotification('ðŸ“Š Poll Launched!', question, 'success');
+  showNotification(' Poll Launched!', question, 'success');
   if (socket) socket.emit('poll_started', activePoll);
 }
 
@@ -3266,7 +3254,7 @@ let qaQuestions = [];
 
 function toggleQAMode() {
   qaMode = document.getElementById('qa-toggle').checked;
-  showNotification(qaMode ? 'â“ Q&A Enabled' : 'Q&A Disabled', qaMode ? 'Viewers can now ask questions' : 'Questions are paused', 'info');
+  showNotification(qaMode ? 'â“ Q&A Enabled' : 'Q&A Disabled', qaMode ? 'VIEWERS can now ask questions' : 'Questions are paused', 'info');
   if (socket) socket.emit('qa_mode', { enabled: qaMode });
 }
 
@@ -3285,10 +3273,10 @@ function renderQAList() {
     <div class="qa-item">
       <div class="qa-question">${esc(q.text)}</div>
       <div class="qa-author">${esc(q.author)} â€¢ ${new Date(q.time).toLocaleTimeString()}</div>
-      ${q.answer ? `<div class="qa-answer">ðŸ’¬ ${esc(q.answer)}</div>` : ''}
+      ${q.answer ? `<div class="qa-answer"> ${esc(q.answer)}</div>` : ''}
       <div class="qa-actions">
-        <button class="btn btn-ghost btn-sm" onclick="answerQuestion(${i})">ðŸ’¬ Answer</button>
-        <button class="btn btn-ghost btn-sm" onclick="pinComment('${esc(q.author)}', '${esc(q.text)}')">ðŸ“Œ Pin</button>
+        <button class="btn btn-ghost btn-sm" onclick="answerQuestion(${i})"> Answer</button>
+        <button class="btn btn-ghost btn-sm" onclick="pinComment('${esc(q.author)}', '${esc(q.text)}')"> Pin</button>
       </div>
     </div>
   `).join('');
@@ -3299,7 +3287,7 @@ function answerQuestion(index) {
   if (!answer) return;
   qaQuestions[index].answer = answer;
   renderQAList();
-  showNotification('ðŸ’¬ Answered', 'Question answered', 'success');
+  showNotification(' Answered', 'Question answered', 'success');
 }
 
 // â”€â”€ MODERATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -3308,7 +3296,7 @@ let blockedWords = [];
 function saveBlockedWords() {
   const text = document.getElementById('blocked-words').value;
   blockedWords = text.split(',').map(w => w.trim().toLowerCase()).filter(w => w);
-  showNotification('ðŸ›¡ï¸ Filter Saved', `${blockedWords.length} words blocked`, 'success');
+  showNotification(' Filter Saved', `${blockedWords.length} words blocked`, 'success');
   if (socket) socket.emit('mod_settings', { blockedWords });
 }
 
@@ -3330,7 +3318,7 @@ function pinComment(author, text) {
   document.getElementById('pinned-author').textContent = author;
   document.getElementById('pinned-text').textContent = text;
   document.getElementById('pinned-comment-bar').style.display = 'block';
-  showNotification('ðŸ“Œ Pinned', 'Comment pinned to top', 'success');
+  showNotification(' Pinned', 'Comment pinned to top', 'success');
   if (socket) socket.emit('pin_comment', pinnedComment);
 }
 
@@ -3342,11 +3330,11 @@ function unpinComment() {
 
 // Override gift handler to track goal progress
 socket?.on('gift_received', ({ senderName, gift }) => {
-  totalGifts++;
+  totalGIFTS++;
   const val = giftValue(gift);
   totalGiftValue += val;
-  document.getElementById('stat-gifts').textContent    = fmt(totalGifts);
-  document.getElementById('stat-earnings').textContent = fmtUSD(totalGiftValue);
+  document.getElementById('stat-GIFTS').textContent    = fmt(totalGIFTS);
+  document.getElementById('stat-EARNINGS').textContent = fmtUSD(totalGiftValue);
   showGiftToast(senderName, gift);
   updateGoalProgress(val);
   clearTimeout(window._lbDebounce);
@@ -3359,7 +3347,7 @@ if (socket) {
     showBattleInviteToast(data.invite);
   });
   socket.on('battle_invite_accepted', (data) => {
-    showNotification('ðŸ”¥ Battle Started!', 'Your invite was accepted!', 'live');
+    showNotification(' Battle Started!', 'Your invite was accepted!', 'live');
     if (data.battle) {
       currentBattleId = data.battle.id;
       document.getElementById('battle-active').style.display = 'block';
@@ -3414,7 +3402,7 @@ async function buyCredits(amount) {
     } else if (d.ok) {
       userCredits = d.new_balance;
       updateWalletDisplay();
-      showNotification('ðŸ’Ž Purchased!', `+${amount} credits added`, 'success');
+      showNotification(' Purchased!', `+${amount} credits added`, 'success');
     } else {
       showNotification('Error', d.error || 'Purchase failed', 'error');
     }
@@ -3440,7 +3428,7 @@ async function withdrawCredits() {
     if (d.ok) {
       userCredits = d.new_balance;
       updateWalletDisplay();
-      showNotification('ðŸ’° Withdrawal Initiated', `$${d.usd_amount} will arrive in 3-5 business days`, 'success');
+      showNotification(' Withdrawal Initiated', `$${d.usd_amount} will arrive in 3-5 business days`, 'success');
     } else {
       showNotification('Error', d.error || 'Withdrawal failed', 'error');
     }
@@ -3483,7 +3471,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
   deferredPrompt = e;
   const btn = document.createElement('button');
   btn.id = 'pwa-install-btn';
-  btn.innerHTML = 'ðŸ“² Install NVME App';
+  btn.innerHTML = ' Install NVME App';
   btn.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#e91e8c,#00d4ff);color:#fff;border:none;border-radius:30px;padding:14px 28px;font-weight:700;font-size:1rem;box-shadow:0 8px 30px rgba(233,30,140,0.4);cursor:pointer;animation:slideUp 0.5s ease-out;';
   btn.onclick = () => { deferredPrompt.prompt(); deferredPrompt = null; btn.remove(); };
   document.body.appendChild(btn);
@@ -3498,7 +3486,7 @@ if ('serviceWorker' in navigator) {
       w.addEventListener('statechange', () => {
         if (w.state === 'installed' && navigator.serviceWorker.controller) {
           const toast = document.createElement('div');
-          toast.innerHTML = 'ðŸ”„ <b>Update available!</b> <button onclick="location.reload()" style="margin-left:8px;padding:4px 12px;border-radius:8px;border:none;background:var(--gold);color:#000;font-weight:700;cursor:pointer;">Reload</button>';
+          toast.innerHTML = ' <b>Update available!</b> <button onclick="location.reload()" style="margin-left:8px;padding:4px 12px;border-radius:8px;border:none;background:var(--gold);color:#000;font-weight:700;cursor:pointer;">Reload</button>';
           toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;background:var(--card);border:1px solid var(--gold);padding:12px 20px;border-radius:12px;font-weight:600;box-shadow:0 10px 40px rgba(0,0,0,0.8);';
           document.body.appendChild(toast);
         }
@@ -3512,7 +3500,7 @@ if ('serviceWorker' in navigator) {
 <div id="wallet-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:10000;align-items:center;justify-content:center;">
   <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <h2 style="font-size:1.2rem;">ðŸ’Ž NVME Wallet</h2>
+      <h2 style="font-size:1.2rem;"> NVME Wallet</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeWallet()">âœ•</button>
     </div>
     <div style="text-align:center;padding:20px;background:linear-gradient(135deg,rgba(124,92,252,0.1),rgba(233,30,140,0.1));border-radius:12px;margin-bottom:20px;">
@@ -3524,23 +3512,19 @@ if ('serviceWorker' in navigator) {
       <div style="font-weight:700;font-size:0.85rem;margin-bottom:10px;">Buy Credits</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <button class="btn btn-ghost" onclick="buyCredits(100)" style="flex-direction:column;gap:4px;padding:12px;">
-          <span style="font-size:1.2rem;">ðŸ’Ž</span>
-          <span style="font-weight:700;">100</span>
+          <span style="font-size:1.2rem;">          <span style="font-weight:700;">100</span>
           <span style="font-size:0.7rem;color:var(--muted);">$0.99</span>
         </button>
         <button class="btn btn-ghost" onclick="buyCredits(500)" style="flex-direction:column;gap:4px;padding:12px;">
-          <span style="font-size:1.2rem;">ðŸ’Ž</span>
-          <span style="font-weight:700;">500</span>
+          <span style="font-size:1.2rem;">          <span style="font-weight:700;">500</span>
           <span style="font-size:0.7rem;color:var(--muted);">$4.99</span>
         </button>
         <button class="btn btn-ghost" onclick="buyCredits(1200)" style="flex-direction:column;gap:4px;padding:12px;">
-          <span style="font-size:1.2rem;">ðŸ’Ž</span>
-          <span style="font-weight:700;">1,200</span>
+          <span style="font-size:1.2rem;">          <span style="font-weight:700;">1,200</span>
           <span style="font-size:0.7rem;color:var(--muted);">$9.99</span>
         </button>
         <button class="btn btn-ghost" onclick="buyCredits(2500)" style="flex-direction:column;gap:4px;padding:12px;">
-          <span style="font-size:1.2rem;">ðŸ’Ž</span>
-          <span style="font-weight:700;">2,500</span>
+          <span style="font-size:1.2rem;">          <span style="font-weight:700;">2,500</span>
           <span style="font-size:0.7rem;color:var(--muted);">$19.99</span>
         </button>
       </div>
@@ -3584,11 +3568,11 @@ if ('serviceWorker' in navigator) {
 <!-- MOBILE BOTTOM NAVIGATION -->
 
 <nav class="botnav" aria-label="Main">
-  <a class="bitem on" href="/app"><div class="ic">ðŸ </div><div class="lb">Home</div></a>
-  <a class="bitem" href="/app#explore"><div class="ic">ðŸ”</div><div class="lb">Discover</div></a>
+  <a class="bitem on" href="/app"><div class="ic"> class="lb">Home</div></a>
+  <a class="bitem" href="/app#explore"><div class="ic"> class="lb">Discover</div></a>
   <a class="bplus" href="/creator" aria-label="Create"><span class="bplus-in">ï¼‹</span></a>
-  <a class="bitem" href="/messages"><div class="ic">ðŸ’¬</div><div class="lb">Inbox</div></a>
-  <a class="bitem" href="/app#profile"><div class="ic">ðŸ‘¤</div><div class="lb">Me</div></a>
+  <a class="bitem" href="/messages"><div class="ic"> class="lb">Inbox</div></a>
+  <a class="bitem" href="/app#profile"><div class="ic"> class="lb">Me</div></a>
 </nav>
  <script src="/creator_live_hub_patch.js"></script>
 </body>

@@ -6,165 +6,58 @@
 <title>Go LIVE - NVME.live</title>
 <link rel="icon" href="/img/icon-192.png">
 <style>
-:root{--pink:#fe2c55;--cyan:#00f2ea}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#000;color:#fff;font-family:Inter,system-ui,sans-serif;overflow:hidden;height:100dvh;width:100vw}
-#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#111}
-.overlay{position:fixed;inset:0;display:flex;flex-direction:column;pointer-events:none}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;height:100dvh;width:100vw}
+#cam{position:fixed;inset:0;width:100vw;height:100dvh;object-fit:cover;object-position:center center;background:#000;z-index:0;transform:scaleX(-1)}
+#cam.env{transform:scaleX(1)}
+.overlay{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;pointer-events:none}
 .overlay *{pointer-events:auto}
-/* Top bar */
-.top{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:linear-gradient(to bottom,rgba(0,0,0,.6),transparent)}
-.top .icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:16px;backdrop-filter:blur(6px)}
-.top .pill{padding:6px 14px;border-radius:20px;background:rgba(0,0,0,.45);font-size:.75rem;display:flex;align-items:center;gap:6px;backdrop-filter:blur(6px)}
-.reward{margin:6px 10px;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.15);backdrop-filter:blur(10px);font-size:.75rem;display:flex;justify-content:space-between;align-items:center}
-/* Right side tools */
-.right-tools{position:absolute;right:8px;top:90px;display:flex;flex-direction:column;gap:18px;align-items:center}
-.tool{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
-.tool .ic{width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:18px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.1)}
-.tool span{font-size:.62rem;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-.tool.active .ic{background:rgba(255,255,255,.2);border-color:var(--cyan);box-shadow:0 0 12px var(--cyan)}
-/* Left bottom king theme */
-.king-panel{position:absolute;left:10px;bottom:140px;width:200px;pointer-events:none;opacity:.95}
-.king-panel img{width:100%;border-radius:12px}
-/* Bottom */
-.bottom{margin-top:auto;padding:0 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.4) 60%,transparent 100%)}
-.modes{display:flex;justify-content:center;gap:18px;margin-bottom:10px;font-size:.7rem;color:rgba(255,255,255,.6)}
-.modes b{color:#fff;background:rgba(255,255,255,.2);padding:2px 8px;border-radius:10px}
-.effects-row{display:flex;gap:10px;overflow-x:auto;padding:6px 0;scrollbar-width:none}
-.effects-row::-webkit-scrollbar{display:none}
-.eff{flex:0 0 48px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
-.eff .bubble{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid transparent;display:flex;align-items:center;justify-content:center;font-size:18px;backdrop-filter:blur(6px)}
-.eff.active .bubble{border-color:var(--pink);background:rgba(254,44,85,.2)}
-.eff span{font-size:.55rem;color:rgba(255,255,255,.7)}
-.go-live-wrap{display:flex;align-items:center;gap:10px;margin-top:12px}
-.go-btn{flex:1;height:48px;border-radius:24px;border:none;background:var(--pink);color:#fff;font-weight:800;font-size:1rem;letter-spacing:.02em;cursor:pointer;box-shadow:0 4px 20px rgba(254,44,85,.5)}
-.go-btn.live{background:#0f0;color:#000}
-.side-cam{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center}
-.tabs{display:flex;justify-content:center;gap:24px;margin-top:12px;padding-bottom:env(safe-area-inset-bottom);font-size:.75rem;font-weight:700;color:rgba(255,255,255,.5)}
-.tabs .active{color:#fff;border-bottom:2px solid #fff;padding-bottom:2px}
-.ring-selector{position:absolute;left:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;background:rgba(0,0,0,.4);padding:8px;border-radius:16px;backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1)}
-.ring-dot{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent}
-.ring-dot.active{border-color:#fff;box-shadow:0 0 0 2px var(--cyan)}
-#liveRing{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);width:260px;height:340px;border-radius:24px;border:3px solid transparent;pointer-events:none;transition:.3s}
+.top{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+.icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer;text-decoration:none}
+.pill{padding:6px 12px;border-radius:20px;background:rgba(0,0,0,.55);font-size:.75rem}
+.reward{margin:6px 10px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.15);font-size:.7rem;display:flex;justify-content:space-between;gap:8px}
+.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:14px;align-items:center}
+.t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+.t .i{width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid rgba(255,255,255,.1)}
+.t span{font-size:.55rem;text-shadow:0 1px 2px #000}
+.bottom{margin-top:auto;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.85),transparent)}
+.go{width:100%;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
+.go.live{background:#0f0;color:#000}
+.mini{display:flex;gap:10px;justify-content:center;font-size:.6rem;opacity:.7;margin-top:8px;flex-wrap:wrap}
+.tabs{display:flex;gap:20px;justify-content:center;margin-top:8px;font-size:.7rem;font-weight:700;opacity:.6}
+.tabs .a{opacity:1;border-bottom:2px solid #fff}
 </style>
 </head>
 <body>
 <video id="cam" autoplay playsinline muted></video>
-<div id="liveRing"></div>
-
 <div class="overlay">
-  <div class="top">
-    <a href="/app.html" class="icon" style="text-decoration:none;color:#fff">✕</a>
-    <div class="pill">♫ Add sound</div>
-    <div style="display:flex;gap:8px">
-      <div class="icon">↻</div>
-      <div class="icon">✕</div>
-    </div>
+  <div class="top"><a href="/app.html" class="icon">✕</a><div class="pill">♫ Add sound</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a href="/app.html" class="icon">✕</a></div></div>
+  <div class="reward" id="rw"><span>Scaled LIVE Rewards: complete missions +$0.01</span><button onclick="rw.remove()" style="background:none;border:none;color:#fff;cursor:pointer">✕</button></div>
+  <div class="tools">
+    <div class="t" onclick="flip()"><div class="i">⇄</div><span>Flip</span></div>
+    <div class="t"><div class="i">✨</div><span>Beautify</span></div>
+    <div class="t"><div class="i">🎨</div><span>Effects</span></div>
+    <div class="t"><div class="i">⚙</div><span>Settings</span></div>
+    <div class="t"><div class="i">👥</div><span>Hangout</span></div>
+    <div class="t"><div class="i">📋</div><span>Boards</span></div>
+    <div class="t"><div class="i">💬</div><span>Service+</span></div>
+    <div class="t"><div class="i">❤</div><span>Fan Club</span></div>
+    <div class="t"><div class="i">👁</div><span>Interact</span></div>
+    <div class="t"><div class="i">↗</div><span>Share</span></div>
   </div>
-
-  <div class="reward" id="rewardBanner">
-    <span>Scaled LIVE Rewards: if you complete all Weekly Missions, you could get at least $0.01 more!</span>
-    <span style="margin-left:10px">✕</span>
-  </div>
-
-  <div class="right-tools">
-    <div class="tool" onclick="flipCam()"><div class="ic">⇄</div><span>Flip</span></div>
-    <div class="tool"><div class="ic">✨</div><span>Beautify</span></div>
-    <div class="tool"><div class="ic">🎨</div><span>Effects</span></div>
-    <div class="tool"><div class="ic">⚙</div><span>Settings</span></div>
-    <div class="tool"><div class="ic">🎥</div><span>Hangout</span></div>
-    <div class="tool"><div class="ic">📋</div><span>Boards</span></div>
-    <div class="tool"><div class="ic">💬</div><span>Service+</span></div>
-    <div class="tool"><div class="ic">❤</div><span>Fan Club</span></div>
-    <div class="tool"><div class="ic">👁</div><span>Interact</span></div>
-    <div class="tool"><div class="ic">↗</div><span>Share</span></div>
-  </div>
-
-  <div class="ring-selector" id="ringSelector">
-    <div class="ring-dot active" style="background:#00d4ff" data-style="neon" data-color="#00d4ff" title="Neon"></div>
-    <div class="ring-dot" style="background:#e91e8c" data-style="solid" data-color="#e91e8c" title="Solid"></div>
-    <div class="ring-dot" style="background:linear-gradient(135deg,#ffd600,#ff8f00)" data-style="gold" data-color="#ffd600" title="Gold"></div>
-    <div class="ring-dot" style="background:conic-gradient(#ff0050,#ffd600,#00e676,#00d4ff,#7c5cfc,#ff0050)" data-style="rainbow" data-color="#ff0050" title="Rainbow"></div>
-    <div class="ring-dot" style="background:#00e676" data-style="pulse" data-color="#00e676" title="Pulse"></div>
-    <div class="ring-dot" style="background:linear-gradient(135deg,#00d4ff,#e91e8c)" data-style="gradient" data-color="#00d4ff" title="Gradient"></div>
-  </div>
-
   <div class="bottom">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.5);padding:4px 8px;border-radius:12px;font-size:.7rem"><span>👑</span> Build Your Digital System</div>
-      <div style="margin-left:auto;font-size:.65rem;display:flex;align-items:center;gap:4px">◉ LIVE goal</div>
-    </div>
-
-    <div class="go-live-wrap">
-      <button class="go-btn" id="goLiveBtn">Go LIVE</button>
-    </div>
-
-    <div style="display:flex;gap:12px;justify-content:center;margin-top:10px;font-size:.65rem;color:rgba(255,255,255,.7)">
-      <span>🎤 Voice chat</span>
-      <span>📷 Device camera</span>
-      <span>🎮 Mobile gaming</span>
-      <span>💻 LIVE Studio</span>
-    </div>
-
-    <div class="tabs">
-      <span class="active">LIVE</span>
-      <span>POST</span>
-      <span>CREATE</span>
-    </div>
+    <div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:8px"><span style="background:rgba(0,0,0,.5);padding:4px 10px;border-radius:12px">👑 Build Your Digital System</span><span>◉ LIVE goal</span></div>
+    <button class="go" id="go">Go LIVE</button>
+    <div class="mini"><span>🎤 Voice</span><span>📷 Camera</span><span>🎮 Gaming</span><span>💻 Studio</span></div>
+    <div class="tabs"><span class="a">LIVE</span><span>POST</span><span>CREATE</span></div>
   </div>
 </div>
-
-<script src="/socket.io/socket.io.js"></script>
 <script>
-let cam=document.getElementById('cam');
-let facing='user';
-let stream=null;
-async function startCam(){
-  if(stream) stream.getTracks().forEach(t=>t.stop());
-  try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:720},height:{ideal:1280}},audio:true});
-    cam.srcObject=stream;
-  }catch(e){ console.log('cam error',e); }
-}
-function flipCam(){ facing=facing==='user'?'environment':'user'; cam.style.transform=facing==='user'?'scaleX(-1)':'scaleX(1)'; startCam(); }
-startCam();
-
-const ring=document.getElementById('liveRing');
-function applyRing(style,color){
-  ring.style.boxShadow='none'; ring.style.border='3px solid '+color; ring.style.background='transparent';
-  switch(style){
-    case 'solid': ring.style.border='4px solid '+color; break;
-    case 'neon': ring.style.border='3px solid '+color; ring.style.boxShadow='0 0 18px '+color+', 0 0 36px '+color; break;
-    case 'gold': ring.style.border='4px solid transparent'; ring.style.background='linear-gradient(#000,#000) padding-box, linear-gradient(135deg,#ffd600,#ff8f00) border-box'; break;
-    case 'rainbow': ring.style.border='4px solid transparent'; ring.style.background='linear-gradient(#000,#000) padding-box, conic-gradient(from 0deg,#ff0050,#ffd600,#00e676,#00d4ff,#7c5cfc,#ff0050) border-box'; break;
-    case 'pulse': ring.style.border='3px solid '+color; ring.style.animation='pulse 1.2s infinite'; break;
-    case 'gradient': ring.style.background='linear-gradient(135deg,'+color+',#e91e8c)'; ring.style.padding='4px'; break;
-  }
-  localStorage.setItem('nvme_ring_style',style);
-  localStorage.setItem('nvme_ring_color',color);
-  try{ if(window.socket&&window.currentStreamId) socket.emit('selector_ring_change',{streamId:currentStreamId,style,color}); }catch(e){}
-}
-document.querySelectorAll('.ring-dot').forEach(d=>{
-  d.onclick=()=>{
-    document.querySelectorAll('.ring-dot').forEach(x=>x.classList.remove('active')); d.classList.add('active');
-    applyRing(d.dataset.style,d.dataset.color);
-  }
-});
-applyRing('neon','#00d4ff');
-
-// Go LIVE
-let isLive=false;
-document.getElementById('goLiveBtn').onclick=()=>{
-  isLive=!isLive;
-  const btn=document.getElementById('goLiveBtn');
-  btn.textContent=isLive?'END LIVE':'Go LIVE';
-  btn.classList.toggle('live',isLive);
-  if(isLive){
-    try{ window.socket=io(); window.currentStreamId='test-'+Date.now(); socket.emit('join_stream',window.currentStreamId); }catch(e){}
-  }
-};
-
-document.getElementById('rewardBanner').onclick=function(){ this.style.display='none' };
+const cam=document.getElementById('cam'); let facing='user',stream=null;
+async function start(){ if(stream) stream.getTracks().forEach(t=>t.stop()); try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:true}); cam.srcObject=stream; await cam.play(); }catch(e){ alert('Allow camera: click lock > Allow'); } }
+function flip(){ facing=facing==='user'?'environment':'user'; cam.classList.toggle('env',facing==='environment'); start(); }
+document.getElementById('go').onclick=function(){ this.classList.toggle('live'); this.textContent=this.classList.contains('live')?'END LIVE':'Go LIVE'; };
+window.addEventListener('load',start);
 </script>
 </body>
 </html>

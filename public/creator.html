@@ -3,20 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Go LIVE - NVME.live</title>
+<title>Go LIVE - NVME.live Battle</title>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;height:100dvh;width:100vw}
 #cam{display:none}
-#out{position:fixed;inset:0;width:100vw;height:100dvh;background:#000;z-index:0;transform:scaleX(-1)}
-#out.env{transform:scaleX(1)}
-.overlay{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;pointer-events:none}
+#out{position:fixed;inset:0;width:100vw;height:100dvh;background:#000;z-index:0}
+#out.single{transform:scaleX(-1)}
+#out.battle{object-fit:cover}
+#battleWrap{position:fixed;inset:0;z-index:0;display:none}
+#battleWrap.on{display:flex}
+.battleSide{flex:1;position:relative;overflow:hidden;background:#111;border:2px solid #222}
+.battleSide video,.battleSide canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.battleSide.me canvas{transform:scaleX(-1)}
+.battleSide .label{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:12px;font-size:.7rem;z-index:2}
+.battleSide .mic{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:12px;font-size:.7rem;z-index:2}
+.vs{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;background:#fe2c55;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;box-shadow:0 0 20px #fe2c55}
+#noCam{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;flex-direction:column;background:#111;text-align:center;padding:20px}
+#noCam.show{display:flex}
+.overlay{position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;pointer-events:none}
 .overlay *{pointer-events:auto}
 .top{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
 .icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer;font-size:14px;text-decoration:none}
-.pill{padding:6px 12px;border-radius:20px;background:rgba(0,0,0,.55);font-size:.75rem;cursor:pointer}
+.pill{padding:6px 12px;border-radius:20px;background:rgba(0,0,0,.55);font-size:.7rem;cursor:pointer}
 .reward{margin:6px 10px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.15);font-size:.7rem;display:flex;justify-content:space-between;gap:8px}
 .tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:10px;align-items:center;overflow-y:auto}
 .t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
@@ -25,284 +37,248 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 .t span{font-size:.55rem}
 .bottom{margin-top:auto;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.2))}
 .go{width:100%;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
-.go.live{background:#10ff70;color:#000}
+.go.live{background:#10ff70;color:#000;box-shadow:0 0 10px #10ff70}
+.battleBtn{width:100%;height:40px;margin-top:8px;border-radius:20px;border:none;background:#7c3aed;color:#fff;font-weight:700;cursor:pointer}
+.battleBtn.on{background:#10ff70;color:#000}
 #toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.9);padding:14px 22px;border-radius:12px;z-index:100;display:none;font-size:.9rem;max-width:85%;text-align:center}
 #toast.show{display:block}
-#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:20;background:#151515;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:88dvh;overflow-y:auto}
+#fxPanel{position:fixed;left:0;right:0;bottom:0;z-index:25;background:#151515;border-top-left-radius:16px;border-top-right-radius:16px;padding:12px;transform:translateY(100%);transition:.3s;max-height:88dvh;overflow-y:auto}
 #fxPanel.show{transform:translateY(0)}
 .fxHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .fxGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .fxItem{aspect-ratio:1;background:#222;border-radius:12px;overflow:hidden;cursor:pointer;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
 .fxItem.active{border-color:#fe2c55}
 .fxItem img{width:100%;height:70%;object-fit:cover}
-.fxItem span{font-size:.52rem;padding:2px;text-align:center;line-height:1.1}
-.fxItem .mov{position:absolute;top:2px;left:2px;font-size:.45rem;background:#10ff70;color:#000;border-radius:4px;padding:1px 3px}
-.fxItem .fix{position:absolute;top:2px;right:2px;font-size:.4rem;background:#fe2c55;border-radius:4px;padding:1px 3px}
+.fxItem span{font-size:.52rem;padding:2px;text-align:center}
 .tabs2{display:flex;gap:8px;margin:10px 0}
 .tabs2 button{flex:1;padding:8px;border-radius:10px;border:none;background:#222;color:#fff;font-size:.7rem;cursor:pointer}
 .tabs2 button.active{background:#fe2c55;font-weight:700}
 .row{display:flex;align-items:center;gap:8px;margin:8px 0}
 .row label{font-size:.65rem;width:85px;opacity:.8}
 .row input,.row select{flex:1}
-#liveBadge{position:fixed;top:70px;left:12px;z-index:10;background:#fe2c55;padding:6px 12px;border-radius:20px;font-size:.7rem;font-weight:700;display:none}
+#battleModal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;padding:20px}
+#battleModal.on{display:flex}
+.modalBox{background:#1a1a1a;border-radius:16px;padding:16px;width:100%;max-width:360px}
+.modalBox input{width:100%;padding:10px;border-radius:10px;border:none;background:#222;color:#fff;margin:8px 0}
+.modalBox button{width:100%;padding:12px;border-radius:12px;border:none;font-weight:700;cursor:pointer;margin-top:6px}
+#liveBadge{position:fixed;top:70px;left:12px;z-index:16;background:#fe2c55;padding:6px 12px;border-radius:20px;font-size:.7rem;font-weight:700;display:none}
 #liveBadge.on{display:block}
-#debug{position:fixed;top:50px;left:12px;z-index:10;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:8px;font-size:.6rem}
 </style>
 </head>
 <body>
 <video id="cam" autoplay playsinline muted></video>
-<canvas id="out"></canvas>
+<canvas id="out" class="single"></canvas>
+<div id="battleWrap">
+  <div class="battleSide me"><canvas id="meCanvas"></canvas><div class="label" id="meLabel">YOU</div><div class="mic" id="meMic">🎤 ON</div></div>
+  <div class="battleSide guest"><video id="guestVideo" autoplay playsinline></video><canvas id="guestCanvas"></canvas><div class="label" id="guestLabel">GUEST - Waiting...</div><div class="mic" id="guestMic">🎤 ON</div></div>
+  <div class="vs">VS</div>
+</div>
 <img id="bgImg" crossorigin="anonymous" style="display:none">
-<video id="bgVid" loop muted playsinline crossorigin="anonymous" style="display:none"></video>
 <canvas id="work" style="display:none"></canvas>
 <img id="filterImg" style="display:none">
-
+<div id="noCam"><div style="font-size:48px">📷</div><h3>Camera Blocked</h3><button onclick="start()" style="margin-top:12px;padding:10px 20px;border-radius:20px;border:none;background:#fff;color:#000;font-weight:700">Try Again</button></div>
 <div id="toast"></div>
-<div id="liveBadge">🔴 LIVE</div>
-<div id="debug">AI loading...</div>
+<div id="liveBadge">🔴 LIVE • BATTLE</div>
 
 <div class="overlay">
-  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">🎨 BG REMOVES ROOM</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
-  <div class="reward" id="rw"><span id="rwText">Now removes background - solid behind you</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
+  <div class="top"><a class="icon" href="/app.html">✕</a><div class="pill" onclick="toggleFx()">⚔️ Battle • BG Remove</div><div style="display:flex;gap:6px"><button class="icon" onclick="flip()">↻</button><a class="icon" href="/app.html">✕</a></div></div>
+  <div class="reward" id="rw"><span id="rwText">Battle split-screen + split mic ready</span><button onclick="document.getElementById('rw').style.display='none'" style="background:none;border:none;color:#fff">✕</button></div>
   <div class="tools">
     <div class="t" onclick="flip()"><div class="i">⇄</div><span>Flip</span></div>
-    <div class="t active" id="btnFx" onclick="toggleFx()"><div class="i">🎨</div><span>BG Remove</span></div>
+    <div class="t active" onclick="toggleFx()"><div class="i">🎨</div><span>BG</span></div>
+    <div class="t" onclick="openBattle()"><div class="i">⚔️</div><span>Battle</span></div>
+    <div class="t" onclick="toggleMic('me')"><div class="i" id="meMicIcon">🎤</div><span id="meMicTxt">Mic Me</span></div>
+    <div class="t" onclick="toggleMic('guest')"><div class="i" id="guestMicIcon">🎤</div><span>Mic Guest</span></div>
     <div class="t" onclick="share()"><div class="i">↗</div><span>Share</span></div>
   </div>
-  <div class="bottom"><button class="go" id="goBtn">Go LIVE</button></div>
+  <div class="bottom"><button class="go" id="goBtn">Go LIVE</button><button class="battleBtn" id="battleBtn" onclick="openBattle()">⚔️ START BATTLE SPLIT-SCREEN</button></div>
+</div>
+
+<div id="battleModal">
+  <div class="modalBox">
+    <h3>⚔️ Battle Split-Screen</h3>
+    <p style="font-size:.7rem;opacity:.7;margin:6px 0">Two mics, split screen live. Invite guest.</p>
+    <div style="background:#222;border-radius:10px;padding:10px;margin:8px 0">
+      <div style="font-size:.7rem;opacity:.7">Your Battle ID:</div>
+      <div id="myPeerId" style="font-weight:700;word-break:break-all">Loading...</div>
+      <button onclick="copyId()" style="background:#333;color:#fff;margin-top:6px">Copy ID</button>
+    </div>
+    <input id="remoteId" placeholder="Paste guest Battle ID here">
+    <button onclick="connectBattle()" style="background:#fe2c55;color:#fff">Connect ⚔️ Split Screen</button>
+    <button onclick="startBattleLocal()" style="background:#7c3aed;color:#fff">Test Local Split (No Guest)</button>
+    <div style="font-size:.6rem;opacity:.5;margin-top:6px">Guest: open nvme.live/creator and paste host ID to join battle</div>
+    <button onclick="closeBattle()" style="background:#222;color:#fff">Close</button>
+    <button onclick="endBattle()" style="background:#111;color:#ff4444;border:1px solid #ff4444">End Battle</button>
+  </div>
 </div>
 
 <div id="fxPanel">
-  <div class="fxHead"><b>✅ BG REMOVER - FIXED</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
+  <div class="fxHead"><b>BG Remove + Battle</b><button onclick="toggleFx()" style="background:#222;border:none;color:#fff;width:28px;height:28px;border-radius:50%">✕</button></div>
   <div class="tabs2">
-    <button id="tab-bg" class="active" onclick="switchTab('bg')">🖼️ Solid & Moving BG (Removes Room)</button>
-    <button id="tab-face" onclick="switchTab('face')">🎭 Face Anim</button>
+    <button id="tab-bg" class="active" onclick="switchTab('bg')">🖼️ BG Remove</button>
+    <button id="tab-battle" onclick="switchTab('battle')">⚔️ Battle Settings</button>
+    <button id="tab-face" onclick="switchTab('face')">🎭 Face</button>
   </div>
-
   <div id="panel-bg">
-    <div style="font-size:.7rem;opacity:.8;margin-bottom:6px">✅ CLICK - REMOVES YOUR ROOM, PUTS IMAGE SOLID BEHIND</div>
     <div class="fxGrid">
-      <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:22px">🚫</div><span>None (Cam)</span></div>
-      <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img src="https://picsum.photos/seed/officefix/300/200"><span>Office</span><div class="fix">FIXED</div></div>
-      <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img src="https://picsum.photos/seed/beachfix/300/200"><span>Beach</span><div class="fix">FIXED</div></div>
-      <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img src="https://picsum.photos/seed/cityfix/300/200"><span>City</span><div class="fix">FIXED</div></div>
-      <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img src="https://picsum.photos/seed/spacefix/300/200"><span>Space</span><div class="fix">FIXED</div></div>
-      <div class="fxItem" data-bg="forest" onclick="setBg('forest',this)"><img src="https://picsum.photos/seed/forestfix/300/200"><span>Forest</span><div class="fix">FIXED</div></div>
-      <div class="fxItem" data-bg="studio" onclick="setBg('studio',this)"><img src="https://picsum.photos/seed/studiofix/300/200"><span>Studio</span><div class="fix">FIXED</div></div>
-      <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:20px">⬆️</div><span>Upload (Stays)</span></div>
-    </div>
-    <div style="font-size:.65rem;opacity:.7;margin-top:10px">MOVING BACKGROUNDS - REMOVES ROOM</div>
-    <div class="fxGrid">
-      <div class="fxItem" data-bg="neon" onclick="setBg('neon',this)"><div style="width:100%;height:70%;background:linear-gradient(45deg,#ff00ff,#00ffff)"></div><span>Neon Move</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="stars" onclick="setBg('stars',this)"><div style="width:100%;height:70%;background:#000"></div><span>Stars Move</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="waves" onclick="setBg('waves',this)"><div style="width:100%;height:70%;background:linear-gradient(#001122,#00aaff)"></div><span>Waves Move</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="matrix" onclick="setBg('matrix',this)"><div style="width:100%;height:70%;background:#001100;color:#0f0;display:flex;align-items:center;justify-content:center">0101</div><span>Matrix Move</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="firebg" onclick="setBg('firebg',this)"><div style="width:100%;height:70%;background:linear-gradient(#ff3300,#ffaa00)"></div><span>Fire Move</span><div class="mov">MOV</div></div>
-      <div class="fxItem" data-bg="gradient" onclick="setBg('gradient',this)"><div style="width:100%;height:70%;background:linear-gradient(90deg,red,blue)"></div><span>Gradient Move</span><div class="mov">MOV</div></div>
+      <div class="fxItem active" data-bg="none" onclick="setBg('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
+      <div class="fxItem" data-bg="office" onclick="setBg('office',this)"><img src="https://picsum.photos/seed/officefix/300/200"><span>Office</span></div>
+      <div class="fxItem" data-bg="beach" onclick="setBg('beach',this)"><img src="https://picsum.photos/seed/beachfix/300/200"><span>Beach</span></div>
+      <div class="fxItem" data-bg="city" onclick="setBg('city',this)"><img src="https://picsum.photos/seed/cityfix/300/200"><span>City</span></div>
+      <div class="fxItem" data-bg="space" onclick="setBg('space',this)"><img src="https://picsum.photos/seed/spacefix/300/200"><span>Space</span></div>
+      <div class="fxItem" data-bg="neon" onclick="setBg('neon',this)"><div style="width:100%;height:70%;background:linear-gradient(45deg,#ff00ff,#00ffff)"></div><span>Neon Move</span></div>
+      <div class="fxItem" data-bg="stars" onclick="setBg('stars',this)"><div style="width:100%;height:70%;background:#000"></div><span>Stars Move</span></div>
+      <div class="fxItem" onclick="document.getElementById('uploadBg').click()"><div style="font-size:20px">⬆️</div><span>Upload</span></div>
     </div>
     <div class="row"><label>BG Scale</label><input type="range" id="bgScale" min="30" max="200" value="100"><span id="bgScaleV">100%</span></div>
-    <div class="row"><label>Edge Smooth</label><input type="range" id="edge" min="0" max="20" value="8"><span id="edgeV">8</span></div>
-    <div class="row"><label>Fit</label><select id="fitMode" style="background:#222;color:#fff;border:none;padding:6px;border-radius:8px"><option value="cover">Cover - fills screen solid</option><option value="contain">Shrink to Frame</option><option value="center">Small center</option></select></div>
-    <div style="font-size:.6rem;opacity:.5;margin-top:4px">If BG not removing room, make sure you picked a BG (not None). None shows real room.</div>
   </div>
-
+  <div id="panel-battle" style="display:none">
+    <div style="font-size:.7rem;margin:6px 0">Split Mic Controls</div>
+    <div class="row"><label>My Mic</label><input type="range" id="meVol" min="0" max="100" value="100"><span id="meVolV">100%</span></div>
+    <div class="row"><label>Guest Mic</label><input type="range" id="guestVol" min="0" max="100" value="100"><span id="guestVolV">100%</span></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button onclick="toggleMic('me')" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Toggle My Mic</button>
+      <button onclick="toggleMic('guest')" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Toggle Guest Mic</button>
+    </div>
+    <button onclick="openBattle()" style="width:100%;margin-top:8px;padding:12px;border-radius:12px;border:none;background:#fe2c55;color:#fff;font-weight:700">Open Battle Invite</button>
+  </div>
   <div id="panel-face" style="display:none">
     <div class="fxGrid">
       <div class="fxItem active" data-filter="none" onclick="setFaceFilter('none',this)"><div style="font-size:22px">🚫</div><span>None</span></div>
       <div class="fxItem" data-filter="dog" onclick="setFaceFilter('dog',this)"><div style="font-size:22px">🐶</div><span>Dog</span></div>
       <div class="fxItem" data-filter="glasses" onclick="setFaceFilter('glasses',this)"><div style="font-size:22px">😎</div><span>Glasses</span></div>
-      <div class="fxItem" data-filter="heart" onclick="setFaceFilter('heart',this)"><div style="font-size:22px">😍</div><span>Heart</span></div>
-      <div class="fxItem" data-filter="clown" onclick="setFaceFilter('clown',this)"><div style="font-size:22px">🤡</div><span>Clown</span></div>
-      <div class="fxItem" data-filter="fire" onclick="setFaceFilter('fire',this)"><div style="font-size:22px">🔥</div><span>Fire Crown</span></div>
-      <div class="fxItem" onclick="document.getElementById('uploadFilter').click()"><div style="font-size:20px">⬆️</div><span>Upload PNG</span></div>
+      <div class="fxItem" data-filter="fire" onclick="setFaceFilter('fire',this)"><div style="font-size:22px">🔥</div><span>Fire</span></div>
     </div>
   </div>
-
   <input type="file" id="uploadBg" accept="image/*,video/*" style="display:none">
   <input type="file" id="uploadFilter" accept="image/*" style="display:none">
-  <div style="display:flex;gap:8px;margin-top:8px"><button onclick="clearAll()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#333;color:#fff">Clear</button><button onclick="toggleFx()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#fe2c55;color:#fff;font-weight:700">Done - BG Removes Room</button></div>
 </div>
 
 <script>
 const cam=document.getElementById('cam'), out=document.getElementById('out'), ctx=out.getContext('2d',{alpha:false});
-const bgImg=document.getElementById('bgImg'), bgVid=document.getElementById('bgVid');
-const work=document.getElementById('work'), wctx=work.getContext('2d');
-const debug=document.getElementById('debug');
-let facing='user',stream=null,fxOpen=false,bgMode='none',faceFilter='none',bgScale=100,fitMode='cover',edge=8,faceLandmarks=null;
-let seg=null,faceMesh=null,segResult=null,animT=0;
-let uploadedBgDataUrl=localStorage.getItem('nvme_uploaded_bg')||null;
-
-const bgUrls={
-  office:'https://picsum.photos/seed/officefix/1280/720',
-  beach:'https://picsum.photos/seed/beachfix/1280/720',
-  city:'https://picsum.photos/seed/cityfix/1280/720',
-  space:'https://picsum.photos/seed/spacefix/1280/720',
-  forest:'https://picsum.photos/seed/forestfix/1280/720',
-  studio:'https://picsum.photos/seed/studiofix/1280/720'
-};
+const meCanvas=document.getElementById('meCanvas'), meCtx=meCanvas.getContext('2d');
+const guestVideo=document.getElementById('guestVideo'), guestCanvas=document.getElementById('guestCanvas'), guestCtx=guestCanvas.getContext('2d');
+const battleWrap=document.getElementById('battleWrap');
+const bgImg=document.getElementById('bgImg'), work=document.getElementById('work'), wctx=work.getContext('2d');
+let facing='user',stream=null,fxOpen=false,bgMode='none',faceFilter='none',bgScale=100,faceLandmarks=null,seg=null,faceMesh=null,segResult=null,animT=0;
+let isBattle=false, peer=null, conn=null, call=null, meMuted=false, guestMuted=false;
+let meStreamForBattle=null;
+const bgUrls={office:'https://picsum.photos/seed/officefix/1280/720',beach:'https://picsum.photos/seed/beachfix/1280/720',city:'https://picsum.photos/seed/cityfix/1280/720',space:'https://picsum.photos/seed/spacefix/1280/720'};
 
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 function toggleFx(){ fxOpen=!fxOpen; document.getElementById('fxPanel').classList.toggle('show',fxOpen); }
-function switchTab(t){ document.getElementById('panel-bg').style.display=t==='bg'?'block':'none'; document.getElementById('panel-face').style.display=t==='face'?'block':'none'; document.getElementById('tab-bg').classList.toggle('active',t==='bg'); document.getElementById('tab-face').classList.toggle('active',t==='face'); }
-function clearAll(){ setBg('none',document.querySelector('[data-bg=none]')); setFaceFilter('none',document.querySelector('[data-filter=none]')); }
+function switchTab(t){ document.getElementById('panel-bg').style.display=t==='bg'?'block':'none'; document.getElementById('panel-battle').style.display=t==='battle'?'block':'none'; document.getElementById('panel-face').style.display=t==='face'?'block':'none'; document.querySelectorAll('.tabs2 button').forEach(b=>b.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); }
+function openBattle(){ document.getElementById('battleModal').classList.add('on'); }
+function closeBattle(){ document.getElementById('battleModal').classList.remove('on'); }
 
-document.getElementById('bgScale').oninput=e=>{ bgScale=+e.target.value; document.getElementById('bgScaleV').textContent=bgScale+'%'; };
-document.getElementById('edge').oninput=e=>{ edge=+e.target.value; document.getElementById('edgeV').textContent=edge; };
-document.getElementById('fitMode').onchange=e=>{ fitMode=e.target.value; };
+async function initPeer(){
+  peer=new Peer(null,{config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}});
+  peer.on('open',id=>{ document.getElementById('myPeerId').textContent=id; });
+  peer.on('call',async incomingCall=>{
+    toast('Guest calling - joining battle');
+    const answerStream=meStreamForBattle||stream;
+    incomingCall.answer(answerStream);
+    incomingCall.on('stream',remoteStream=>{
+      guestVideo.srcObject=remoteStream;
+      guestVideo.onloadedmetadata=()=>{ guestVideo.play(); startBattleUI(); };
+      document.getElementById('guestLabel').textContent='GUEST CONNECTED';
+    });
+    call=incomingCall;
+  });
+}
+function copyId(){ navigator.clipboard.writeText(document.getElementById('myPeerId').textContent); toast('Battle ID copied'); }
+function connectBattle(){
+  const rid=document.getElementById('remoteId').value.trim(); if(!rid) return toast('Paste guest ID');
+  const remoteStream=meStreamForBattle||stream;
+  const c=peer.call(rid,remoteStream);
+  c.on('stream',s=>{ guestVideo.srcObject=s; guestVideo.play(); startBattleUI(); document.getElementById('guestLabel').textContent='GUEST CONNECTED'; toast('Battle connected - split screen'); });
+  c.on('error',e=>toast('Connect failed: '+e));
+  call=c; closeBattle();
+}
+function startBattleLocal(){
+  // test without guest - shows your cam twice split
+  guestVideo.srcObject=null;
+  startBattleUI(true);
+  toast('Local battle test - split screen');
+  closeBattle();
+}
+function startBattleUI(isLocal=false){
+  isBattle=true; battleWrap.classList.add('on'); out.style.display='none'; document.getElementById('liveBadge').classList.add('on'); document.getElementById('battleBtn').classList.add('on'); document.getElementById('battleBtn').textContent='⚔️ BATTLE LIVE';
+  if(isLocal){ guestCanvas.style.display='block'; document.getElementById('guestLabel').textContent='TEST - SAME CAM'; }
+}
+function endBattle(){
+  isBattle=false; battleWrap.classList.remove('on'); out.style.display='block'; document.getElementById('battleBtn').classList.remove('on'); document.getElementById('battleBtn').textContent='⚔️ START BATTLE SPLIT-SCREEN';
+  if(call) call.close(); if(guestVideo.srcObject) guestVideo.srcObject=null; document.getElementById('battleModal').classList.remove('on'); toast('Battle ended');
+}
+function toggleMic(who){
+  if(who==='me'){
+    meMuted=!meMuted; if(stream) stream.getAudioTracks().forEach(t=>t.enabled=!meMuted);
+    document.getElementById('meMic').textContent=meMuted?'🔇 MUTED':'🎤 ON'; document.getElementById('meMicIcon').textContent=meMuted?'🔇':'🎤'; toast(meMuted?'Your mic muted':'Your mic on');
+  } else {
+    guestMuted=!guestMuted; guestVideo.muted=guestMuted; document.getElementById('guestMic').textContent=guestMuted?'🔇 MUTED':'🎤 ON'; toast(guestMuted?'Guest mic muted':'Guest mic on');
+  }
+}
+document.getElementById('meVol').oninput=e=>{ const v=e.target.value/100; if(meCanvas) meCanvas.style.opacity=v; document.getElementById('meVolV').textContent=e.target.value+'%'; if(stream){ stream.getAudioTracks().forEach(t=>{ /* volume via gain */ }); } };
+document.getElementById('guestVol').oninput=e=>{ guestVideo.volume=e.target.value/100; document.getElementById('guestVolV').textContent=e.target.value+'%'; };
 
 async function initModels(){
-  debug.textContent='AI loading...';
-  seg=new SelfieSegmentation({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`});
-  seg.setOptions({modelSelection:1});
-  seg.onResults(r=>{ segResult=r; debug.textContent='AI ready - BG removes room'; });
-  faceMesh=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
-  faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
-  faceMesh.onResults(r=>{ faceLandmarks=r.multiFaceLandmarks&&r.multiFaceLandmarks[0]?r.multiFaceLandmarks[0]:null; });
-  debug.textContent='AI ready';
+  seg=new SelfieSegmentation({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`}); seg.setOptions({modelSelection:1}); seg.onResults(r=>segResult=r);
+  faceMesh=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`}); faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5}); faceMesh.onResults(r=>{ faceLandmarks=r.multiFaceLandmarks&&r.multiFaceLandmarks[0]?r.multiFaceLandmarks[0]:null; });
 }
-
-function drawMovingBg(W,H){
+function drawBg(W,H){
+  if(bgMode==='none'){ ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); return; }
+  if(['neon','stars'].includes(bgMode)){
+    const t=animT*0.02; const g=ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,`hsl(${(t*30)%360},100%,50%)`); g.addColorStop(1,`hsl(${(t*30+180)%360},100%,50%)`); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  } else {
+    if(bgImg.complete&&bgImg.naturalWidth>0){ const iw=bgImg.naturalWidth, ih=bgImg.naturalHeight; let r=Math.max(W/iw,H/ih)*(bgScale/100); ctx.drawImage(bgImg,(W-iw*r)/2,(H-ih*r)/2,iw*r,ih*r); } else { ctx.fillStyle='#222'; ctx.fillRect(0,0,W,H); }
+  }
+}
+function compositeSingle(){
+  const W=out.width,H=out.height;
+  if(bgMode==='none'){ ctx.drawImage(cam,0,0,W,H); return; }
+  drawBg(W,H);
+  if(segResult&&segResult.segmentationMask){ work.width=W; work.height=H; wctx.clearRect(0,0,W,H); wctx.drawImage(segResult.segmentationMask,0,0,W,H); wctx.globalCompositeOperation='source-in'; wctx.drawImage(segResult.image,0,0,W,H); ctx.drawImage(work,0,0,W,H); }
+}
+function compositeBattle(){
   animT++;
-  if(bgMode==='neon'){
-    const g=ctx.createLinearGradient(0,0,W,H);
-    const t=animT*0.02;
-    g.addColorStop(0,`hsl(${(t*30)%360},100%,50%)`);
-    g.addColorStop(1,`hsl(${(t*30+180)%360},100%,50%)`);
-    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  } else if(bgMode==='stars'){
-    ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#fff';
-    for(let i=0;i<80;i++){ const x=(Math.sin(i)*W*0.5+W*0.5 + animT*0.5)%W; const y=(i*23+animT)%H; ctx.beginPath(); ctx.arc(x,y,1.5,0,Math.PI*2); ctx.fill(); }
-  } else if(bgMode==='waves'){
-    ctx.fillStyle='#001122'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#0099ff';
-    for(let y=0;y<H;y+=30){ ctx.beginPath(); ctx.moveTo(0,y); for(let x=0;x<W;x+=10) ctx.lineTo(x, y+Math.sin(x*0.02+animT*0.05)*12); ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill(); }
-  } else if(bgMode==='matrix'){
-    ctx.fillStyle='rgba(0,0,0,0.15)'; ctx.fillRect(0,0,W,H); ctx.fillStyle='#0f0'; ctx.font='14px monospace';
-    for(let i=0;i<W;i+=16) ctx.fillText(String.fromCharCode(33+Math.random()*90), i, (Math.random()*H+animT*2)%H);
-  } else if(bgMode==='firebg'){
-    const g=ctx.createRadialGradient(W/2,H,W/2,H,W); g.addColorStop(0,'#ffaa00'); g.addColorStop(1,'#440000'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  } else if(bgMode==='gradient'){
-    const g=ctx.createLinearGradient(0,0,W,0); g.addColorStop(0,`hsl(${(animT)%360},100%,50%)`); g.addColorStop(1,`hsl(${(animT+180)%360},100%,50%)`); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  }
-}
-
-function drawImageBgFitted(W,H){
-  const iw=bgImg.naturalWidth||1280, ih=bgImg.naturalHeight||720;
-  if(!bgImg.complete || iw===0){ ctx.fillStyle='#222'; ctx.fillRect(0,0,W,H); return; }
-  let r=fitMode==='cover'?Math.max(W/iw,H/ih):fitMode==='contain'?Math.min(W/iw,H/ih)*0.9:0.5;
-  r*=bgScale/100; const dw=iw*r, dh=ih*r;
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
-  ctx.drawImage(bgImg,(W-dw)/2,(H-dh)/2,dw,dh);
-}
-
-// MAIN FIXED RENDER - REMOVES BACKGROUND
-function composite(){
-  const W=out.width, H=out.height;
-  if(bgMode==='none'){
-    ctx.drawImage(cam,0,0,W,H);
-    drawFace();
-    return;
-  }
-  // 1. Draw background first (solid or moving) - this will be BEHIND
-  if(['neon','stars','waves','matrix','firebg','gradient'].includes(bgMode)){
-    drawMovingBg(W,H);
-  } else {
-    drawImageBgFitted(W,H);
-  }
-  // 2. If we have segmentation mask, cut person out and draw on top
-  if(segResult && segResult.segmentationMask){
-    work.width=W; work.height=H;
-    // draw mask to work canvas with blur for smooth edge
-    wctx.clearRect(0,0,W,H);
-    if(edge>0){ wctx.filter=`blur(${edge}px)`; }
-    wctx.drawImage(segResult.segmentationMask,0,0,W,H);
-    wctx.filter='none';
-    wctx.globalCompositeOperation='source-in';
-    wctx.drawImage(segResult.image,0,0,W,H);
-    // draw person on top of bg
-    ctx.globalCompositeOperation='source-over';
-    ctx.drawImage(work,0,0,W,H);
-  } else {
-    // fallback if AI not ready yet - still show cam so user not black
-    // but once AI ready, room will be removed
-    ctx.globalAlpha=0.85;
-    ctx.drawImage(cam,0,0,W,H);
-    ctx.globalAlpha=1;
-  }
-  drawFace();
-}
-
-function drawFace(){
-  if(!faceLandmarks || faceFilter==='none') return;
-  const W=out.width, H=out.height;
-  const get=i=>({x:faceLandmarks[i].x*W, y:faceLandmarks[i].y*H});
-  const nose=get(1), leftEye=get(33), rightEye=get(263), top=get(10);
-  const eyeDist=Math.hypot(leftEye.x-rightEye.x, leftEye.y-rightEye.y);
-  ctx.save();
-  if(faceFilter==='dog'){ ctx.font=`${eyeDist*1.2}px serif`; ctx.textAlign='center'; ctx.fillText('🐶',top.x,top.y-eyeDist*0.5); }
-  else if(faceFilter==='glasses'){ ctx.font=`${eyeDist*2.2}px serif`; ctx.textAlign='center'; ctx.fillText('😎',(leftEye.x+rightEye.x)/2,(leftEye.y+rightEye.y)/2+eyeDist*0.3); }
-  else if(faceFilter==='heart'){ ctx.font=`${eyeDist}px serif`; ctx.textAlign='center'; ctx.fillText('❤️',leftEye.x,leftEye.y-10); ctx.fillText('❤️',rightEye.x,rightEye.y-10); }
-  else if(faceFilter==='clown'){ ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(nose.x,nose.y,eyeDist*0.25,0,Math.PI*2); ctx.fill(); }
-  else if(faceFilter==='fire'){ ctx.font=`${eyeDist*1.5}px serif`; ctx.textAlign='center'; ctx.fillText('🔥',top.x,top.y-eyeDist*0.6); }
-  ctx.restore();
+  const W=meCanvas.width||640, H=meCanvas.height||720;
+  // me side - with BG removal
+  if(bgMode!=='none'){ 
+    meCtx.fillStyle='#000'; meCtx.fillRect(0,0,W,H);
+    if(['neon','stars'].includes(bgMode)){ const g=meCtx.createLinearGradient(0,0,W,H); g.addColorStop(0,`hsl(${(animT*2)%360},100%,50%)`); g.addColorStop(1,`hsl(${(animT*2+180)%360},100%,50%)`); meCtx.fillStyle=g; meCtx.fillRect(0,0,W,H); }
+    else if(bgImg.complete) meCtx.drawImage(bgImg,0,0,W,H);
+    if(segResult&&segResult.segmentationMask){ work.width=W; work.height=H; wctx.clearRect(0,0,W,H); wctx.drawImage(segResult.segmentationMask,0,0,W,H); wctx.globalCompositeOperation='source-in'; wctx.drawImage(segResult.image,0,0,W,H); meCtx.drawImage(work,0,0,W,H); }
+    else meCtx.drawImage(cam,0,0,W,H);
+  } else { meCtx.drawImage(cam,0,0,W,H); }
+  // guest side
+  if(guestVideo.srcObject && guestVideo.readyState>=2){ guestCtx.drawImage(guestVideo,0,0,guestCanvas.width,guestCanvas.height); }
+  else if(document.getElementById('guestLabel').textContent.includes('TEST')){ guestCtx.drawImage(cam,0,0,guestCanvas.width,guestCanvas.height); guestCtx.fillStyle='rgba(124,58,237,0.3)'; guestCtx.fillRect(0,0,W,H); }
 }
 
 async function start(){
   if(stream) stream.getTracks().forEach(x=>x.stop());
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1920},height:{ideal:1080}},audio:true});
-    cam.srcObject=stream; await cam.play(); out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720; work.width=out.width; work.height=out.height;
-    if(!seg) await initModels();
-    if(uploadedBgDataUrl){ bgImg.src=uploadedBgDataUrl; bgMode='uploaded'; }
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:{echoCancellation:true,noiseSuppression:true}});
+    cam.srcObject=stream; await cam.play(); out.width=cam.videoWidth||1280; out.height=cam.videoHeight||720; meCanvas.width=640; meCanvas.height=720; guestCanvas.width=640; guestCanvas.height=720; meStreamForBattle=stream;
+    if(!seg) await initModels(); if(!peer) await initPeer();
     loop();
-  }catch(e){ debug.textContent='Camera blocked'; }
+  }catch(e){ document.getElementById('noCam').classList.add('show'); }
 }
-function flip(){ facing=facing==='user'?'environment':'user'; out.classList.toggle('env',facing==='environment'); start(); }
+function flip(){ facing=facing==='user'?'environment':'user'; start(); }
+function setBg(k,el){ document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active'); if(k==='none'){bgMode='none';return;} if(['neon','stars'].includes(k)){bgMode=k;return;} bgMode='image'; const url=bgUrls[k]; bgImg.crossOrigin='anonymous'; bgImg.src=url; }
 function setFaceFilter(f,el){ document.querySelectorAll('#panel-face .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active'); faceFilter=f; }
-function setBg(k,el){
-  document.querySelectorAll('#panel-bg .fxItem').forEach(x=>x.classList.remove('active')); if(el) el.classList.add('active');
-  if(k==='none'){ bgMode='none'; toast('Real room'); return; }
-  if(['neon','stars','waves','matrix','firebg','gradient'].includes(k)){ bgMode=k; toast('Moving BG - removes room'); return; }
-  if(k==='uploaded'){ bgMode='uploaded'; return; }
-  bgMode='image';
-  const url=bgUrls[k];
-  bgImg.crossOrigin='anonymous';
-  bgImg.onload=()=>toast(k+' - room removed, solid behind');
-  bgImg.onerror=()=>{ toast('Retrying image...'); setTimeout(()=>bgImg.src=url+'?t='+Date.now(),500); };
-  bgImg.src=url;
-}
-document.getElementById('uploadBg').onchange=e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    uploadedBgDataUrl=ev.target.result;
-    try{ localStorage.setItem('nvme_uploaded_bg',uploadedBgDataUrl); }catch(e){}
-    bgImg.onload=()=>{ bgMode='uploaded'; toast('Uploaded stays - room removed'); };
-    bgImg.src=uploadedBgDataUrl;
-  };
-  reader.readAsDataURL(f);
-};
-document.getElementById('uploadFilter').onchange=e=>{
-  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f); document.getElementById('filterImg').src=url; faceFilter='custom';
-};
-function share(){ if(navigator.share) navigator.share({url:location.href}); else { navigator.clipboard.writeText(location.href); toast('Link copied'); } }
-
+document.getElementById('uploadBg').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ bgImg.src=ev.target.result; bgMode='image'; localStorage.setItem('nvme_uploaded_bg',ev.target.result); }; r.readAsDataURL(f); };
+function share(){ const id=document.getElementById('myPeerId').textContent; const url=location.origin+'/creator?battle='+id; if(navigator.share) navigator.share({title:'Join my battle',url}); else { navigator.clipboard.writeText(url); toast('Battle link copied: '+url); } }
 async function loop(){
   if(faceMesh) await faceMesh.send({image:cam});
   if(seg) await seg.send({image:cam});
-  composite();
+  if(isBattle) compositeBattle(); else compositeSingle();
   requestAnimationFrame(loop);
 }
-async function goLiveBackend(start){
-  const token=localStorage.getItem('token')||localStorage.getItem('nvme_token')||sessionStorage.getItem('token');
-  const headers={'Content-Type':'application/json'}; if(token) headers['Authorization']='Bearer '+token;
-  try{ if(start){ const res=await fetch('/api/live/start',{method:'POST',headers,body:JSON.stringify({title:'LIVE'})}); if(res.ok) document.getElementById('liveBadge').classList.add('on'); } else { await fetch('/api/live/end',{method:'POST',headers}); document.getElementById('liveBadge').classList.remove('on'); } }catch(e){}
-}
+async function goLiveBackend(start){ const token=localStorage.getItem('token')||localStorage.getItem('nvme_token')||sessionStorage.getItem('token'); const headers={'Content-Type':'application/json'}; if(token) headers['Authorization']='Bearer '+token; try{ if(start){ const res=await fetch('/api/live/start',{method:'POST',headers,body:JSON.stringify({title:'BATTLE LIVE',battle:true}}); if(res.ok) document.getElementById('liveBadge').classList.add('on'); } else { await fetch('/api/live/end',{method:'POST',headers}); document.getElementById('liveBadge').classList.remove('on'); } }catch(e){} }
 document.getElementById('goBtn').onclick=function(){ const willLive=!this.classList.contains('live'); this.classList.toggle('live',willLive); this.textContent=willLive?'END LIVE':'Go LIVE'; goLiveBackend(willLive); };
-window.addEventListener('load',()=>{ start(); setTimeout(()=>{ if(!fxOpen) toggleFx(); },700); });
 document.getElementById('bgScale').oninput=e=>{ bgScale=+e.target.value; document.getElementById('bgScaleV').textContent=bgScale+'%'; };
-document.getElementById('edge').oninput=e=>{ edge=+e.target.value; document.getElementById('edgeV').textContent=edge; };
+window.addEventListener('load',()=>{ start(); const saved=localStorage.getItem('nvme_uploaded_bg'); if(saved) bgImg.src=saved; const params=new URLSearchParams(location.search); const battleId=params.get('battle'); if(battleId){ document.getElementById('remoteId').value=battleId; openBattle(); toast('Battle invite - paste ID to join'); } setTimeout(()=>{ if(!fxOpen) toggleFx(); },800); });
 </script>
 </body>
 </html>

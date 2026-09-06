@@ -12321,6 +12321,10 @@ app.post(
 
 const onlineUserSockets =
   new Map();
+const userSocketMap = new Map(); // userId -> Set<socketId> single session
+const pendingSessionConflicts = new Map(); // socketId -> {userId, existingSet, timestamp}
+const autoBattleQueue = []; // waiting for auto match
+const activeBattles = new Map();
 
 io.on(
   'connection',
@@ -12369,54 +12373,128 @@ io.on(
     }
 
     // ------------------------------------
-    // Presence (DM online indicators)
+    // Presence + SINGLE SESSION ENFORCEMENT
     // ------------------------------------
 
     const authedUserId =
       socket.data.userId ||
       null;
 
-    if (authedUserId) {
-      // Catch the new client up on who
-      // is already online, then announce
-      // this user to everyone.
+    // helper to finalize login after confirm
+    const finalizeLogin = () => {
+      if (!authedUserId) return;
+      // if already finalized, skip
+      if (userSocketMap.has(authedUserId) && userSocketMap.get(authedUserId).has(socket.id)) return;
 
-      for (
-        const uid of
-        onlineUserSockets.keys()
-      ) {
-        socket.emit(
-          'user_online',
-          { userId: uid }
-        );
+      if (!userSocketMap.has(authedUserId)) userSocketMap.set(authedUserId, new Set());
+      userSocketMap.get(authedUserId).add(socket.id);
+
+      for (const uid of onlineUserSockets.keys()) {
+        socket.emit('user_online', { userId: uid });
       }
 
-      const onlineCount =
-        onlineUserSockets.get(
-          authedUserId
-        ) || 0;
-
-      onlineUserSockets.set(
-        authedUserId,
-        onlineCount + 1
-      );
+      const onlineCount = onlineUserSockets.get(authedUserId) || 0;
+      onlineUserSockets.set(authedUserId, onlineCount + 1);
 
       if (onlineCount === 0) {
-        io.emit(
-          'user_online',
-          {
-            userId:
-              authedUserId
-          }
-        );
+        io.emit('user_online', { userId: authedUserId });
       }
+
+      socket.emit('session_confirmed', { userId: authedUserId });
+    };
+
+    if (authedUserId) {
+      const existingSet = userSocketMap.get(authedUserId);
+
+      if (existingSet && existingSet.size > 0) {
+        // CONFLICT - ask user if they want to continue here and kill other device
+        pendingSessionConflicts.set(socket.id, {
+          userId: authedUserId,
+          existingSet: new Set(existingSet),
+          timestamp: Date.now()
+        });
+
+        socket.emit('session_conflict', {
+          message: 'You are already logged in on another device. Do you want to continue here? The other device will be logged out.',
+          otherDevices: existingSet.size,
+          userId: authedUserId
+        });
+
+        console.log(`⚠️ Session conflict for ${authedUserId} - ${existingSet.size} other device(s), asking confirmation from ${socket.id}`);
+
+        // auto-cancel after 60s if no response
+        setTimeout(() => {
+          if (pendingSessionConflicts.has(socket.id)) {
+            pendingSessionConflicts.delete(socket.id);
+            socket.emit('session_cancelled', { reason: 'Timeout - stayed on other device' });
+            socket.disconnect(true);
+          }
+        }, 60000);
+
+      } else {
+        // No conflict, login directly
+        finalizeLogin();
+      }
+
+      // Listen for user's choice
+      socket.on('session_confirm', (p = {}) => {
+        const action = p.action || p.choice || 'continue';
+        const pending = pendingSessionConflicts.get(socket.id);
+        if (!pending) return;
+
+        if (action === 'continue' || action === 'yes' || action === 'confirm') {
+          // Kick old devices
+          for (const oldSid of pending.existingSet) {
+            if (oldSid !== socket.id) {
+              const oldSock = io.sockets.sockets.get(oldSid);
+              if (oldSock) {
+                oldSock.emit('session_kicked', { 
+                  reason: 'You have been logged out because you logged in on another device',
+                  by: socket.id
+                });
+                oldSock.disconnect(true);
+              }
+            }
+          }
+          pendingSessionConflicts.delete(socket.id);
+          finalizeLogin();
+          console.log(`✅ Session confirmed for ${authedUserId} - kicked ${pending.existingSet.size} old device(s)`);
+        } else {
+          // Cancel - stay on other device
+          pendingSessionConflicts.delete(socket.id);
+          socket.emit('session_cancelled', { reason: 'Cancelled - staying on other device' });
+          socket.disconnect(true);
+          console.log(`❌ Session cancelled for ${authedUserId} - staying on other device`);
+        }
+      });
+
+      // Also support legacy event names
+      socket.on('session:continue', () => socket.emit('session_confirm', { action: 'continue' }));
+      socket.on('session:cancel', () => socket.emit('session_confirm', { action: 'cancel' }));
+      socket.on('continue_here', () => socket.emit('session_confirm', { action: 'continue' }));
+      socket.on('stay_there', () => socket.emit('session_confirm', { action: 'cancel' }));
     }
 
     socket.on(
       'disconnect',
       () => {
-        if (!authedUserId)
-          return;
+        // Clean pending conflict
+        pendingSessionConflicts.delete(socket.id);
+
+        // Remove from queue if disconnecting while searching
+        const qIdx = autoBattleQueue.findIndex(q => q.socketId === socket.id);
+        if (qIdx !== -1) {
+          clearTimeout(autoBattleQueue[qIdx].timer);
+          autoBattleQueue.splice(qIdx, 1);
+        }
+
+        if (!authedUserId) return;
+
+        const set = userSocketMap.get(authedUserId);
+        if (set) {
+          set.delete(socket.id);
+          if (set.size === 0) userSocketMap.delete(authedUserId);
+        }
 
         const onlineCount =
           (
@@ -12734,6 +12812,133 @@ io.on(
         io.to('battle-' + battleId).emit('gift', payload);
       }
     });
+    
+    // ================= AUTO BATTLE MATCHMAKING - 60s timeout =================
+    const findOpponent = (myEntry) => {
+      // find first different user
+      const idx = autoBattleQueue.findIndex(q => q.userId !== myEntry.userId);
+      if (idx === -1) return null;
+      const opponent = autoBattleQueue[idx];
+      autoBattleQueue.splice(idx, 1);
+      return opponent;
+    };
+
+    const handleAutoBattleFind = async (p = {}) => {
+      const userId = socket.data.userId;
+      if (!userId) {
+        socket.emit('battle:error', { error: 'Not authenticated' });
+        return;
+      }
+      // prevent double queue
+      const existing = autoBattleQueue.find(q => q.userId === userId);
+      if (existing) {
+        socket.emit('battle:searching', { message: 'Already searching...' });
+        return;
+      }
+
+      const streamId = p.streamId || p.stream_id || null;
+
+      const myEntry = {
+        userId,
+        socketId: socket.id,
+        streamId,
+        joinedAt: Date.now(),
+        timer: null
+      };
+
+      // Try immediate match
+      const opponent = findOpponent(myEntry);
+      if (opponent) {
+        // MATCHED!
+        const battleId = uuidv4();
+        activeBattles.set(battleId, {
+          id: battleId,
+          users: [userId, opponent.userId],
+          sockets: [socket.id, opponent.socketId],
+          createdAt: Date.now()
+        });
+
+        // Make both join battle room
+        socket.join(battleId);
+        socket.join('battle-' + battleId);
+        const oppSock = io.sockets.sockets.get(opponent.socketId);
+        if (oppSock) {
+          oppSock.join(battleId);
+          oppSock.join('battle-' + battleId);
+        }
+
+        // Create DB row if tables exist (best effort)
+        try {
+          const bRes = await pool.query(
+            `INSERT INTO stream_battles (id, stream_id, host_id, status, started_at) VALUES ($1, $2, $3, 'active', NOW()) RETURNING *`,
+            [battleId, streamId || opponent.streamId, userId]
+          );
+          await pool.query(
+            `INSERT INTO battle_participants (battle_id, user_id, team) VALUES ($1, $2, 'a'), ($1, $3, 'b') ON CONFLICT DO NOTHING`,
+            [battleId, userId, opponent.userId]
+          );
+        } catch(e){ console.log('battle db insert skip', e.message); }
+
+        const payloadForMe = {
+          battleId,
+          opponentId: opponent.userId,
+          opponentSocketId: opponent.socketId,
+          role: 'a'
+        };
+        const payloadForOpp = {
+          battleId,
+          opponentId: userId,
+          opponentSocketId: socket.id,
+          role: 'b'
+        };
+
+        socket.emit('battle:matched', payloadForMe);
+        io.to(opponent.socketId).emit('battle:matched', payloadForOpp);
+
+        // Also emit to battle room for ring UI
+        io.to(battleId).emit('battle:joined', { battleId, count: 2 });
+        io.to(battleId).emit('battle:started', { battleId });
+
+        console.log(`⚔️ Auto Battle matched ${userId} vs ${opponent.userId} => ${battleId}`);
+        return;
+      }
+
+      // No opponent - add to queue and start 60s timer
+      const timer = setTimeout(() => {
+        const idx = autoBattleQueue.findIndex(q => q.socketId === socket.id);
+        if (idx !== -1) {
+          autoBattleQueue.splice(idx, 1);
+          socket.emit('battle:timeout', { message: 'No opponent found in 60s' });
+          socket.emit('battle:no_opponent', { message: 'No opponent found' });
+          console.log(`⏰ Auto Battle timeout for ${userId}`);
+        }
+      }, 60000);
+
+      myEntry.timer = timer;
+      autoBattleQueue.push(myEntry);
+      socket.emit('battle:searching', { message: 'Finding opponent...', position: autoBattleQueue.length });
+      console.log(`🔍 Auto Battle queue: ${userId} waiting, queue size ${autoBattleQueue.length}`);
+    };
+
+    const handleAutoBattleCancel = () => {
+      const idx = autoBattleQueue.findIndex(q => q.socketId === socket.id);
+      if (idx !== -1) {
+        clearTimeout(autoBattleQueue[idx].timer);
+        autoBattleQueue.splice(idx, 1);
+        socket.emit('battle:cancelled', { message: 'Search cancelled' });
+      }
+    };
+
+    // Listen to all possible frontend event names
+    socket.on('auto_battle:find', handleAutoBattleFind);
+    socket.on('battle:find', handleAutoBattleFind);
+    socket.on('find_battle', handleAutoBattleFind);
+    socket.on('battle_find', handleAutoBattleFind);
+    socket.on('auto_battle:cancel', handleAutoBattleCancel);
+    socket.on('battle:cancel', handleAutoBattleCancel);
+    socket.on('cancel_battle', handleAutoBattleCancel);
+    // ================= END AUTO BATTLE =================
+
     // ================= NVME LIVE FIX - END =================
 
 
@@ -14988,6 +15193,28 @@ require('./nvme-tiktok-features')(
 // registration; anything below this line
 // is unreachable for GET requests.
 // ========================================
+
+app.get(
+  '/live/:id',
+  (req, res) =>
+    res.sendFile(
+      'live.html',
+      {
+        root: 'public'
+      }
+    )
+);
+
+app.get(
+  '/live',
+  (req, res) =>
+    res.sendFile(
+      'live.html',
+      {
+        root: 'public'
+      }
+    )
+);
 
 app.get(
   '*',

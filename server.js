@@ -12697,6 +12697,46 @@ io.on(
       onJoinBattle
     );
 
+    // ================= NVME LIVE FIX - START =================
+    // TikTok-style same battleId room - this makes 2 phones see each other
+    socket.on('battle:join', (p = {}) => {
+      const battleId = p.battleId || p.battle_id || p.id;
+      if (!battleId) return;
+      socket.join(battleId);
+      socket.join('battle-' + battleId);
+      const room = io.sockets.adapter.rooms.get(battleId);
+      const count = room ? room.size : 1;
+      io.to(battleId).emit('battle:joined', { battleId, count, peerId: socket.id });
+      socket.to(battleId).emit('battle:peer-joined', { id: socket.id, battleId });
+      io.to('battle-' + battleId).emit('battle:joined', { battleId, count, peerId: socket.id });
+    });
+
+    socket.on('battle:leave', (p = {}) => {
+      const battleId = p.battleId || p.battle_id || p.id;
+      if (!battleId) return;
+      socket.leave(battleId);
+      socket.leave('battle-' + battleId);
+      socket.to(battleId).emit('battle:peer-left', { id: socket.id, battleId });
+      io.to(battleId).emit('battle:peer-left', { id: socket.id });
+    });
+
+    socket.on('gift:send', (p = {}) => {
+      const battleId = p.battleId || p.battle_id;
+      const giftId = p.giftId || p.gift_id || p.type;
+      if (!battleId || !giftId) return;
+      const isClub = giftId === 'daily-hug' || giftId === 'hug' || p.club;
+      const payload = { type: giftId, id: giftId, sender: p.sender || 'Someone', legendary: !!p.legendary || isClub, club: isClub };
+      if (p.legendary || isClub) {
+        io.to(battleId).emit('gift:legendary', payload);
+        io.to('battle-' + battleId).emit('gift:legendary', payload);
+      } else {
+        io.to(battleId).emit('gift', payload);
+        io.to('battle-' + battleId).emit('gift', payload);
+      }
+    });
+    // ================= NVME LIVE FIX - END =================
+
+
     const onGiftByName =
       async (p = {}) => {
         const streamId =

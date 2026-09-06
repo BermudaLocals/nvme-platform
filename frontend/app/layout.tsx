@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import Providers from '@/components/Providers';
 import Navbar from '@/components/Navbar';
+import BottomNav from './components/BottomNav';
 
 export const metadata: Metadata = {
   title: 'NVME — Watch. Create. Earn.',
@@ -9,7 +10,12 @@ export const metadata: Metadata = {
   openGraph: { title: 'NVME — Watch. Create. Earn.', description: 'The future of short video entertainment.', siteName: 'NVME' }
 };
 
-export const viewport: Viewport = { themeColor: '#0a0a0a', width: 'device-width', initialScale: 1, viewportFit: 'cover' };
+export const viewport: Viewport = { 
+  themeColor: '#0a0a0a', 
+  width: 'device-width', 
+  initialScale: 1, 
+  viewportFit: 'cover' 
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,7 +29,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <div className="grain-overlay" aria-hidden="true" />
           <Navbar />
-          <main>{children}</main>
+          <main style={{ paddingBottom: '83px' }}>{children}</main>
+          <BottomNav />
         </Providers>
       </body>
     </html>

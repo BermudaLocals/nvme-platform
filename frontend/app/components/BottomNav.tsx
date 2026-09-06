@@ -4,11 +4,11 @@ import { usePathname } from 'next/navigation'
 
 export default function BottomNav() {
   const path = usePathname()
-  const isActive = (p: string) => path === p || path?.startsWith(p + '/')
+  const isActive = (p: string) => path === p || (p !== '/' && path?.startsWith(p))
 
   return (
     <nav className="bottom-nav">
-      <Link href="/" className={isActive('/') && path === '/' ? 'active' : ''}>
+      <Link href="/" className={path === '/' ? 'active' : ''}>
         <svg viewBox="0 0 24 24"><path d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z"/></svg>
         <span>Home</span>
       </Link>
@@ -16,7 +16,7 @@ export default function BottomNav() {
         <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.5 6.5 0 0016 9.5 6.5 6.5 0 109.5 16a6.5 6.5 0 004.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
         <span>Friends</span>
       </Link>
-      <Link href="/create" className="plus">
+      <Link href="/create" className="plus-link">
         <div className="plus-box"><span>+</span></div>
       </Link>
       <Link href="/inbox" className={isActive('/inbox') ? 'active' : ''}>
@@ -34,6 +34,7 @@ export default function BottomNav() {
         .bottom-nav a.active{color:white}
         .bottom-nav a.active svg{fill:white}
         .bottom-nav svg{width:27px;height:27px;fill:#8a8a8a}
+        .plus-link{padding-top:2px}
         .plus-box{width:44px;height:30px;background:white;border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative}
         .plus-box::before{content:'';position:absolute;left:-4px;top:0;width:44px;height:30px;background:#25F4EE;border-radius:8px;z-index:-1;transform:translateX(-2px)}
         .plus-box::after{content:'';position:absolute;left:4px;top:0;width:44px;height:30px;background:#FE2C55;border-radius:8px;z-index:-2;transform:translateX(2px)}

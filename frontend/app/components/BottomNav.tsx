@@ -13,7 +13,7 @@ export default function BottomNav() {
         <span>Home</span>
       </Link>
       <Link href="/discover" className={isActive('/discover') ? 'active' : ''}>
-        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.5 6.5 0 0016 9.5 6.5 6.5 0 109.5 16a6.5 6.5 0 004.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M10 18a7.5 7.5 0 115.2-2.2l5.5 5.5-1.5 1.5-5.5-5.5A7.5 7.5 0 0110 18zM10 16a6 6 0 100-12 6 6 0 000 12z"/></svg>
         <span>Friends</span>
       </Link>
       <Link href="/create" className="plus-link">
@@ -30,9 +30,8 @@ export default function BottomNav() {
 
       <style jsx>{`
         .bottom-nav{position:fixed;bottom:0;left:0;right:0;height:83px;background:black;border-top:1px solid #222;display:flex;justify-content:space-around;align-items:flex-start;padding-top:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));z-index:100}
-        .bottom-nav a{display:flex;flex-direction:column;align-items:center;gap:3px;color:#8a8a8a;text-decoration:none;font-size:10px;letter-spacing:.2px;min-width:48px}
-        .bottom-nav a.active{color:white}
-        .bottom-nav a.active svg{fill:white}
+        .bottom-nav a{display:flex;flex-direction:column;align-items:center;gap:3px;color:#8a8a8a;text-decoration:none;font-size:10px;min-width:48px}
+        .bottom-nav a.active{color:white}.bottom-nav a.active svg{fill:white}
         .bottom-nav svg{width:27px;height:27px;fill:#8a8a8a}
         .plus-link{padding-top:2px}
         .plus-box{width:44px;height:30px;background:white;border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative}

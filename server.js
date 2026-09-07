@@ -27,6 +27,7 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const paypal = require('@paypal/checkout-server-sdk');
+const liveSFU = require('./modules/live-sfu');
 
 // Optional — push routes no-op (with a log
 // line) when the package or VAPID keys are
@@ -9862,13 +9863,35 @@ app.post(
   authenticateToken,
   async (req, res) => {
     try {
-      const result =
-        await pool.query(
-          `
+      const streamId = req.params.id;
+      const roomName = `stream-${streamId}`;
+
+      // Ensure livekit_room_id column exists (best-effort, won't break if fails)
+      try {
+        await pool.query(`ALTER TABLE livestreams ADD COLUMN IF NOT EXISTS livekit_room_id TEXT`);
+        await pool.query(`ALTER TABLE stream_battles ADD COLUMN IF NOT EXISTS livekit_room_id TEXT`);
+      } catch {}
+
+      try {
+        await liveSFU.createRoom(roomName);
+      } catch (e) {
+        console.log('LiveKit createRoom skip', e.message);
+      }
+
+      const result = await pool.query(
+        `
           UPDATE livestreams
           SET
             status = 'live',
-            started_at = NOW()
+            started_at = NOW(),
+            livekit_room_id = $3
+
+          WHERE
+            id = $1
+            AND user_id = $2
+
+          RETURNING *
+          
 
           WHERE
             id = $1
@@ -9936,13 +9959,22 @@ app.post(
   authenticateToken,
   async (req, res) => {
     try {
-      const result =
-        await pool.query(
-          `
+      const streamId = req.params.id;
+      const roomName = `stream-${streamId}`;
+
+      try {
+        await liveSFU.deleteRoom(roomName);
+      } catch (e) {
+        console.log('LiveKit deleteRoom skip', e.message);
+      }
+
+      const result = await pool.query(
+        `
           UPDATE livestreams
           SET
             status = 'ended',
             ended_at = NOW()
+
 
           WHERE
             id = $1
@@ -10006,6 +10038,69 @@ app.post(
     }
   }
 );
+
+
+// ========================================
+// 🔴 LiveKit — viewer join + token (NEW)
+// ========================================
+
+app.post(
+  '/api/streams/:id/join',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const streamId = req.params.id;
+      const roomName = `stream-${streamId}`;
+      const role = req.body.role || 'viewer';
+
+      try { await liveSFU.createRoom(roomName); } catch {}
+
+      const token = await liveSFU.issueToken({
+        identity: req.user.id,
+        name: req.user.username,
+        room: roomName,
+        role
+      });
+
+      const participants = await liveSFU.listParticipants(roomName);
+
+      res.json({
+        success: true,
+        livekit_room: roomName,
+        livekit_url: process.env.LIVEKIT_URL,
+        token,
+        viewer_count: participants.length
+      });
+    } catch (error) {
+      console.error('Join error:', error.message);
+      res.status(500).json({ error: 'Failed to join stream' });
+    }
+  }
+);
+
+app.post(
+  '/api/livekit/token',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { room, role } = req.body;
+      if (!room) return res.status(400).json({ error: 'room required' });
+
+      const token = await liveSFU.issueToken({
+        identity: req.user.id,
+        name: req.user.username,
+        room,
+        role: role || 'viewer'
+      });
+
+      res.json({ token, url: process.env.LIVEKIT_URL, room });
+    } catch (error) {
+      console.error('LiveKit token error:', error.message);
+      res.status(500).json({ error: 'Failed to issue token' });
+    }
+  }
+);
+
 
 app.post(
   '/api/streams/:id/goal',

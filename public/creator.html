@@ -7,6 +7,69 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "livekit-client": "https://cdn.jsdelivr.net/npm/livekit-client@2.5.9/dist/livekit-client.esm.min.js"
+  }
+}
+</script>
+<script type="module">
+import { Room, Track } from 'livekit-client';
+
+let lkRoom = null;
+
+window.NvmeLiveKit = {
+  async goLive(streamId, canvasEl, micStream) {
+    const token = localStorage.getItem('token') || localStorage.getItem('nvme_token') || '';
+    const headers = { Authorization: 'Bearer ' + token };
+
+    const res = await fetch('/api/streams/' + streamId + '/go-live', { method: 'POST', headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ('HTTP ' + res.status));
+    }
+    const data = await res.json();
+    const { url, token: lkToken } = data.livekit || {};
+    if (!url || !lkToken) throw new Error('No LiveKit credentials returned');
+
+    lkRoom = new Room({ adaptiveStream: true, dynacast: true });
+    await lkRoom.connect(url, lkToken);
+
+    const canvasStream = canvasEl.captureStream(30);
+    const videoTrack = canvasStream.getVideoTracks()[0];
+    await lkRoom.localParticipant.publishTrack(videoTrack, {
+      name: 'camera',
+      source: Track.Source.Camera
+    });
+
+    if (micStream) {
+      const audioTrack = micStream.getAudioTracks()[0];
+      if (audioTrack) {
+        await lkRoom.localParticipant.publishTrack(audioTrack, {
+          name: 'microphone',
+          source: Track.Source.Microphone
+        });
+      }
+    }
+
+    return data.stream;
+  },
+
+  async endLive(streamId) {
+    const token = localStorage.getItem('token') || localStorage.getItem('nvme_token') || '';
+    const headers = { Authorization: 'Bearer ' + token };
+    try {
+      await fetch('/api/streams/' + streamId + '/end-live', { method: 'POST', headers });
+    } finally {
+      if (lkRoom) {
+        try { await lkRoom.disconnect(); } catch (e) {}
+        lkRoom = null;
+      }
+    }
+  }
+};
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;height:100dvh;width:100vw}
@@ -25,11 +88,12 @@ body{background:#000;color:#fff;font-family:Inter,system-ui;overflow:hidden;heig
 .top{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
 .icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;border:none;cursor:pointer;font-size:14px;text-decoration:none}
 .pill{padding:6px 12px;border-radius:20px;background:rgba(0,0,0,.55);font-size:.7rem;cursor:pointer}
-.tools{position:absolute;right:8px;top:70px;bottom:140px;display:flex;flex-direction:column;gap:10px;align-items:center}
-.t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
-.t .i{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid rgba(255,255,255,.15)}
-.t.active .i{background:#fe2c55}
-.t span{font-size:.55rem}
+.tools{position:absolute;right:10px;top:76px;bottom:150px;display:flex;flex-direction:column;gap:18px;align-items:center}
+.t{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}
+.t .i{width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.32);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;font-size:19px;border:none;box-shadow:0 2px 10px rgba(0,0,0,.3);transition:transform .12s ease}
+.t:active .i{transform:scale(0.86)}
+.t.active .i{background:#fe2c55;box-shadow:0 0 0 3px rgba(254,44,85,.3),0 2px 12px rgba(254,44,85,.55)}
+.t span{font-size:.6rem;font-weight:600;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.7)}
 .bottom{position:fixed;bottom:0;left:0;right:0;padding:8px 12px 10px;background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.1));z-index:16;display:flex;gap:8px;align-items:center}
 .go{flex:1;height:48px;border-radius:24px;border:none;background:#fe2c55;color:#fff;font-weight:800;font-size:1rem;cursor:pointer}
 .go.live{background:#10ff70;color:#000}
@@ -315,16 +379,30 @@ function setBg(k,el){ document.querySelectorAll('.fxGrid .fxItem').forEach(x=>x.
 document.getElementById('uploadBg').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ bgImg.src=ev.target.result; bgMode='image'; localStorage.setItem('nvme_uploaded_bg',ev.target.result); }; r.readAsDataURL(f); };
 async function loop(){ if(seg) await seg.send({image:cam}); composite(); requestAnimationFrame(loop); }
 
+let currentStreamId = localStorage.getItem('nvme_current_stream_id') || null;
+
 async function goLiveBackend(startLive){
   const token=localStorage.getItem('token')||localStorage.getItem('nvme_token')||''; const headers={'Content-Type':'application/json'}; if(token) headers['Authorization']='Bearer '+token;
   try{
     if(startLive){
-      const res=await fetch('/api/live/start',{method:'POST',headers,body:JSON.stringify({title:'LIVE',peerId:document.getElementById('myPeerId').textContent})});
-      if(res.ok){ isLive=true; document.getElementById('liveBadge').classList.add('on'); document.getElementById('battleBottomBtn').classList.add('on'); toast('You are LIVE - bottom left ⚔️ to battle'); registerPeer(); pollInvites(); }
+      if(!currentStreamId){
+        const createRes = await fetch('/api/streams', { method:'POST', headers, body: JSON.stringify({ title: 'LIVE' }) });
+        if(!createRes.ok) throw new Error('Could not create stream');
+        const created = await createRes.json();
+        currentStreamId = created.id;
+        localStorage.setItem('nvme_current_stream_id', currentStreamId);
+      }
+      await window.NvmeLiveKit.goLive(currentStreamId, out, stream);
+      isLive=true; document.getElementById('liveBadge').classList.add('on'); document.getElementById('battleBottomBtn').classList.add('on'); toast('You are LIVE 🔴 — real video is broadcasting'); registerPeer(); pollInvites();
     } else {
-      await fetch('/api/live/end',{method:'POST',headers}); isLive=false; document.getElementById('liveBadge').classList.remove('on'); document.getElementById('battleBottomBtn').classList.remove('on'); if(isBattle) endBattle();
+      if(currentStreamId) await window.NvmeLiveKit.endLive(currentStreamId);
+      isLive=false; document.getElementById('liveBadge').classList.remove('on'); document.getElementById('battleBottomBtn').classList.remove('on'); if(isBattle) endBattle();
+      currentStreamId = null; localStorage.removeItem('nvme_current_stream_id');
     }
-  }catch(e){ isLive=startLive; if(startLive){ document.getElementById('liveBadge').classList.add('on'); document.getElementById('battleBottomBtn').classList.add('on'); toast('LIVE (local) - battle button bottom left'); } }
+  }catch(e){
+    console.error('Go-live error:', e);
+    toast('Failed to go live: ' + e.message);
+  }
 }
 function pollInvites(){
   if(!isLive) return;

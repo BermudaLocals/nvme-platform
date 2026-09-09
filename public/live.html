@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>nvme.live — LIVE</title>
   <script src="/socket.io/socket.io.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "livekit-client": "https://cdn.jsdelivr.net/npm/livekit-client@2.5.9/dist/livekit-client.esm.min.js"
+    }
+  }
+  </script>
   <style>
     /* ── Reset & base ─────────────────────────────────────── */
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -147,6 +154,7 @@
     .gift-btn:hover { border-color:#e91e8c; background:#1e0f18; transform:scale(1.06); }
     .gift-btn.selected { border-color:gold; background:#1e1800; box-shadow:0 0 8px rgba(255,215,0,0.3); }
     .gift-btn .g-emoji { font-size:1.45rem; display:block; }
+    .gift-btn .g-icon { width:28px; height:28px; display:block; margin:0 auto; object-fit:contain; }
     .gift-btn .g-name { font-size:0.6rem; color:#7a8499; margin-top:2px; display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
     .gift-btn .g-cost { font-size:0.68rem; color:gold; font-weight:700; display:block; }
     #send-gift-btn { width:100%; background:linear-gradient(135deg,#e91e8c,#7c3aed); border:none; color:#fff; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:0.92rem; transition:opacity 0.2s,transform 0.1s; letter-spacing:0.5px; }
@@ -388,6 +396,67 @@ async function loadStreamInfo() {
   } catch(e) { console.warn('loadStreamInfo', e); }
 }
 loadStreamInfo();
+</script>
+<script type="module">
+import { Room, RoomEvent, Track } from 'livekit-client';
+
+(async () => {
+  const streamId = new URLSearchParams(location.search).get('id');
+  const token = localStorage.getItem('nvme_token');
+  if (!streamId) return;
+
+  const videoEl = document.getElementById('stream-video');
+  const placeholderEl = document.getElementById('stream-placeholder');
+
+  async function tryJoin() {
+    try {
+      const res = await fetch('/api/streams/' + streamId + '/join', {
+        method: 'POST',
+        headers: token ? { Authorization: 'Bearer ' + token } : {}
+      });
+
+      if (res.status === 409) return false; // not live yet — retry later
+      if (!res.ok) { console.warn('LiveKit join failed:', res.status); return false; }
+
+      const data = await res.json();
+      const { url, token: lkToken } = data.livekit || {};
+      if (!url || !lkToken) return false;
+
+      const room = new Room({ adaptiveStream: true, dynacast: true });
+
+      room.on(RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind === Track.Kind.Video) {
+          track.attach(videoEl);
+          videoEl.style.display = 'block';
+          placeholderEl.style.display = 'none';
+        }
+        if (track.kind === Track.Kind.Audio) track.attach();
+      });
+
+      room.on(RoomEvent.Disconnected, () => {
+        videoEl.style.display = 'none';
+        placeholderEl.style.display = '';
+        const msgEl = placeholderEl.querySelector('div:last-child');
+        if (msgEl) msgEl.textContent = 'Stream ended';
+      });
+
+      await room.connect(url, lkToken);
+      return true;
+    } catch (e) {
+      console.warn('LiveKit connect error:', e);
+      return false;
+    }
+  }
+
+  const ok = await tryJoin();
+  if (!ok) {
+    const retryInterval = setInterval(async () => {
+      if (await tryJoin()) clearInterval(retryInterval);
+    }, 4000);
+  }
+})();
+</script>
+<script>
 
 /* ── Wallet balance ────────────────────────────────────────────
    Populates #balance-display and keeps it in sync after every
@@ -414,6 +483,12 @@ const GIFTS = [
   { name:'Commander',    emoji:'👑',  cost:1000,  level:5 },
   { name:'CxO Elite',    emoji:'💎',  cost:5000,  level:6 },
   { name:'DIGITAL KING', emoji:'🔱',  cost:10000, level:7 },
+  { name:'Daily Hug',     emoji:'🤗', cost:1,   level:1, icon:'/gifts/daily-hug.png' },
+  { name:'Plush Hug',     emoji:'🧸', cost:5,   level:1, icon:'/gifts/plush-hug.webp' },
+  { name:'Bermuda Heart', emoji:'💗', cost:25,  level:1, icon:'/gifts/bermuda-heart.png' },
+  { name:'Hurricane',     emoji:'🌪️', cost:50,  level:2, icon:'/gifts/hurricane-spin.png' },
+  { name:'VS Beam',       emoji:'⚔️', cost:75,  level:2, icon:'/gifts/vs-beam.png' },
+  { name:'Dolphin Hug',   emoji:'🐬', cost:100, level:2, icon:'/gifts/dolphin-hug.webp' },
 ];
 
 /* ── Socket ──────────────────────────────────────────────────── */
@@ -425,7 +500,10 @@ const grid = document.getElementById('gift-grid');
 GIFTS.forEach(g => {
   const btn = document.createElement('div');
   btn.className = 'gift-btn';
-  btn.innerHTML = `<span class="g-emoji">${g.emoji}</span><span class="g-name">${g.name}</span><span class="g-cost">${g.cost}🪙</span>`;
+  const media = g.icon
+    ? `<img class="g-icon" src="${g.icon}" alt="" onerror="this.outerHTML='<span class=&quot;g-emoji&quot;>${g.emoji}</span>'">`
+    : `<span class="g-emoji">${g.emoji}</span>`;
+  btn.innerHTML = `${media}<span class="g-name">${g.name}</span><span class="g-cost">${g.cost}🪙</span>`;
   btn.onclick = () => {
     document.querySelectorAll('.gift-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');

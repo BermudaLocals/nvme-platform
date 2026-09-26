@@ -391,24 +391,41 @@
   <!-- TOAST -->
   <div id="toast"></div>
 
-  <!-- PayPal SDK (client-id injected by server or fallback) -->
-  <script>
-    // Server should set window.__PAYPAL_CLIENT_ID before this loads
-    // Fallback: read from meta tag or use placeholder
-    window.__PAYPAL_CLIENT_ID = window.__PAYPAL_CLIENT_ID ||
-      document.querySelector('meta[name="paypal-client-id"]')?.content ||
-      'PAYPAL_CLIENT_ID';
-  </script>
+  <!-- PayPal SDK (client-id resolved from server config, meta tag, or window var) -->
   <script>
     (function () {
-      const sdkSrc = `https://www.paypal.com/sdk/js?client-id=${window.__PAYPAL_CLIENT_ID}&currency=USD`;
-      const s = document.createElement('script');
-      s.src = sdkSrc;
-      s.setAttribute('data-sdk-integration-source', 'button-factory');
-      s.onload = () => { window.__paypalReady = true; if (window.__paypalReadyCb) window.__paypalReadyCb(); };
-      document.head.appendChild(s);
+      async function resolveClientId() {
+        if (window.__PAYPAL_CLIENT_ID) return window.__PAYPAL_CLIENT_ID;
+        var meta = document.querySelector('meta[name="paypal-client-id"]');
+        if (meta && meta.content) return meta.content;
+        try {
+          var r = await fetch('/api/config/public');
+          if (r.ok) {
+            var cfg = await r.json();
+            if (cfg.paypalClientId) return cfg.paypalClientId;
+          }
+        } catch (e) { /* fall through to error state */ }
+        return '';
+      }
+
+      resolveClientId().then(function (clientId) {
+        if (!clientId) {
+          window.__paypalError = 'Payments are not configured yet. Please check back soon.';
+          var container = document.getElementById('paypal-button-container');
+          if (container) container.innerHTML = '<p style="opacity:.7;font-size:.9rem">' + window.__paypalError + '</p>';
+          return;
+        }
+        window.__PAYPAL_CLIENT_ID = clientId;
+        var s = document.createElement('script');
+        s.src = 'https://www.paypal.com/sdk/js?client-id=' + encodeURIComponent(clientId) + '&currency=USD';
+        s.setAttribute('data-sdk-integration-source', 'button-factory');
+        s.onload = function () { window.__paypalReady = true; if (window.__paypalReadyCb) window.__paypalReadyCb(); };
+        s.onerror = function () { window.__paypalError = 'Could not load PayPal. Check your connection and retry.'; };
+        document.head.appendChild(s);
+      });
     })();
   </script>
+
 
   <script>
     /* ═══════════════════════════════════════════════

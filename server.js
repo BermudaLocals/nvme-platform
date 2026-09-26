@@ -81,7 +81,10 @@ const pool = new Pool({
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
-  ssl: { rejectUnauthorized: false }
+  ssl:
+    process.env.PGSSL === 'disable'
+      ? false
+      : { rejectUnauthorized: false }
 });
 
 pool.connect((err, client, release) => {
@@ -12119,6 +12122,24 @@ app.post(
 // 🪙 Credits (shop checkout)
 // ========================================
 
+// Public browser config — only publishable values, never
+// secrets. The PayPal client ID is designed to be public
+// (it ships in the SDK URL); the secret stays server-side.
+app.get(
+  '/api/config/public',
+  (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      paypalClientId:
+        process.env.PAYPAL_CLIENT_ID || '',
+      paypalMode:
+        process.env.PAYPAL_MODE === 'live'
+          ? 'live'
+          : 'sandbox'
+    });
+  }
+);
+
 // Mirrors the packs in public/shop.html — `value` is the
 // PayPal charge in USD, `credits` is what the buyer gets.
 const CREDIT_PACKAGES = {
@@ -13685,6 +13706,17 @@ app.get(
 
 app.get(
   '/profile',
+  (req, res) =>
+    res.sendFile(
+      'app.html',
+      {
+        root: 'public'
+      }
+    )
+);
+
+app.get(
+  '/feed',
   (req, res) =>
     res.sendFile(
       'app.html',

@@ -8,3 +8,7 @@ uploads/
 .env.development
 *.env
 .env.save
+.env
+.env.*
+*.env
+!.env.example

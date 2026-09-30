@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -16,10 +16,10 @@
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   overflow:hidden;height:100dvh;width:100vw;position:fixed;top:0;left 0;user-select:none}
 
-/* ── Shell ── */
+/* â”€â”€ Shell â”€â”€ */
 #shell{display:flex;flex-direction:column;height:100dvh;width:100vw;position:relative}
 
-/* ── Top Bar ── */
+/* â”€â”€ Top Bar â”€â”€ */
 #topbar{position:fixed;top:0;left:0;right:0;z-index:100;
   display:flex;align-items:center;justify-content:space-between;
   padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));
@@ -36,7 +36,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   border:none;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .topbar-btn:active{background:rgba(255,255,255,.25)}
 
-/* ── Main Stage ── */
+/* â”€â”€ Main Stage â”€â”€ */
 #stage{flex:1;position:relative;overflow:hidden;background:#000}
 #clip-container{width:100%;height:100%;position:relative}
 .clip{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -46,7 +46,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .clip.off-right{transform:translateX(100%);opacity:0}
 .clip.active{transform:translateX(0);opacity:1}
 
-/* ── Clip Info Overlay ── */
+/* â”€â”€ Clip Info Overlay â”€â”€ */
 #clip-info{position:absolute;bottom:90px;left:16px;right:70px;z-index:10;
   pointer-events:none}
 #clip-info h2{font-size:16px;font-weight:700;margin-bottom:4px;
@@ -55,7 +55,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 #clip-info .tag{display:inline-block;background:rgba(255,255,255,.15);
   padding:2px 8px;border-radius:10px;font-size:11px;margin-top:6px;margin-right:4px}
 
-/* ── Right Actions ── */
+/* â”€â”€ Right Actions â”€â”€ */
 #right-actions{position:absolute;right:10px;bottom:140px;z-index:10;
   display:flex;flex-direction:column;align-items:center;gap:18px}
 .ra-btn{display:flex;flex-direction:column;align-items:center;gap:3px;
@@ -66,7 +66,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .ra-label{font-size:10px;color:var(--text2)}
 .ra-btn.liked .ra-icon{background:var(--accent);color:#fff}
 
-/* ── Bottom Nav ── */
+/* â”€â”€ Bottom Nav â”€â”€ */
 #bottomnav{position:fixed;bottom:0;left:0;right:0;z-index:100;
   display:flex;align-items:center;justify-content:space-around;
   padding:8px 0;padding-bottom:calc(8px + var(--safe-b));
@@ -80,7 +80,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .nav-btn.create-btn .nav-icon{background:var(--accent);width:40px;height:28px;
   border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff}
 
-/* ── Panels ── */
+/* â”€â”€ Panels â”€â”€ */
 .panel{position:fixed;inset:0;z-index:200;background:var(--bg);
   transform:translateY(100%);transition:transform .35s cubic-bezier(.22,1,.36,1);
   display:flex;flex-direction:column;overflow:hidden}
@@ -93,7 +93,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   border:none;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .panel-body{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
 
-/* ── Library Panel ── */
+/* â”€â”€ Library Panel â”€â”€ */
 .genre-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .genre-card{background:var(--surface2);border-radius:var(--radius);overflow:hidden;cursor:pointer;
   transition:transform .2s;position:relative}
@@ -104,7 +104,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .genre-card .gc-info h4{font-size:13px;font-weight:700}
 .genre-card .gc-info span{font-size:11px;color:var(--text2)}
 
-/* ── Chat Panel ── */
+/* â”€â”€ Chat Panel â”€â”€ */
 .chat-messages{display:flex;flex-direction:column;gap:8px;min-height:60vh}
 .chat-msg{display:flex;gap:8px;align-items:flex-start}
 .chat-avatar{width:28px;height:28px;border-radius:50%;background:var(--surface3);flex-shrink:0;
@@ -120,7 +120,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .chat-send{width:38px;height:38px;border-radius:50%;background:var(--accent);
   border:none;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 
-/* ── AI Art Panel ── */
+/* â”€â”€ AI Art Panel â”€â”€ */
 .ai-section{margin-bottom:20px}
 .ai-section-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;
   letter-spacing:1px;margin-bottom:10px}
@@ -161,7 +161,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .ai-history-item img{width:100%;height:100%;object-fit:cover}
 .ai-status{font-size:11px;color:var(--text3);text-align:center;margin-top:8px}
 
-/* ── Rabbit Hole Panel ── */
+/* â”€â”€ Rabbit Hole Panel â”€â”€ */
 .rh-graph{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:20px 0}
 .rh-node{padding:10px 16px;border-radius:20px;background:var(--surface2);font-size:13px;
   font-weight:600;cursor:pointer;transition:all .2s;border:1px solid transparent}
@@ -174,7 +174,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .rh-trail .rh-crumb{font-size:12px;color:var(--accent2);cursor:pointer}
 .rh-trail .rh-arrow{color:var(--text3);font-size:10px}
 
-/* ── Battle Panel ── */
+/* â”€â”€ Battle Panel â”€â”€ */
 .battle-vs{display:flex;align-items:center;justify-content:center;gap:16px;padding:30px 0}
 .battle-card{flex:1;background:var(--surface2);border-radius:var(--radius);overflow:hidden;text-align:center}
 .battle-card img{width:100%;aspect-ratio:1;object-fit:cover}
@@ -188,7 +188,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .battle-vote-btn:active{transform:scale(.95)}
 .battle-vote-btn.voted{background:currentColor;color:#000}
 
-/* ── Gifts ── */
+/* â”€â”€ Gifts â”€â”€ */
 .gift-float{position:fixed;z-index:300;pointer-events:none;
   animation:giftRise 2.5s cubic-bezier(.22,1,.36,1) forwards}
 @keyframes giftRise{
@@ -203,7 +203,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   100%{opacity:0;transform:translate(var(--px),var(--py)) scale(0)}
 }
 
-/* ── Subcategory Drawers ── */
+/* â”€â”€ Subcategory Drawers â”€â”€ */
 .sub-drawer{position:fixed;bottom:0;left:0;right:0;z-index:250;
   background:var(--surface);border-radius:20px 20px 0 0;
   transform:translateY(100%);transition:transform .3s cubic-bezier(.22,1,.36,1);
@@ -223,7 +223,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   opacity:0;pointer-events:none;transition:opacity .3s}
 .sub-backdrop.show{opacity:1;pointer-events:auto}
 
-/* ── Floating Quick Buttons ── */
+/* â”€â”€ Floating Quick Buttons â”€â”€ */
 .float-btn{position:fixed;z-index:90;width:44px;height:44px;border-radius:50%;
   background:rgba(255,255,255,.12);backdrop-filter:blur(10px);border:none;
   color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;
@@ -232,14 +232,14 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 #float-gift{right:10px;bottom:calc(70px + var(--safe-b))}
 #float-battle{left:10px;bottom:calc(70px + var(--safe-b))}
 
-/* ── Toast ── */
+/* â”€â”€ Toast â”€â”€ */
 .toast{position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-20px);
   background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:12px;
   padding:10px 20px;font-size:13px;z-index:400;opacity:0;transition:all .3s;pointer-events:none;
   white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* ── Scrollbar ── */
+/* â”€â”€ Scrollbar â”€â”€ */
 ::-webkit-scrollbar{width:0;height:0}
 </style>
 </head>
@@ -253,8 +253,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <div class="live-badge">LIVE</div>
     </div>
     <div class="topbar-right">
-      <button class="topbar-btn" onclick="showToast('🔍 Search coming soon')">🔍</button>
-      <button class="topbar-btn" onclick="openPanel('aiart')">🎨</button>
+      <button class="topbar-btn" onclick="showToast('ðŸ” Search coming soon')">ðŸ”</button>
+      <button class="topbar-btn" onclick="openPanel('aiart')">ðŸŽ¨</button>
     </div>
   </div>
 
@@ -283,23 +283,23 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <!-- Right Actions -->
     <div id="right-actions">
       <button class="ra-btn" id="btn-like" onclick="toggleLike()">
-        <div class="ra-icon">♥</div>
+        <div class="ra-icon">â™¥</div>
         <span class="ra-label" id="like-count">4.2K</span>
       </button>
       <button class="ra-btn" onclick="openPanel('chat')">
-        <div class="ra-icon">💬</div>
+        <div class="ra-icon">ðŸ’¬</div>
         <span class="ra-label">1.8K</span>
       </button>
       <button class="ra-btn" onclick="openPanel('aiart')">
-        <div class="ra-icon">🎨</div>
+        <div class="ra-icon">ðŸŽ¨</div>
         <span class="ra-label">Create</span>
       </button>
       <button class="ra-btn" onclick="openPanel('rabbithole')">
-        <div class="ra-icon">🐰</div>
+        <div class="ra-icon">ðŸ°</div>
         <span class="ra-label">Explore</span>
       </button>
       <button class="ra-btn" onclick="shareClip()">
-        <div class="ra-icon">↗</div>
+        <div class="ra-icon">â†—</div>
         <span class="ra-label">Share</span>
       </button>
     </div>
@@ -308,26 +308,26 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   <!-- Bottom Nav -->
   <div id="bottomnav">
     <button class="nav-btn active" onclick="navTo('home',this)">
-      <span class="nav-icon">🏠</span><span class="nav-label">Home</span>
+      <span class="nav-icon">ðŸ </span><span class="nav-label">Home</span>
     </button>
     <button class="nav-btn" onclick="openPanel('library')">
-      <span class="nav-icon">📚</span><span class="nav-label">Library</span>
+      <span class="nav-icon">ðŸ“š</span><span class="nav-label">Library</span>
     </button>
     <button class="nav-btn create-btn" onclick="openPanel('aiart')">
       <span class="nav-icon">+</span>
     </button>
     <button class="nav-btn" onclick="openPanel('rabbithole')">
-      <span class="nav-icon">🐰</span><span class="nav-label">Hole</span>
+      <span class="nav-icon">ðŸ°</span><span class="nav-label">Hole</span>
     </button>
     <button class="nav-btn" onclick="openPanel('chat')">
-      <span class="nav-icon">💬</span><span class="nav-label">Chat</span>
+      <span class="nav-icon">ðŸ’¬</span><span class="nav-label">Chat</span>
     </button>
   </div>
 </div>
 
 <!-- Floating Buttons -->
-<button class="float-btn" id="float-gift" onclick="openSubDrawer('gifts')">🎁</button>
-<button class="float-btn" id="float-battle" onclick="openPanel('battle')">⚔️</button>
+<button class="float-btn" id="float-gift" onclick="openSubDrawer('gifts')">ðŸŽ</button>
+<button class="float-btn" id="float-battle" onclick="openPanel('battle')">âš”ï¸</button>
 
 <!-- Sub Drawer Backdrop -->
 <div class="sub-backdrop" id="sub-backdrop" onclick="closeSubDrawer()"></div>
@@ -336,39 +336,39 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="sub-drawer" id="drawer-gifts">
   <div class="sub-drawer-handle"></div>
   <div class="sub-drawer-title">Send Gift</div>
-  <div class="sub-option" onclick="sendGift('🌹','Rose',50)">
-    <div class="sub-option-icon">🌹</div>
+  <div class="sub-option" onclick="sendGift('ðŸŒ¹','Rose',50)">
+    <div class="sub-option-icon">ðŸŒ¹</div>
     <div class="sub-option-text"><h5>Rose</h5><p>50 coins</p></div>
   </div>
-  <div class="sub-option" onclick="sendGift('💎','Diamond',500)">
-    <div class="sub-option-icon">💎</div>
+  <div class="sub-option" onclick="sendGift('ðŸ’Ž','Diamond',500)">
+    <div class="sub-option-icon">ðŸ’Ž</div>
     <div class="sub-option-text"><h5>Diamond</h5><p>500 coins</p></div>
   </div>
-  <div class="sub-option" onclick="sendGift('🚀','Rocket',1000)">
-    <div class="sub-option-icon">🚀</div>
+  <div class="sub-option" onclick="sendGift('ðŸš€','Rocket',1000)">
+    <div class="sub-option-icon">ðŸš€</div>
     <div class="sub-option-text"><h5>Rocket</h5><p>1,000 coins</p></div>
   </div>
-  <div class="sub-option" onclick="sendGift('👑','Crown',5000)">
-    <div class="sub-option-icon">👑</div>
+  <div class="sub-option" onclick="sendGift('ðŸ‘‘','Crown',5000)">
+    <div class="sub-option-icon">ðŸ‘‘</div>
     <div class="sub-option-text"><h5>Crown</h5><p>5,000 coins</p></div>
   </div>
-  <div class="sub-option" onclick="sendGift('🎭','Drama Mask',200)">
-    <div class="sub-option-icon">🎭</div>
+  <div class="sub-option" onclick="sendGift('ðŸŽ­','Drama Mask',200)">
+    <div class="sub-option-icon">ðŸŽ­</div>
     <div class="sub-option-text"><h5>Drama Mask</h5><p>200 coins</p></div>
   </div>
-  <div class="sub-option" onclick="sendGift('🎵','Music Note',100)">
-    <div class="sub-option-icon">🎵</div>
+  <div class="sub-option" onclick="sendGift('ðŸŽµ','Music Note',100)">
+    <div class="sub-option-icon">ðŸŽµ</div>
     <div class="sub-option-text"><h5>Music Note</h5><p>100 coins</p></div>
   </div>
 </div>
 
-<!-- ════════════ PANELS ════════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â•â•â• PANELS â•â•â•â•â•â•â•â•â•â•â•â• -->
 
 <!-- Library Panel -->
 <div class="panel" id="panel-library">
   <div class="panel-header">
     <h3>Library</h3>
-    <button class="panel-close" onclick="closePanel('library')">✕</button>
+    <button class="panel-close" onclick="closePanel('library')">âœ•</button>
   </div>
   <div class="panel-body">
     <div class="genre-grid" id="genre-grid"></div>
@@ -379,7 +379,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="panel" id="panel-chat">
   <div class="panel-header">
     <h3>Live Chat</h3>
-    <button class="panel-close" onclick="closePanel('chat')">✕</button>
+    <button class="panel-close" onclick="closePanel('chat')">âœ•</button>
   </div>
   <div class="panel-body">
     <div class="chat-messages" id="chat-messages"></div>
@@ -387,15 +387,15 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   <div class="chat-input-bar">
     <input class="chat-input" id="chat-input" placeholder="Say something..." maxlength="200"
       onkeydown="if(event.key==='Enter')sendChat()">
-    <button class="chat-send" onclick="sendChat()">➤</button>
+    <button class="chat-send" onclick="sendChat()">âž¤</button>
   </div>
 </div>
 
 <!-- AI Art Panel -->
 <div class="panel" id="panel-aiart">
   <div class="panel-header">
-    <h3>🎨 AI Artist</h3>
-    <button class="panel-close" onclick="closePanel('aiart')">✕</button>
+    <h3>ðŸŽ¨ AI Artist</h3>
+    <button class="panel-close" onclick="closePanel('aiart')">âœ•</button>
   </div>
   <div class="panel-body">
     <!-- Prompt -->
@@ -419,17 +419,17 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         </div>
       </div>
       <div class="ai-result-actions" id="ai-result-actions" style="display:none">
-        <button onclick="setAsBackground()">🖼 Set BG</button>
-        <button onclick="downloadResult()">⬇ Save</button>
-        <button class="primary" onclick="morphResult()">✨ Morph</button>
+        <button onclick="setAsBackground()">ðŸ–¼ Set BG</button>
+        <button onclick="downloadResult()">â¬‡ Save</button>
+        <button class="primary" onclick="morphResult()">âœ¨ Morph</button>
       </div>
       <div class="ai-status" id="ai-status"></div>
     </div>
 
     <!-- Generate Buttons -->
     <div class="ai-section" style="display:flex;flex-direction:column;gap:8px">
-      <button class="ai-generate-btn" id="btn-generate" onclick="generateArt()">⚡ Generate Image</button>
-      <button class="ai-generate-btn morph" id="btn-morph" onclick="generateMorph()" disabled>✨ Generate Morph Video</button>
+      <button class="ai-generate-btn" id="btn-generate" onclick="generateArt()">âš¡ Generate Image</button>
+      <button class="ai-generate-btn morph" id="btn-morph" onclick="generateMorph()" disabled>âœ¨ Generate Morph Video</button>
     </div>
 
     <!-- History -->
@@ -447,8 +447,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- Rabbit Hole Panel -->
 <div class="panel" id="panel-rabbithole">
   <div class="panel-header">
-    <h3>🐰 Rabbit Hole</h3>
-    <button class="panel-close" onclick="closePanel('rabbithole')">✕</button>
+    <h3>ðŸ° Rabbit Hole</h3>
+    <button class="panel-close" onclick="closePanel('rabbithole')">âœ•</button>
   </div>
   <div class="panel-body">
     <div class="rh-trail" id="rh-trail">
@@ -461,8 +461,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <!-- Battle Panel -->
 <div class="panel" id="panel-battle">
   <div class="panel-header">
-    <h3>⚔️ Art Battle</h3>
-    <button class="panel-close" onclick="closePanel('battle')">✕</button>
+    <h3>âš”ï¸ Art Battle</h3>
+    <button class="panel-close" onclick="closePanel('battle')">âœ•</button>
   </div>
   <div class="panel-body">
     <div class="battle-vs">
@@ -487,15 +487,15 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="toast" id="toast"></div>
 
 <script>
-// ══════════════════════════════════════════
-// NVME LIVE v2.0 — Full Mobile Shell
-// ══════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// NVME LIVE v2.0 â€” Full Mobile Shell
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:3100'
   : '';
 
-// ── State ──
+// â”€â”€ State â”€â”€
 const state = {
   currentClip: 0,
   liked: false,
@@ -511,7 +511,7 @@ const state = {
   inactivityTimeout: 300000 // 5 min
 };
 
-// ── Init ──
+// â”€â”€ Init â”€â”€
 document.addEventListener('DOMContentLoaded', () => {
   initGenreGrid();
   initAIPresets();
@@ -522,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
   startActivityTracker();
 });
 
-// ── Toast ──
+// â”€â”€ Toast â”€â”€
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -530,13 +530,13 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// ── Nav ──
+// â”€â”€ Nav â”€â”€
 function navTo(tab, btn) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
 }
 
-// ── Panels ──
+// â”€â”€ Panels â”€â”€
 function openPanel(id) {
   document.getElementById('panel-' + id).classList.add('open');
   state.lastActivity = Date.now();
@@ -545,7 +545,7 @@ function closePanel(id) {
   document.getElementById('panel-' + id).classList.remove('open');
 }
 
-// ── Sub Drawers ──
+// â”€â”€ Sub Drawers â”€â”€
 function openSubDrawer(id) {
   document.getElementById('drawer-' + id).classList.add('open');
   document.getElementById('sub-backdrop').classList.add('show');
@@ -556,7 +556,7 @@ function closeSubDrawer() {
   document.getElementById('sub-backdrop').classList.remove('show');
 }
 
-// ── Like ──
+// â”€â”€ Like â”€â”€
 function toggleLike() {
   state.liked = !state.liked;
   state.likeCount += state.liked ? 1 : -1;
@@ -570,7 +570,7 @@ function formatCount(n) {
   return n.toString();
 }
 
-// ── Share ──
+// â”€â”€ Share â”€â”€
 function shareClip() {
   if (navigator.share) {
     navigator.share({ title: 'NVME LIVE', text: 'Check out this live stream!', url: window.location.href });
@@ -580,7 +580,7 @@ function shareClip() {
   }
 }
 
-// ── Genre Library ──
+// â”€â”€ Genre Library â”€â”€
 const genres = [
   { name: 'Cyberpunk', tag: '#cyberpunk', color: '#ff0050' },
   { name: 'Anime', tag: '#anime', color: '#b388ff' },
@@ -596,7 +596,7 @@ function initGenreGrid() {
   grid.innerHTML = genres.map((g, i) => `
     <div class="genre-card" onclick="selectGenre(${i})" style="background:${g.color}22">
       <div style="width:100%;aspect-ratio:9/12;background:linear-gradient(135deg,${g.color}44,${g.color}11);display:flex;align-items:center;justify-content:center;font-size:40px">
-        ${['🌃','🌸','⚔️','🌆','📸','🎨','👻','🌿'][i]}
+        ${['ðŸŒƒ','ðŸŒ¸','âš”ï¸','ðŸŒ†','ðŸ“¸','ðŸŽ¨','ðŸ‘»','ðŸŒ¿'][i]}
       </div>
       <div class="gc-info"><h4>${g.name}</h4><span>${g.tag}</span></div>
     </div>
@@ -622,7 +622,7 @@ function selectGenre(i) {
   document.getElementById('ai-prompt').value = prompts[i];
 }
 
-// ── AI Artist ──
+// â”€â”€ AI Artist â”€â”€
 const presets = [
   { id: 'kayanpink', name: 'Kayan Pink', color: 'linear-gradient(135deg,#ff0050,#ff69b4)' },
   { id: 'cinematic', name: 'Cinematic', color: 'linear-gradient(135deg,#ffd740,#ff6f00)' },
@@ -654,7 +654,7 @@ async function generateArt() {
   state.aiGenerating = true;
   const btn = document.getElementById('btn-generate');
   btn.disabled = true;
-  btn.textContent = '⏳ Generating...';
+  btn.textContent = 'â³ Generating...';
 
   const resultEl = document.getElementById('ai-result');
   resultEl.innerHTML = `<div class="ai-loading"><div class="ai-spinner"></div><div class="ai-loading-text">Creating with ${state.aiPreset} style...</div></div>`;
@@ -689,7 +689,7 @@ async function generateArt() {
     }
   } catch (e) {
     resultEl.innerHTML = `<div style="color:var(--accent);font-size:13px;text-align:center;padding:30px">
-      <div style="font-size:32px;margin-bottom:10px">⚠️</div>
+      <div style="font-size:32px;margin-bottom:10px">âš ï¸</div>
       <div style="font-weight:700;margin-bottom:6px">Generation Failed</div>
       <div style="color:var(--text3)">${e.message}</div>
       <div style="color:var(--text3);margin-top:8px;font-size:11px">
@@ -701,7 +701,7 @@ async function generateArt() {
   } finally {
     state.aiGenerating = false;
     btn.disabled = false;
-    btn.textContent = '⚡ Generate Image';
+    btn.textContent = 'âš¡ Generate Image';
   }
 }
 
@@ -736,7 +736,7 @@ async function generateMorph() {
   state.aiGenerating = true;
   const btn = document.getElementById('btn-morph');
   btn.disabled = true;
-  btn.textContent = '⏳ Morphing...';
+  btn.textContent = 'â³ Morphing...';
 
   const resultEl = document.getElementById('ai-result');
   resultEl.innerHTML = `<div class="ai-loading"><div class="ai-spinner"></div><div class="ai-loading-text">Creating Ken Burns morph...</div></div>`;
@@ -765,20 +765,20 @@ async function generateMorph() {
       // Show first frame, indicate video was created
       resultEl.innerHTML = `<img src="${data.frames[0]}" alt="Morph frame" crossorigin="anonymous">
         <div style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.7);padding:4px 8px;border-radius:6px;font-size:11px">
-          🎬 ${data.frames.length} frames
+          ðŸŽ¬ ${data.frames.length} frames
         </div>`;
       document.getElementById('ai-status').textContent = `Morph: ${data.frames.length} frames generated`;
     }
   } catch (e) {
     resultEl.innerHTML = `<div style="color:var(--accent);font-size:13px;text-align:center;padding:30px">
-      <div style="font-size:32px;margin-bottom:10px">⚠️</div>
+      <div style="font-size:32px;margin-bottom:10px">âš ï¸</div>
       Morph failed: ${e.message}
     </div>`;
     document.getElementById('ai-status').textContent = 'Morph error: ' + e.message;
   } finally {
     state.aiGenerating = false;
     btn.disabled = false;
-    btn.textContent = '✨ Generate Morph Video';
+    btn.textContent = 'âœ¨ Generate Morph Video';
   }
 }
 
@@ -796,7 +796,7 @@ function setAsBackground() {
     canvas.width = img.width;
     canvas.height = img.height;
     ctx.drawImage(img, 0, 0);
-    showToast('🖼 Set as live background');
+    showToast('ðŸ–¼ Set as live background');
   };
   img.src = state.aiLastResult;
 }
@@ -808,7 +808,7 @@ function downloadResult() {
   a.download = 'nvme-ai-art-' + Date.now() + '.png';
   a.target = '_blank';
   a.click();
-  showToast('⬇ Downloading...');
+  showToast('â¬‡ Downloading...');
 }
 
 function addToHistory(url) {
@@ -830,7 +830,7 @@ function previewHistory(url) {
   document.getElementById('btn-morph').disabled = false;
 }
 
-// ── Live Canvas (ambient when no art) ──
+// â”€â”€ Live Canvas (ambient when no art) â”€â”€
 function initLiveCanvas() {
   const canvas = document.getElementById('live-canvas');
   const ctx = canvas.getContext('2d');
@@ -887,7 +887,7 @@ function initLiveCanvas() {
   draw();
 }
 
-// ── Chat ──
+// â”€â”€ Chat â”€â”€
 const chatUsers = [
   { name: 'PixelQueen', color: '#ff69b4' },
   { name: 'NeonDrifter', color: '#448aff' },
@@ -899,10 +899,10 @@ const chatUsers = [
   { name: 'CryptoViz', color: '#18ffff' },
 ];
 const chatPhrases = [
-  'This is insane 🔥', 'Drop the preset!', 'How do I get this style?',
+  'This is insane ðŸ”¥', 'Drop the preset!', 'How do I get this style?',
   'Kayan pink goes crazy', 'Morph mode next pls', 'Battle mode!!',
-  'Reminds me of blade runner', 'The colors tho 😍', 'Can you do anime style?',
-  'This is the future of content', 'Rabbit hole led me here', 'Gift sent! 🎁',
+  'Reminds me of blade runner', 'The colors tho ðŸ˜', 'Can you do anime style?',
+  'This is the future of content', 'Rabbit hole led me here', 'Gift sent! ðŸŽ',
   'Need this as my wallpaper', 'AI art is crazy now', 'What prompt did you use?',
 ];
 
@@ -944,7 +944,7 @@ function sendChat() {
   input.value = '';
 }
 
-// ── Rabbit Hole ──
+// â”€â”€ Rabbit Hole â”€â”€
 const rhTopics = {
   start: [
     { name: 'AI Art', heat: 'hot', next: 'ai-art' },
@@ -1009,7 +1009,7 @@ function renderRhNode(nodeId) {
   // Update trail
   const trail = document.getElementById('rh-trail');
   trail.innerHTML = state.rhTrail.map((t, i) =>
-    (i > 0 ? '<span class="rh-arrow">›</span>' : '') +
+    (i > 0 ? '<span class="rh-arrow">â€º</span>' : '') +
     `<span class="rh-crumb" onclick="rhJumpTo(${i})">${t}</span>`
   ).join('');
 }
@@ -1035,7 +1035,7 @@ function handleRhAction(action) {
   }
 }
 
-// ── Battle ──
+// â”€â”€ Battle â”€â”€
 function initBattle() {
   const styles = presets.sort(() => Math.random() - 0.5);
   document.getElementById('battle-left-name').textContent = styles[0].name;
@@ -1065,7 +1065,7 @@ const battleObserver = new MutationObserver(() => {
 });
 battleObserver.observe(document.getElementById('panel-battle'), { attributes: true, attributeFilter: ['class'] });
 
-// ── Gifts ──
+// â”€â”€ Gifts â”€â”€
 function sendGift(emoji, name, coins) {
   closeSubDrawer();
   // Float animation
@@ -1100,7 +1100,7 @@ function spawnParticles(x, y, color, count) {
   }
 }
 
-// ── Swipe Navigation ──
+// â”€â”€ Swipe Navigation â”€â”€
 let touchStartX = 0, touchStartY = 0, swiping = false;
 document.getElementById('stage').addEventListener('touchstart', e => {
   touchStartX = e.touches[0].clientX;
@@ -1126,7 +1126,7 @@ function swipeClip(dir) {
   state.lastActivity = Date.now();
 }
 
-// ── Inactivity / Zombie Cleanup ──
+// â”€â”€ Inactivity / Zombie Cleanup â”€â”€
 function startActivityTracker() {
   ['touchstart', 'mousemove', 'keydown', 'click', 'scroll'].forEach(evt => {
     document.addEventListener(evt, () => { state.lastActivity = Date.now(); }, { passive: true });
@@ -1137,14 +1137,14 @@ function startZombieWatcher() {
   setInterval(() => {
     const idle = Date.now() - state.lastActivity;
     if (idle > state.inactivityTimeout) {
-      console.log('[NVME] Zombie session detected — cleaning up');
+      console.log('[NVME] Zombie session detected â€” cleaning up');
       // Reduce animation load
       document.getElementById('live-canvas')?.getContext('2d')?.clearRect(0, 0, 1, 1);
     }
   }, 30000);
 }
 
-// ── Keyboard shortcut (desktop testing) ──
+// â”€â”€ Keyboard shortcut (desktop testing) â”€â”€
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (e.key === 'ArrowDown') swipeClip(1);

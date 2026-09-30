@@ -18,4 +18,84 @@ a{color:var(--gold);text-decoration:none}
 .brand span{font-weight:800;font-size:1.15rem;letter-spacing:.04em}
 h1{font-size:2rem;font-weight:800;margin-bottom:6px}
 .subtitle{color:var(--muted);font-size:1rem;margin-bottom:34px}
-.grid{display:grid;grid-template-columns:
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:24px 0}
+@media(max-width:640px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px}
+.card h2{font-size:1.05rem;font-weight:700;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.card p{color:rgba(233,233,242,.85);font-size:.95rem;margin-bottom:6px}
+.card a{color:var(--gold);font-weight:600}
+.icon{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--purple),var(--gold));border-radius:6px;font-size:12px}
+.address{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px;margin-top:24px}
+.address h2{font-size:1.05rem;font-weight:700;color:var(--gold);margin-bottom:14px}
+.address p{color:rgba(233,233,242,.85);margin-bottom:4px}
+.small{font-size:.85rem;color:var(--muted);margin-top:8px}
+.back{margin-top:40px;padding-top:20px;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="brand" href="/"><img src="/img/icon-192.png" alt="NVME"><span>NVME</span></a>
+  <h1>Contact</h1>
+  <p class="subtitle">Questions, support, or business inquiries — we're here to help.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2><span class="icon">📧</span> General Support</h2>
+      <p>Account issues, bugs, feature requests</p>
+      <p><a href="mailto:john@lexai.llc">john@lexai.llc</a></p>
+      <p class="small">Response time: 24-48 hours</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="icon">💰</span> Creator Support</h2>
+      <p>Payouts, monetization, creator fund</p>
+      <p><a href="mailto:john@lexai.llc">john@lexai.llc</a></p>
+      <p class="small">Subject: "Creator Support"</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="icon">⚖️</span> Legal & DMCA</h2>
+      <p>Copyright claims, legal inquiries</p>
+      <p><a href="mailto:john@lexai.llc">john@lexai.llc</a></p>
+      <p class="small">Subject: "DMCA" or "Legal"</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="icon">🔒</span> Privacy</h2>
+      <p>Data requests, privacy concerns</p>
+      <p><a href="mailto:john@lexai.llc">john@lexai.llc</a></p>
+      <p class="small">Subject: "Privacy Request"</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="icon">🤝</span> Business</h2>
+      <p>Partnerships, advertising, press</p>
+      <p><a href="mailto:john@lexai.llc">john@lexai.llc</a></p>
+      <p class="small">Subject: "Business"</p>
+    </div>
+
+    <div class="card">
+      <h2><span class="icon">🐛</span> Security</h2>
+      <p>Report vulnerabilities</p>
+      <p><a href="mailto:john@lexai.llc">john@lexai.llc</a></p>
+      <p class="small">Subject: "Security"</p>
+    </div>
+  </div>
+
+  <div class="address">
+    <h2>📍 Mailing Address</h2>
+    <p><strong>Digital King (John)</strong></p>
+    <p>NVME / Dollar Double Empire</p>
+    <p>156 North Shore Road</p>
+    <p>Hamilton CR 03, Bermuda</p>
+    <p class="small">Registered in Bermuda</p>
+  </div>
+
+  <div class="back">
+    <p class="small">See also: <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/dmca">DMCA</a></p>
+    <p style="margin-top:12px"><a href="/">← Back to NVME</a></p>
+  </div>
+</div>
+</body>
+</html>
+"@ | Out-File -Encoding utf8 "C:\Users\Digital King\nvme-platform\public\contact.html"

@@ -7,3 +7,4 @@ uploads/
 .env.production
 .env.development
 *.env
+.env.save

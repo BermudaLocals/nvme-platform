@@ -15346,6 +15346,13 @@ app.get(
 app.get(
   '*',
   (req, res) => {
+    // Never serve the app shell for dotfiles or server-side
+    // files — probes for /.env, /.git, server.js etc. must
+    // see a real 404, not a 200 that trips security scanners.
+    if (/^\/\.|\/\.env|\.(env|git|pem|key|log|sql|bak|old|save)$|server\.js$|package(-lock)?\.json$|dockerfile/i.test(req.path)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     if (
       req.path.startsWith(
         '/api'
